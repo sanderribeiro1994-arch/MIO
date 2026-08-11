@@ -1,0 +1,1184 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MIO | Official Store</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+<base target="_blank">
+</head>
+<body class="bg-zinc-950 text-white font-sans antialiased">
+
+  <header class="sticky top-0 z-50 bg-zinc-950/95 border-b border-zinc-900 backdrop-blur-md px-4 py-3 lg:px-8">
+    <div class="max-w-7xl mx-auto grid grid-cols-3 items-center">
+      <div class="flex items-center justify-start">
+        <button onclick="toggleMenu()" class="text-white hover:text-zinc-400 transition" title="Menu">
+          <i data-lucide="menu" class="w-6 h-6"></i>
+        </button>
+      </div>
+      <div class="flex items-center justify-center">
+        <a href="index.html" class="text-2xl font-black tracking-widest text-white hover:scale-105 transition-transform" target="_self">MIO</a>
+      </div>
+      <div class="flex items-center justify-end gap-3 md:gap-4">
+        <div class="hidden md:flex items-center relative w-48 lg:w-64">
+          <input type="text" id="searchInput" placeholder="Buscar..." onkeydown="verificarEnter(event)" oninput="toggleBotaoLimpar()"
+                 class="w-full bg-zinc-900 text-xs text-white pl-3 pr-12 py-1.5 rounded-full border border-zinc-800 focus:outline-none focus:border-zinc-800 focus:ring-0 transition">
+          <button id="clearSearchBtn" onclick="limparBusca()" class="absolute right-8 text-zinc-500 hover:text-white transition hidden" title="Limpar busca">
+            <i data-lucide="x" class="w-3.5 h-3.5"></i>
+          </button>
+          <button onclick="realizarBusca()" class="absolute right-2.5 text-black hover:text-zinc-400" title="Pesquisar">
+            <i data-lucide="search" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+        <button onclick="toggleSearchMobile()" class="md:hidden text-black hover:text-zinc-400">
+          <i data-lucide="search" class="w-6 h-6"></i>
+        </button>
+        <button id="btnMembroHeader" onclick="window.location.href='/login-membro.html'" class="text-white hover:text-zinc-400 flex items-center transition" title="Area de Membros">
+          <i data-lucide="gem" class="w-6 h-6"></i>
+        </button>
+        <div class="relative">
+          <button onclick="toggleSacola()" class="p-2 text-zinc-400 hover:text-white transition block relative">
+            <i data-lucide="shopping-bag" class="w-5 h-5"></i>
+            <span id="contador-sacola-header" class="contador-sacola absolute -top-1 -right-1 bg-zinc-800 text-white text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center transition-all">0</span>
+          </button>
+        </div>
+        <div id="searchMobileBar" class="hidden mt-3 px-2 md:hidden">
+          <div class="relative">
+            <input type="text" id="searchMobileInput" placeholder="Buscar produtos..." oninput="toggleBotaoLimparMobile()"
+                   class="w-full bg-zinc-900 text-sm text-white pl-4 pr-14 py-2 rounded-md border border-zinc-800 focus:outline-none focus:border-zinc-800 focus:ring-0">
+            <button id="clearSearchMobileBtn" onclick="limparBuscaMobile()" class="absolute right-10 top-3 text-zinc-500 hover:text-white hidden" title="Limpar busca">
+              <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+            <button onclick="realizarBuscaMobile()" class="absolute right-3 top-2.5 text-white">
+              <i data-lucide="search" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div id="sideMenu" onclick="fecharMenuAoClicarFora(event)" class="fixed inset-0 z-50 bg-black/70 opacity-0 pointer-events-none transition-opacity duration-300">
+    <div id="sideMenuDrawer" class="fixed top-0 left-0 bottom-0 w-80 bg-zinc-950 border-r border-zinc-900 p-6 flex flex-col justify-between transform -translate-x-full transition-transform duration-300 ease-in-out overflow-hidden">
+      <div>
+        <div class="flex items-center justify-between mb-6 pb-4 border-b border-zinc-900">
+          <span class="text-xl font-black tracking-widest text-white">MIO</span>
+          <button onclick="toggleMenu()" class="text-zinc-400 hover:text-white transition p-1">
+            <i data-lucide="x" class="w-6 h-6"></i>
+          </button>
+        </div>
+        <nav class="flex flex-col gap-4 text-sm font-semibold tracking-wider">
+          <a href="login-membro.html" id="linkMenuMembro" class="w-full py-2.5 px-4 rounded-md font-bold transition mb-1 flex items-center justify-center gap-2 text-center uppercase tracking-wider" target="_self">
+            <i data-lucide="gem" class="w-5 h-5"></i> Torne-se membro
+          </a>
+          <div class="border-t border-zinc-900 pt-3">
+            <div class="mb-3">
+              <button onclick="toggleCategorias()" class="flex items-center justify-between w-full py-3 text-zinc-300 hover:text-amber-400 transition uppercase text-xs font-mono tracking-widest">
+                <span>CATEGORIAS</span>
+                <i data-lucide="chevron-down" id="cat-arrow" class="w-4 h-4 transition-transform duration-300"></i>
+              </button>
+              <div id="categoriasList" class="hidden flex-col gap-2.5 pl-3 mt-2 border-l border-zinc-800 text-xs text-zinc-300">
+                <a href="javascript:void(0)" onclick="filtrarPeloMenu('feminino')" class="block py-2 hover:text-amber-400 transition" target="_self">Feminino</a>
+                <a href="javascript:void(0)" onclick="filtrarPeloMenu('masculino')" class="block py-2 hover:text-amber-400 transition" target="_self">Masculino</a>
+                <a href="javascript:void(0)" onclick="filtrarPeloMenu('infantil')" class="block py-2 hover:text-amber-400 transition" target="_self">Infantil</a>
+              </div>
+            </div>
+            <div class="flex flex-col">
+              <a href="javascript:void(0)" onclick="filtrarPeloMenu('todos')" class="block py-3 border-t border-zinc-900 text-zinc-300 hover:text-amber-400 hover:translate-x-1 transition-all duration-200" target="_self">TODOS OS PRODUTOS</a>
+              <a href="javascript:void(0)" onclick="filtrarPeloMenu('meias')" class="block py-3 border-t border-zinc-900 text-zinc-300 hover:text-amber-400 hover:translate-x-1 transition-all duration-200" target="_self">MEIAS CUSTOM DYED</a>
+              <a href="/sobre" class="block py-3 border-t border-b border-zinc-900 text-zinc-300 hover:text-amber-400 hover:translate-x-1 transition-all duration-200" target="_self">SOBRE A MIO</a>
+            </div>
+          </div>
+        </nav>
+      </div>
+      <div class="text-xs text-zinc-500 border-t border-zinc-900 pt-4 mt-6">2026 MIO Streetwear.</div>
+    </div>
+  </div>
+
+  <main class="max-w-7xl mx-auto px-4 py-8 w-full flex-1">
+    <div id="vitrine-todos-container" class="hidden mb-12">
+      <p id="contador-produtos-vitrine" class="text-xs font-mono text-zinc-500 uppercase mb-6"></p>
+      <div id="grid-produtos-todos" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"></div>
+    </div>
+    <div id="detalhes-produto-wrapper">
+      <div id="detalhes-produto-container" class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start"></div>
+      <section class="mt-20 border-t border-zinc-900 pt-12">
+        <h2 class="text-lg font-black text-white uppercase tracking-tight mb-6 flex items-center gap-2">
+          <span class="w-2 h-2 bg-amber-400 rounded-full"></span> Voce Tambem Pode Gostar
+        </h2>
+        <div id="produtos-relacionados-container" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4"></div>
+      </section>
+      <section class="mt-20 border-t border-zinc-900 pt-12">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+          <div>
+            <h2 class="text-xl font-black text-white uppercase tracking-tight flex items-center gap-2">Opinioes dos Clientes</h2>
+            <div class="flex items-center gap-2 mt-2">
+              <div class="flex text-amber-400" id="media-estrelas-topo">
+                <i data-lucide="star" class="w-4 h-4 fill-amber-400"></i>
+                <i data-lucide="star" class="w-4 h-4 fill-amber-400"></i>
+                <i data-lucide="star" class="w-4 h-4 fill-amber-400"></i>
+                <i data-lucide="star" class="w-4 h-4 fill-amber-400"></i>
+                <i data-lucide="star" class="w-4 h-4 fill-amber-400"></i>
+              </div>
+              <span id="texto-media-avaliacoes" class="text-xs font-mono text-zinc-400">5.0 (Baseado em avaliacoes)</span>
+            </div>
+          </div>
+          <button onclick="toggleFormAvaliacao()" class="bg-amber-500 hover:bg-amber-400 text-black text-xs font-black uppercase tracking-wider px-5 py-3 rounded-md transition shadow-md shadow-amber-500/10 flex items-center gap-2 self-start md:self-auto">
+            <i data-lucide="message-square-plus" class="w-4 h-4"></i> Escrever Avaliacao
+          </button>
+        </div>
+        <div id="form-avaliacao-container" class="hidden bg-zinc-900/60 border border-zinc-800 p-6 rounded-xl mb-10 transition-all">
+          <h3 class="text-sm font-bold text-white uppercase mb-4">Deixe sua opiniao sobre o produto</h3>
+          <form id="formAvaliacao" onsubmit="enviarAvaliacao(event)" class="flex flex-col gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Seu Nome</label>
+                <input type="text" id="aval-nome" required class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400" placeholder="Ex: Joao Silva">
+              </div>
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Classificacao</label>
+                <select id="aval-nota" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400">
+                  <option value="5">(5/5) Excelente</option>
+                  <option value="4">(4/5) Muito Bom</option>
+                  <option value="3">(3/5) Bom</option>
+                  <option value="2">(2/5) Regular</option>
+                  <option value="1">(1/5) Ruim</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Seu Comentario</label>
+              <textarea id="aval-comentario" rows="3" required class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400" placeholder="O que voce achou do produto, tamanho, tecido, entrega..."></textarea>
+            </div>
+            <div>
+              <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Foto do Produto (Opcional)</label>
+              <input type="file" id="aval-foto" accept="image/*" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-1.5 text-xs text-zinc-400 file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-zinc-800 file:text-amber-400 hover:file:bg-zinc-700">
+            </div>
+            <div class="flex items-center justify-between pt-2">
+              <span class="text-[10px] font-mono text-zinc-500">*Sua avaliacao passara por aprovacao do administrador antes de ser exibida.</span>
+              <button type="submit" class="bg-amber-400 hover:bg-amber-300 text-black font-black text-xs uppercase px-6 py-2.5 rounded transition">Enviar Avaliacao</button>
+            </div>
+          </form>
+        </div>
+        <div id="lista-avaliacoes" class="grid grid-cols-1 md:grid-cols-3 gap-6"></div>
+      </section>
+    </div>
+  </main>
+
+  <div id="modalGuiaTamanhos" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-zinc-900 border border-zinc-800 rounded-xl max-w-lg w-full p-6 relative">
+      <button onclick="toggleGuiaTamanhos()" class="absolute top-4 right-4 text-zinc-400 hover:text-white">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+      <h3 class="text-lg font-black text-white uppercase tracking-tight mb-2 flex items-center gap-2">
+        <i data-lucide="ruler" class="w-5 h-5 text-amber-400"></i> Guia de Tamanhos (cm)
+      </h3>
+      <p class="text-xs text-zinc-400 mb-4">Compare suas medidas com a tabela abaixo para escolher o tamanho ideal:</p>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs font-mono">
+          <thead class="bg-zinc-950 text-amber-400 border-b border-zinc-800">
+            <tr><th class="p-2.5">Tamanho</th><th class="p-2.5">Torax/Busto</th><th class="p-2.5">Cintura</th><th class="p-2.5">Comprimento</th></tr>
+          </thead>
+          <tbody class="divide-y divide-zinc-800 text-zinc-300">
+            <tr><td class="p-2.5 font-bold text-white">P</td><td class="p-2.5">88 - 94</td><td class="p-2.5">72 - 78</td><td class="p-2.5">68</td></tr>
+            <tr><td class="p-2.5 font-bold text-white">M</td><td class="p-2.5">95 - 102</td><td class="p-2.5">79 - 86</td><td class="p-2.5">71</td></tr>
+            <tr><td class="p-2.5 font-bold text-white">G</td><td class="p-2.5">103 - 110</td><td class="p-2.5">87 - 94</td><td class="p-2.5">74</td></tr>
+            <tr><td class="p-2.5 font-bold text-white">GG</td><td class="p-2.5">111 - 118</td><td class="p-2.5">95 - 102</td><td class="p-2.5">77</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <button onclick="toggleGuiaTamanhos()" class="mt-6 w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs uppercase py-2.5 rounded transition">Entendi</button>
+    </div>
+  </div>
+
+  <div id="sacola" onclick="fecharSacolaFora(event)" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 transition-opacity duration-300 opacity-0 pointer-events-none">
+    <div id="sacola-inner" class="fixed right-0 top-0 h-full w-full max-w-md bg-zinc-950 border-l border-zinc-900 p-6 flex flex-col justify-between transition-transform duration-300 translate-x-full">
+      <div>
+        <div class="flex items-center justify-between pb-4 border-b border-zinc-900">
+          <h2 class="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+            <i data-lucide="shopping-bag" class="w-4 h-4 text-amber-400"></i> Sua Sacola
+          </h2>
+          <button onclick="toggleSacola()" class="text-zinc-500 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+        </div>
+        <div class="py-3 border-b border-zinc-900">
+          <p id="frete-status-text" class="text-[11px] font-mono text-zinc-400 mb-1"></p>
+          <div class="w-full bg-zinc-900 h-1.5 rounded-full overflow-hidden">
+            <div id="frete-progresso" class="bg-amber-400 h-full w-0 transition-all duration-500"></div>
+          </div>
+        </div>
+        <div id="sacola-itens-container" class="my-4 flex flex-col gap-3 max-h-[50vh] overflow-y-auto pr-1"></div>
+      </div>
+      <div class="border-t border-zinc-900 pt-4 flex flex-col gap-3">
+        <div class="flex gap-2">
+          <input type="text" id="inputCupom" placeholder="CODIGO DO CUPOM" class="flex-1 bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-xs font-mono uppercase text-white placeholder-zinc-600 focus:outline-none focus:border-amber-400">
+          <button onclick="aplicarCupom()" class="bg-zinc-800 hover:bg-zinc-700 text-white px-4 text-xs font-bold uppercase rounded transition">Aplicar</button>
+        </div>
+        <p id="mensagemCupom" class="hidden text-[10px] font-mono"></p>
+        <div class="space-y-1 pt-2 border-t border-zinc-900">
+          <div id="linhaDesconto" class="hidden flex justify-between text-xs text-amber-400 font-mono">
+            <span>Desconto</span><span id="valorDesconto">- R$ 0,00</span>
+          </div>
+          <div class="flex justify-between text-sm font-black text-white uppercase tracking-tight">
+            <span>Total</span><span id="sacola-subtotal" class="text-amber-400 font-mono">R$ 0,00</span>
+          </div>
+        </div>
+        <button onclick="irParaCheckout()" class="w-full bg-amber-500 hover:bg-amber-400 text-black font-black text-xs uppercase tracking-widest py-3.5 rounded-md transition shadow-lg shadow-amber-500/10">Finalizar Compra</button>
+      </div>
+    </div>
+  </div>
+
+<footer class="bg-zinc-950 border-t border-zinc-900 pt-16 pb-8 px-4 text-white">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between gap-12 border-b border-zinc-900 pb-12 mb-8">
+      <div class="flex flex-col gap-6 max-w-md">
+        <div>
+          <h2 class="text-3xl font-black tracking-widest text-white mb-2">MIO</h2>
+          <p class="text-xs text-zinc-400">"Design autentico, pecas exclusivas e estilo streetwear para expressar sua individualidade."</p>
+        </div>
+        <div class="flex flex-col gap-2 pt-2 border-t border-zinc-900/60">
+          <a href="fale-conosco.html" class="text-xs font-semibold text-zinc-300 hover:text-white transition flex items-center gap-2" target="_self"><span>></span> FALE CONOSCO</a>
+        </div>
+      </div>
+      <div class="flex flex-col gap-8 md:items-end text-left md:text-right">
+        <div>
+          <h3 class="text-xs font-bold tracking-wider text-zinc-400 uppercase mb-3">NOS SIGA NAS REDES SOCIAIS</h3>
+          <div class="flex items-center md:justify-end gap-5">
+            <a href="https://instagram.com" target="_blank" class="text-zinc-400 hover:text-white transition" title="Instagram MIO">
+              <svg class="w-6 h-6 fill-current" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+            </a>
+            <a href="https://tiktok.com" target="_blank" class="text-zinc-400 hover:text-white transition" title="TikTok MIO">
+              <svg class="w-6 h-6 fill-current" viewBox="0 0 24 24"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.82.56-1.32 1.56-1.28 2.56.02.83.42 1.64 1.09 2.14.8.61 1.87.77 2.82.44.97-.31 1.72-1.13 1.93-2.13.12-.66.11-1.34.11-2.01V.02z"/></svg>
+            </a>
+          </div>
+        </div>
+        <div>
+          <h3 class="text-xs font-bold tracking-wider text-zinc-400 uppercase mb-3">FORMAS DE PAGAMENTO</h3>
+          <div class="flex flex-wrap items-center md:justify-end gap-3 text-zinc-400 text-xs font-mono">
+            <span class="px-2.5 py-1 bg-zinc-900 border border-zinc-800 rounded font-bold text-white">VISA</span>
+            <span class="px-2.5 py-1 bg-zinc-900 border border-zinc-800 rounded font-bold text-white">MASTERCARD</span>
+            <span class="px-2.5 py-1 bg-zinc-900 border border-zinc-800 rounded font-bold text-white">ELO</span>
+            <span class="px-2.5 py-1 bg-zinc-900 border border-zinc-800 rounded font-bold text-white">HIPERCARD</span>
+            <span class="px-2.5 py-1 bg-zinc-900 border border-zinc-800 rounded font-bold text-white">AMEX</span>
+            <span class="px-2.5 py-1 bg-zinc-900 border border-zinc-800 rounded font-bold text-emerald-400">PIX</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between text-[11px] text-zinc-500 gap-4">
+      <div class="flex flex-wrap items-center justify-center md:justify-start gap-4">
+        <span>2026 MIO Streetwear. Todos os direitos reservados.</span>
+        <a href="politicas.html" class="hover:text-zinc-300 transition underline underline-offset-2" target="_self">Politicas da Loja</a>
+        <a href="privacidade.html" class="hover:text-zinc-300 transition underline underline-offset-2" target="_self">Privacidade</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    const produtosOriginais = [
+      { id: 1, nome: "Meia Custom Dyed Classic Red MIO", preco: 29.90, precoOriginal: 39.90, estaEmPromocao: true, corDestaquePromo: "#f59e0b", textoDestaquePromo: "Super Drop", categoria: "meias", genero: "masculino", imagem: "https://images.unsplash.com/photo-1582966772680-860e372bb558?q=80&w=400", fotos: ["https://images.unsplash.com/photo-1582966772680-860e372bb558?q=80&w=400","https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=400"], cores: [{ nome: "Acid Red", codigoHex: "#ef4444" }], tamanhos: ["U", "34-38", "39-43"], estoque: 15, cronometro: "2026-08-30T23:59:59", descricao: "<p>Meia artesanal de alta qualidade feita com tingimento reativo.</p>", data: "2026-07-10", relevancia: 5 },
+      { id: 2, nome: "Meia Custom Dyed Ocean Blue MIO", preco: 29.90, precoOriginal: 39.90, estaEmPromocao: true, corDestaquePromo: "#06b6d4", textoDestaquePromo: "Saldao MIO", categoria: "meias", genero: "feminino", imagem: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=400", fotos: ["https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=400"], cores: [{ nome: "Ocean Blue", codigoHex: "#0284c7" }], tamanhos: ["U"], estoque: 8, cronometro: "2026-08-15T18:00:00", descricao: "<p>Tingimento em tons azuis oceanicos.</p>", data: "2026-07-01", relevancia: 3 },
+      { id: 3, nome: "Meia Custom Dyed Neon Acid MIO", preco: 34.90, precoOriginal: 44.90, estaEmPromocao: true, corDestaquePromo: "#22c55e", textoDestaquePromo: "Oferta Relampago", categoria: "meias", genero: "infantil", imagem: "https://images.unsplash.com/photo-1582966772680-860e372bb558?q=80&w=400", fotos: ["https://images.unsplash.com/photo-1582966772680-860e372bb558?q=80&w=400"], cores: [{ nome: "Neon Acid", codigoHex: "#84cc16" }], tamanhos: ["U", "34-38"], estoque: 5, cronometro: "2026-07-31T23:59:59", descricao: "<p>Estilo neon vibrante sob medida.</p>", data: "2026-07-12", relevancia: 9 },
+      { id: 4, nome: "Camiseta Oversized Drop 01 MIO", preco: 99.90, precoOriginal: 119.90, estaEmPromocao: true, corDestaquePromo: "#f59e0b", textoDestaquePromo: "Drop MIO", categoria: "roupas", genero: "masculino", imagem: "https://images.unsplash.com/photo-1556821840-3a63f95609a7?q=80&w=400", fotos: ["https://images.unsplash.com/photo-1556821840-3a63f95609a7?q=80&w=400"], cores: [{ nome: "Off-Black", codigoHex: "#18181b" }], tamanhos: ["P", "M", "G", "GG"], estoque: 20, cronometro: "2026-08-20T20:00:00", descricao: "<p>Camiseta com caimento perfeito street.</p>", data: "2026-06-25", relevancia: 8 },
+      { id: 5, nome: "Corta Vento Windbreaker MIO Black", preco: 189.90, precoOriginal: 229.90, estaEmPromocao: true, corDestaquePromo: "#f59e0b", textoDestaquePromo: "Promo Inverno", categoria: "roupas", genero: "feminino", imagem: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=400", fotos: ["https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=400"], cores: [{ nome: "Black Matte", codigoHex: "#09090b" }], tamanhos: ["P", "M", "G"], estoque: 3, cronometro: "2026-08-01T23:59:59", descricao: "<p>Corta vento impermeavel premium.</p>", data: "2026-07-11", relevancia: 10 },
+      { id: 6, nome: "Meia Custom Dyed Tie-Dye Pink", preco: 29.90, precoOriginal: 39.90, estaEmPromocao: true, corDestaquePromo: "#ec4899", textoDestaquePromo: "Edicao Limitada", categoria: "meias", genero: "feminino", imagem: "https://images.unsplash.com/photo-1582966772680-860e372bb558?q=80&w=400", fotos: ["https://images.unsplash.com/photo-1582966772680-860e372bb558?q=80&w=400"], cores: [{ nome: "Tie-Dye Pink", codigoHex: "#f472b6" }], tamanhos: ["U", "34-38"], estoque: 11, cronometro: "2026-08-10T23:59:59", descricao: "<p>Tingimento em tons rosa e lavanda.</p>", data: "2026-07-05", relevancia: 4 },
+      { id: 7, nome: "Produto Nao Promocional de Exemplo", preco: 59.90, precoOriginal: 59.90, estaEmPromocao: false, categoria: "meias", genero: "masculino", imagem: "https://images.unsplash.com/photo-1582966772680-860e372bb558?q=80&w=400", fotos: ["https://images.unsplash.com/photo-1582966772680-860e372bb558?q=80&w=400"], cores: [{ nome: "Cinza", codigoHex: "#71717a" }], tamanhos: ["U"], estoque: 10, descricao: "<p>Um produto padrao sem desconto ativo.</p>", data: "2026-07-15", relevancia: 2 }
+    ];
+
+    let produtosExibidos = [...produtosOriginais];
+    let sacolaItens = JSON.parse(localStorage.getItem('mio_sacola_itens')) || [];
+    let cupomAtivo = JSON.parse(localStorage.getItem('mio_cupom_ativo')) || null;
+    let usuarioLogado = null;
+    let avaliacoesAprovadas = JSON.parse(localStorage.getItem('mio_avaliacoes_aprovadas')) || [];
+    let corSelecionada = "";
+    let tamanhoSelecionado = "";
+    let quantidadeSelecionada = 1;
+    const FRETE_GRATIS_META = 249.00;
+
+    function verificarSessaoUsuario() {
+      usuarioLogado = JSON.parse(localStorage.getItem('mio_usuario_logado'));
+      const btnHeader = document.getElementById('btnMembroHeader');
+      const btnMenuMembro = document.getElementById('linkMenuMembro');
+      if (usuarioLogado && btnMenuMembro) {
+        btnMenuMembro.href = "perfil.html";
+        btnMenuMembro.removeAttribute('onclick');
+        // Use Tailwind classes em vez de estilos inline para melhor responsividade
+        btnMenuMembro.classList.add('bg-amber-400', 'text-black', 'font-extrabold');
+        btnMenuMembro.innerHTML = '<i data-lucide="user" class="w-5 h-5 text-black"></i> MEU PERFIL';
+        if (btnHeader) {
+          btnHeader.setAttribute('onclick', "window.location.href='perfil.html'");
+          btnHeader.title = "Meu Perfil";
+          if (usuarioLogado.foto) {
+            btnHeader.innerHTML = '<img src="' + usuarioLogado.foto + '" class="w-7 h-7 rounded-full object-cover border-2 border-amber-400">';
+          } else {
+            btnHeader.innerHTML = '<i data-lucide="user" class="w-6 h-6 text-amber-400"></i>';
+          }
+        }
+      } else if (btnMenuMembro) {
+        // Estado padrão quando não logado: usa classes em vez de estilos inline
+        btnMenuMembro.classList.remove('bg-amber-400', 'font-extrabold');
+        btnMenuMembro.classList.add('bg-white', 'text-black');
+      }
+      if (window.lucide) lucide.createIcons();
+      return usuarioLogado || null;
+    }
+
+    function salvarEstado() {
+      localStorage.setItem('mio_sacola_itens', JSON.stringify(sacolaItens));
+      localStorage.setItem('mio_cupom_ativo', JSON.stringify(cupomAtivo));
+      atualizarContadorHeader();
+      verificarNotificacaoFreteGratis();
+    }
+
+    function adicionarPorId(id) {
+      const p = produtosOriginais.find(item => item.id === id);
+      if (!p) return;
+      const corPadrao = p.cores[0]?.nome || "Padrao";
+      const tamPadrao = p.tamanhos[0] || "U";
+      adicionarASacola(p.nome, p.preco, p.imagem, tamPadrao, corPadrao);
+    }
+
+    function renderizarPaginaProduto(produtoId) {
+      const wrapperDetalhes = document.getElementById('detalhes-produto-wrapper');
+      const containerVitrine = document.getElementById('vitrine-todos-container');
+      const container = document.getElementById('detalhes-produto-container');
+      if (!container || !wrapperDetalhes || !containerVitrine) return;
+      containerVitrine.classList.add('hidden');
+      wrapperDetalhes.classList.remove('hidden');
+      const produto = produtosOriginais.find(p => p.id === produtoId) || produtosOriginais[0];
+      corSelecionada = produto.cores[0]?.nome || "";
+      tamanhoSelecionado = produto.tamanhos[0] || "";
+      quantidadeSelecionada = 1;
+      const usuarioLogado = verificarSessaoUsuario();
+      const valorParcela = (produto.preco / 3).toFixed(2).replace('.', ',');
+
+      container.innerHTML = `
+        <div class="col-span-1 lg:col-span-7 flex flex-col gap-4">
+          <div class="aspect-square bg-zinc-900 border border-zinc-900 rounded-xl overflow-hidden relative group cursor-crosshair">
+            <img id="foto-principal" src="${produto.imagem}" alt="${produto.nome}" class="w-full h-full object-cover group-hover:scale-125 transition-transform duration-500 origin-center">
+          </div>
+          <div class="flex gap-3 overflow-x-auto pb-2">
+            ${produto.fotos.map(f => `
+              <button onclick="mudarFotoPrincipal('${f}')" class="w-20 h-20 bg-zinc-900 border border-zinc-800 focus:border-amber-400 rounded-lg overflow-hidden transition shrink-0">
+                <img src="${f}" class="w-full h-full object-cover">
+              </button>
+            `).join('')}
+          </div>
+        </div>
+        <div class="col-span-1 lg:col-span-5 flex flex-col gap-5">
+          <div class="bg-gradient-to-r from-amber-500/10 via-amber-400/20 to-amber-500/10 border border-amber-400/30 p-2.5 rounded-lg flex items-center justify-center gap-2 text-center">
+            <i data-lucide="truck" class="w-4 h-4 text-amber-400"></i>
+            <span class="text-[11px] font-black uppercase text-amber-400 tracking-wider">Frete Gratis a partir de R$ 249,00</span>
+          </div>
+          <div>
+            <span class="text-[10px] text-zinc-500 uppercase font-mono tracking-widest block mb-1">${produto.genero} | ${produto.categoria}</span>
+            <h1 class="text-2xl md:text-3xl font-black text-white uppercase tracking-tight leading-tight">${produto.nome}</h1>
+          </div>
+          <div class="bg-zinc-900/40 border border-zinc-900 p-4 rounded-xl flex flex-col gap-1">
+            <div class="flex items-baseline gap-3">
+              ${produto.precoOriginal ? '<span class="text-xs text-zinc-500 line-through font-mono">R$ ' + produto.precoOriginal.toFixed(2).replace('.', ',') + '</span>' : ''}
+              <p class="text-3xl font-black text-amber-400 font-mono">R$ ${produto.preco.toFixed(2).replace('.', ',')}</p>
+              <span class="text-xs font-bold text-amber-400 uppercase font-mono">no PIX</span>
+            </div>
+            <p class="text-xs text-amber-400 font-mono">ou R$ ${produto.preco.toFixed(2).replace('.', ',')} em ate <span class="text-white font-bold">3x de R$ ${valorParcela}</span> sem juros no cartao</p>
+          </div>
+          <div class="bg-zinc-950 border border-zinc-900 p-3.5 rounded-xl" id="secao-frete">
+            ${usuarioLogado && usuarioLogado.endereco ? `
+              <div class="flex items-start gap-2.5">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 mt-0.5"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                <div class="text-xs w-full">
+                  <p class="text-zinc-300 font-bold">Entrega para: <span class="text-white font-normal">${formatarEnderecoString(usuarioLogado.endereco)}</span></p>
+                  <p class="text-zinc-400 font-mono mt-1">
+                    Frete: <span class="text-white font-bold" id="frete-logado-valor">Calculando...</span>
+                    <span class="text-zinc-500" id="frete-logado-prazo">(ate 4 dias uteis)</span>
+                  </p>
+                </div>
+              </div>
+            ` : `
+              <div>
+                <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1.5">Calcular Frete e Prazo</label>
+                <div class="flex gap-2">
+                  <input type="text" id="inputCepSimulacao" placeholder="Digite seu CEP" maxlength="9"
+                    class="bg-zinc-900 border border-zinc-800 rounded px-3 py-1.5 text-xs text-white uppercase font-mono focus:outline-none focus:border-amber-400 flex-1">
+                  <button onclick="simularFrete()" class="bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-bold uppercase px-3 rounded transition">Calcular</button>
+                </div>
+                <div id="resultadoFreteSimulacao" class="hidden mt-2 text-xs font-mono"></div>
+              </div>
+            `}
+          </div>
+          <div>
+            <span class="text-xs text-zinc-400 uppercase font-bold tracking-wider block mb-2">Cor: <span id="label-cor-selecionada" class="text-white">${corSelecionada}</span></span>
+            <div class="flex gap-2.5">
+              ${produto.cores.map(cor => `
+                <button onclick="selecionarCor('${cor.nome}')" id="btn-cor-${cor.nome}" class="flex items-center gap-2 px-3 py-1.5 border border-zinc-800 rounded-lg text-xs font-bold uppercase transition">
+                  <span class="w-3.5 h-3.5 rounded-full border border-zinc-700" style="background-color: ${cor.codigoHex}"></span>
+                  ${cor.nome}
+                </button>
+              `).join('')}
+            </div>
+          </div>
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs text-zinc-400 uppercase font-bold tracking-wider">Tamanho: <span id="label-tam-selecionado" class="text-white">${tamanhoSelecionado}</span></span>
+              <button onclick="toggleGuiaTamanhos()" class="text-xs text-amber-400 hover:underline flex items-center gap-1 font-mono">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z"/><path d="m14.5 12.5 2-2"/><path d="m11.5 9.5 2-2"/><path d="m8.5 6.5 2-2"/><path d="m17.5 15.5 2-2"/></svg>
+                Guia de Tamanhos
+              </button>
+            </div>
+            <div class="flex gap-2">
+              ${produto.tamanhos.map(tam => `
+                <button onclick="selecionarTamanho('${tam}')" id="btn-tam-${tam}" class="w-11 h-11 border border-zinc-800 rounded-lg text-xs font-black uppercase flex items-center justify-center transition">
+                  ${tam}
+                </button>
+              `).join('')}
+            </div>
+          </div>
+          <div class="flex items-center justify-between bg-zinc-950 border border-zinc-900 p-3 rounded-xl">
+            <span class="text-xs text-zinc-400 uppercase font-bold">Quantidade:</span>
+            <div class="flex items-center gap-4">
+              <span class="text-[11px] font-mono text-emerald-400 flex items-center gap-1">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                ${produto.estoque} unidades em estoque
+              </span>
+              <div class="flex items-center gap-3 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5">
+                <button onclick="alterarQuantidadeDetalhe(-1)" class="text-zinc-400 hover:text-white font-bold text-sm">-</button>
+                <span id="qtd-detalhe-display" class="text-xs font-mono font-bold text-white w-4 text-center">1</span>
+                <button onclick="alterarQuantidadeDetalhe(1, ${produto.estoque})" class="text-zinc-400 hover:text-white font-bold text-sm">+</button>
+              </div>
+            </div>
+          </div>
+          <div class="flex flex-col gap-3 pt-2">
+            <button onclick="dispararAdicionarASacolaGenerico(${produto.id})" class="w-full bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800 font-black text-xs uppercase tracking-widest py-4 rounded-xl transition flex items-center justify-center gap-2">
+              <i data-lucide="shopping-bag" class="w-4 h-4"></i> Adicionar a Sacola
+            </button>
+            <button onclick="dispararCompraImediata(${produto.id})" class="w-full bg-amber-500 hover:bg-amber-400 text-black font-black text-xs uppercase tracking-widest py-4 rounded-xl transition text-center shadow-lg shadow-amber-500/10 flex items-center justify-center gap-2">
+              Comprar Agora
+            </button>
+          </div>
+          <div class="border-t border-zinc-900 pt-5 mt-2">
+            <h3 class="text-xs text-zinc-400 uppercase font-bold tracking-wider mb-2">Descricao do Produto</h3>
+            <p class="text-xs text-zinc-400 leading-relaxed font-light">${produto.descricao}</p>
+          </div>
+          <div class="border-t border-zinc-900 pt-5 space-y-3">
+            <div class="flex items-start gap-3 text-zinc-300">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 mt-0.5"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 12"/><path d="M3 3v9h9"/></svg>
+              <div>
+                <h4 class="text-xs font-bold uppercase">Devolucao Gratis</h4>
+                <p class="text-[11px] text-zinc-500">Voce tem 7 dias a partir do recebimento para devolver o produto sem custos.</p>
+              </div>
+            </div>
+            <div class="flex items-start gap-3 text-zinc-300">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 mt-0.5"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>
+              <div>
+                <h4 class="text-xs font-bold uppercase">Compra Garantida</h4>
+                <p class="text-[11px] text-zinc-500">Receba o produto que esta esperando ou devolvemos o seu dinheiro.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      atualizarSeletoresVisuais(produto);
+      renderizarRelacionados(produto);
+      renderizarAvaliacoesProduto(produto.id);
+      if (window.lucide) {
+        lucide.createIcons();
+        setTimeout(() => lucide.createIcons(), 100);
+        setTimeout(() => lucide.createIcons(), 500);
+        setTimeout(() => lucide.createIcons(), 1000);
+      }
+    }
+
+    function alterarQuantidadeDetalhe(delta, estoqueMax) {
+      estoqueMax = estoqueMax || 99;
+      const novaQtd = quantidadeSelecionada + delta;
+      if (novaQtd >= 1 && novaQtd <= estoqueMax) {
+        quantidadeSelecionada = novaQtd;
+        const elem = document.getElementById('qtd-detalhe-display');
+        if (elem) elem.innerText = quantidadeSelecionada;
+      }
+    }
+
+    function toggleGuiaTamanhos() {
+      const modal = document.getElementById('modalGuiaTamanhos');
+      if (modal) modal.classList.toggle('hidden');
+    }
+
+    function formatarEnderecoString(endereco) {
+      if (!endereco) return '';
+      if (typeof endereco === 'string') return endereco;
+      if (typeof endereco === 'object') {
+        const partes = [];
+        if (endereco.rua || endereco.logradouro) partes.push(endereco.rua || endereco.logradouro);
+        if (endereco.numero) partes.push(endereco.numero);
+        if (endereco.bairro) partes.push(endereco.bairro);
+        if (endereco.cidade || endereco.localidade) partes.push(endereco.cidade || endereco.localidade);
+        if (endereco.estado || endereco.uf) partes.push(endereco.estado || endereco.uf);
+        if (endereco.cep) partes.push(endereco.cep);
+        if (partes.length > 0) return partes.join(', ');
+        return JSON.stringify(endereco);
+      }
+      return String(endereco);
+    }
+
+    function extrairCEPDoEndereco(endereco) {
+      if (!endereco) return null;
+      let str = '';
+      if (typeof endereco === 'string') str = endereco;
+      else str = JSON.stringify(endereco);
+      const match = str.match(/(\d{5}-?\d{3})/);
+      return match ? match[1] : null;
+    }
+
+    const CEP_ORIGEM = "83650-000";
+
+    const TABELA_FRETE = {
+      SP: { valor: 14.90, prazo: "2 a 4 dias uteis" },
+      RJ: { valor: 16.50, prazo: "3 a 5 dias uteis" },
+      MG: { valor: 17.90, prazo: "3 a 6 dias uteis" },
+      ES: { valor: 18.50, prazo: "4 a 6 dias uteis" },
+      PR: { valor: 19.90, prazo: "4 a 7 dias uteis" },
+      SC: { valor: 21.50, prazo: "5 a 8 dias uteis" },
+      RS: { valor: 23.90, prazo: "5 a 9 dias uteis" },
+      DF: { valor: 19.90, prazo: "4 a 7 dias uteis" },
+      GO: { valor: 20.50, prazo: "4 a 7 dias uteis" },
+      MT: { valor: 24.90, prazo: "5 a 9 dias uteis" },
+      MS: { valor: 22.50, prazo: "5 a 8 dias uteis" },
+      BA: { valor: 24.90, prazo: "5 a 9 dias uteis" },
+      SE: { valor: 26.50, prazo: "6 a 10 dias uteis" },
+      AL: { valor: 27.90, prazo: "6 a 10 dias uteis" },
+      PE: { valor: 27.50, prazo: "6 a 10 dias uteis" },
+      PB: { valor: 28.90, prazo: "6 a 11 dias uteis" },
+      RN: { valor: 29.50, prazo: "7 a 11 dias uteis" },
+      CE: { valor: 29.90, prazo: "7 a 11 dias uteis" },
+      PI: { valor: 30.50, prazo: "7 a 12 dias uteis" },
+      MA: { valor: 31.90, prazo: "7 a 12 dias uteis" },
+      PA: { valor: 32.50, prazo: "8 a 13 dias uteis" },
+      AP: { valor: 34.90, prazo: "9 a 14 dias uteis" },
+      RR: { valor: 36.50, prazo: "9 a 15 dias uteis" },
+      AM: { valor: 35.90, prazo: "8 a 14 dias uteis" },
+      AC: { valor: 37.50, prazo: "9 a 15 dias uteis" },
+      RO: { valor: 33.90, prazo: "8 a 13 dias uteis" },
+      TO: { valor: 31.50, prazo: "7 a 12 dias uteis" }
+    };
+
+    function formatarCEP(cep) {
+      cep = cep.replace(/\D/g, '');
+      if (cep.length > 5) cep = cep.substring(0, 5) + '-' + cep.substring(5, 8);
+      return cep;
+    }
+
+    function validarCEP(cep) {
+      return /^\d{5}-?\d{3}$/.test(cep);
+    }
+
+    async function consultarCEP(cep) {
+      const cepLimpo = cep.replace(/\D/g, '');
+      const response = await fetch('https://viacep.com.br/ws/' + cepLimpo + '/json/');
+      const data = await response.json();
+      if (data.erro) throw new Error('CEP nao encontrado');
+      return data;
+    }
+
+    function calcularFrete(uf) {
+      const regiao = TABELA_FRETE[uf.toUpperCase()];
+      if (!regiao) return { valor: 39.90, prazo: "10 a 15 dias uteis", uf: uf };
+      return regiao;
+    }
+
+    async function simularFrete() {
+      const input = document.getElementById('inputCepSimulacao');
+      const resultado = document.getElementById('resultadoFreteSimulacao');
+      const cep = input.value.trim();
+      if (!validarCEP(cep)) {
+        resultado.classList.remove('hidden', 'text-amber-400', 'text-emerald-400');
+        resultado.classList.add('text-red-400');
+        resultado.innerHTML = 'CEP invalido. Digite 8 numeros.';
+        return;
+      }
+      resultado.classList.remove('hidden', 'text-red-400', 'text-emerald-400');
+      resultado.classList.add('text-zinc-400');
+      resultado.innerHTML = '<span class="inline-block w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin mr-1"></span> Consultando...';
+      try {
+        const endereco = await consultarCEP(cep);
+        const frete = calcularFrete(endereco.uf);
+        resultado.classList.remove('text-zinc-400', 'text-red-400');
+        resultado.classList.add('text-emerald-400');
+        resultado.innerHTML = '<div class="flex items-start gap-2"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 mt-0.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><div><p class="text-white font-bold">R$ ' + frete.valor.toFixed(2).replace('.', ',') + '</p><p class="text-zinc-400 text-[10px]">' + endereco.localidade + ' - ' + endereco.uf + ' &middot; ' + frete.prazo + '</p></div></div>';
+        localStorage.setItem('cep_frete_simulado', cep);
+        localStorage.setItem('valor_frete_simulado', frete.valor);
+        window.dispatchEvent(new CustomEvent('freteCalculado', { detail: { valor: frete.valor, prazo: frete.prazo } }));
+      } catch (error) {
+        resultado.classList.remove('text-zinc-400', 'text-emerald-400');
+        resultado.classList.add('text-red-400');
+        resultado.innerHTML = 'CEP nao encontrado. Verifique e tente novamente.';
+      }
+    }
+
+    async function calcularFreteLogado() {
+      const elValor = document.getElementById('frete-logado-valor');
+      const elPrazo = document.getElementById('frete-logado-prazo');
+      if (!elValor) return;
+      const cep = extrairCEPDoEndereco(usuarioLogado && usuarioLogado.endereco ? usuarioLogado.endereco : null);
+      if (!cep) {
+        elValor.textContent = 'R$ 19,90';
+        elValor.classList.remove('text-white');
+        elValor.classList.add('text-amber-400');
+        if (elPrazo) elPrazo.textContent = '(ate 7 dias uteis)';
+        return;
+      }
+      try {
+        const enderecoData = await consultarCEP(cep);
+        const frete = calcularFrete(enderecoData.uf);
+        elValor.textContent = 'R$ ' + frete.valor.toFixed(2).replace('.', ',');
+        elValor.classList.remove('text-white');
+        elValor.classList.add('text-amber-400');
+        if (elPrazo) elPrazo.textContent = '(' + frete.prazo + ')';
+      } catch (error) {
+        elValor.textContent = 'R$ 19,90';
+        elValor.classList.remove('text-white');
+        elValor.classList.add('text-amber-400');
+        if (elPrazo) elPrazo.textContent = '(ate 7 dias uteis)';
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const inputCep = document.getElementById('inputCepSimulacao');
+      if (inputCep) {
+        inputCep.addEventListener('input', (e) => {
+          e.target.value = formatarCEP(e.target.value);
+        });
+        const cepSalvo = localStorage.getItem('cep_frete_simulado');
+        if (cepSalvo) {
+          inputCep.value = formatarCEP(cepSalvo);
+          simularFrete();
+        }
+      }
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && e.target.id === 'inputCepSimulacao') {
+        simularFrete();
+      }
+    });
+
+    function mudarFotoPrincipal(url) {
+      const img = document.getElementById('foto-principal');
+      if (img) img.src = url;
+    }
+
+    function selecionarCor(nomeCor) {
+      corSelecionada = nomeCor;
+      const label = document.getElementById('label-cor-selecionada');
+      if (label) label.innerText = nomeCor;
+      const urlParams = new URLSearchParams(window.location.search);
+      const produto = produtosOriginais.find(p => p.id === (parseInt(urlParams.get('id')) || 1));
+      atualizarSeletoresVisuais(produto);
+    }
+
+    function selecionarTamanho(tam) {
+      tamanhoSelecionado = tam;
+      const label = document.getElementById('label-tam-selecionado');
+      if (label) label.innerText = tam;
+      const urlParams = new URLSearchParams(window.location.search);
+      const produto = produtosOriginais.find(p => p.id === (parseInt(urlParams.get('id')) || 1));
+      atualizarSeletoresVisuais(produto);
+    }
+
+    function atualizarSeletoresVisuais(produto) {
+      if (!produto) return;
+      produto.cores.forEach(cor => {
+        const btn = document.getElementById('btn-cor-' + cor.nome);
+        if (btn) {
+          btn.className = cor.nome === corSelecionada
+            ? "flex items-center gap-2 px-3 py-1.5 border border-amber-400 rounded-lg bg-zinc-900 text-xs font-bold uppercase text-amber-400 transition"
+            : "flex items-center gap-2 px-3 py-1.5 border border-zinc-800 rounded-lg bg-zinc-950 text-xs font-bold uppercase text-zinc-400 transition";
+        }
+      });
+      produto.tamanhos.forEach(tam => {
+        const btn = document.getElementById('btn-tam-' + tam);
+        if (btn) {
+          btn.className = tam === tamanhoSelecionado
+            ? "w-11 h-11 border border-amber-400 rounded-lg bg-zinc-900 text-xs font-black uppercase text-amber-400 flex items-center justify-center transition"
+            : "w-11 h-11 border border-zinc-800 rounded-lg bg-zinc-950 text-xs font-black uppercase text-zinc-400 flex items-center justify-center transition";
+        }
+      });
+    }
+
+    function dispararAdicionarASacolaGenerico(id) {
+      const produto = produtosOriginais.find(p => p.id === id);
+      if (!produto) return;
+      const itemExistente = sacolaItens.find(item => item.id === id && item.cor === corSelecionada && item.tamanho === tamanhoSelecionado);
+      if (itemExistente) {
+        itemExistente.quantidade += quantidadeSelecionada;
+      } else {
+        sacolaItens.push({
+          id: produto.id,
+          nome: produto.nome,
+          preco: produto.preco,
+          imagem: produto.imagem,
+          cor: corSelecionada || produto.cores[0]?.nome || "Padrao",
+          tamanho: tamanhoSelecionado || produto.tamanhos[0] || "U",
+          quantidade: quantidadeSelecionada
+        });
+      }
+      salvarEstado();
+    }
+
+    function dispararCompraImediata(id) {
+      dispararAdicionarASacolaGenerico(id);
+      irParaCheckout();
+    }
+
+    function toggleFormAvaliacao() {
+      const container = document.getElementById('form-avaliacao-container');
+      if (container) container.classList.toggle('hidden');
+    }
+
+    function enviarAvaliacao(e) {
+      e.preventDefault();
+      const nome = document.getElementById('aval-nome').value;
+      const nota = parseInt(document.getElementById('aval-nota').value);
+      const comentario = document.getElementById('aval-comentario').value;
+      const fotoInput = document.getElementById('aval-foto');
+      const urlParams = new URLSearchParams(window.location.search);
+      const produtoId = parseInt(urlParams.get('id')) || 1;
+
+      const processarEEnviar = (fotoBase64) => {
+        const novaAvaliacao = {
+          id: Date.now(),
+          produtoId: produtoId,
+          nome: nome,
+          nota: nota,
+          comentario: comentario,
+          foto: fotoBase64,
+          data: new Date().toLocaleDateString('pt-BR')
+        };
+        let pendentes = JSON.parse(localStorage.getItem('mio_avaliacoes_pendentes')) || [];
+        pendentes.push(novaAvaliacao);
+        localStorage.setItem('mio_avaliacoes_pendentes', JSON.stringify(pendentes));
+        alert("Obrigado! Sua avaliacao foi enviada com sucesso e sera exibida apos a aprovacao do administrador.");
+        document.getElementById('formAvaliacao').reset();
+        toggleFormAvaliacao();
+      };
+
+      if (fotoInput && fotoInput.files && fotoInput.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(evt) { processarEEnviar(evt.target.result); };
+        reader.readAsDataURL(fotoInput.files[0]);
+      } else {
+        processarEEnviar(null);
+      }
+    }
+
+    function renderizarAvaliacaoEstrelas(nota) {
+      let starsHtml = '';
+      for (let i = 1; i <= 5; i++) {
+        if (i <= nota) {
+          starsHtml += '<i data-lucide="star" class="w-3.5 h-3.5 fill-amber-400 text-amber-400"></i>';
+        } else {
+          starsHtml += '<i data-lucide="star" class="w-3.5 h-3.5 text-zinc-700"></i>';
+        }
+      }
+      return '<div class="flex gap-0.5">' + starsHtml + '</div>';
+    }
+
+    function renderizarAvaliacoesProduto(produtoId) {
+      const container = document.getElementById('lista-avaliacoes');
+      if (!container) return;
+      const filtradas = avaliacoesAprovadas.filter(a => a.produtoId === produtoId);
+      if (filtradas.length === 0) {
+        container.innerHTML = '<div class="col-span-full text-center py-8 text-zinc-500 text-xs font-mono">Ainda nao ha avaliacoes aprovadas para este produto. Seja o primeiro a avaliar!</div>';
+        return;
+      }
+      container.innerHTML = filtradas.map(a => `
+        <div class="bg-zinc-900/40 border border-zinc-900 p-4 rounded-xl flex flex-col justify-between gap-3">
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-bold text-white">${a.nome}</span>
+              <span class="text-[10px] font-mono text-zinc-500">${a.data}</span>
+            </div>
+            ${renderizarAvaliacaoEstrelas(a.nota)}
+            <p class="text-xs text-zinc-300 font-light mt-2.5 leading-relaxed">"${a.comentario}"</p>
+          </div>
+          ${a.foto ? '<div class="mt-2 aspect-video bg-zinc-950 rounded-lg overflow-hidden border border-zinc-800"><img src="' + a.foto + '" class="w-full h-full object-cover"></div>' : ''}
+        </div>
+      `).join('');
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function renderizarRelacionados(produtoAtivo) {
+      const container = document.getElementById('produtos-relacionados-container');
+      if (!container) return;
+      let relacionados = produtosOriginais.filter(p => p.id !== produtoAtivo.id);
+      let mesmoSegmento = relacionados.filter(p => p.categoria === produtoAtivo.categoria);
+      let listaFinal = [...mesmoSegmento, ...relacionados.filter(p => p.categoria !== produtoAtivo.categoria)].slice(0, 6);
+      container.innerHTML = listaFinal.map(p => `
+        <div class="group border border-zinc-900 bg-zinc-950 p-2.5 rounded-xl flex flex-col justify-between transition-all hover:border-zinc-800">
+          <a href="produto.html?id=${p.id}" class="relative overflow-hidden aspect-square bg-zinc-900 mb-3 rounded-lg block" target="_self">
+            <img src="${p.imagem}" alt="${p.nome}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+          </a>
+          <div class="flex-grow mb-3">
+            <a href="produto.html?id=${p.id}" class="block" target="_self">
+              <h4 class="text-xs font-black text-white uppercase tracking-tight group-hover:text-amber-400 transition line-clamp-1">${p.nome}</h4>
+            </a>
+            <p class="text-xs font-black text-amber-400 font-mono mt-1">R$ ${p.preco.toFixed(2).replace('.', ',')}</p>
+          </div>
+          <div class="flex flex-col gap-2 w-full">
+            <button onclick="adicionarASacolaGenerico(${p.id})" class="w-full bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 text-[10px] font-black uppercase tracking-wider py-2 rounded-lg transition flex items-center justify-center gap-1.5">
+              <i data-lucide="shopping-bag" class="w-3.5 h-3.5"></i> Add Sacola
+            </button>
+            <button onclick="comprarAgoraVitrine(${p.id})" class="w-full bg-amber-400 hover:bg-amber-300 text-black text-[10px] font-black uppercase tracking-wider py-2 rounded-lg transition text-center shadow-md shadow-amber-400/10">
+              Comprar Agora
+            </button>
+          </div>
+        </div>
+      `).join('');
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function adicionarASacolaGenerico(id) {
+      const produto = produtosOriginais.find(p => p.id === id);
+      if (!produto) return;
+      const itemExistente = sacolaItens.find(item => item.id === id);
+      if (itemExistente) { itemExistente.quantidade += 1; } 
+      else {
+        sacolaItens.push({
+          id: produto.id,
+          nome: produto.nome,
+          preco: produto.preco,
+          imagem: produto.imagem,
+          cor: produto.cores[0]?.nome || "Padrao",
+          tamanho: produto.tamanhos[0] || "U",
+          quantidade: 1
+        });
+      }
+      salvarEstado();
+    }
+
+    function comprarAgoraVitrine(id) {
+      adicionarASacolaGenerico(id);
+      window.location.href = 'checkout.html';
+    }
+
+    function renderizarItensSacola() {
+      const containerItens = document.getElementById('sacola-itens-container');
+      let subtotalGeral = 0;
+      sacolaItens.forEach(item => subtotalGeral += item.preco * item.quantidade);
+      if (containerItens) {
+        if (sacolaItens.length === 0) {
+          containerItens.innerHTML = '<div class="flex flex-col items-center justify-center py-12 text-center"><i data-lucide="shopping-bag" class="w-12 h-12 text-zinc-700 mb-2"></i><p class="text-xs font-mono text-zinc-500 uppercase">Sua sacola esta vazia</p></div>';
+        } else {
+          containerItens.innerHTML = sacolaItens.map(item => `
+            <div class="flex gap-3 bg-zinc-900/60 p-3 rounded-xl border border-zinc-800 items-center justify-between">
+              <img src="${item.imagem}" alt="${item.nome}" class="w-14 h-14 object-cover rounded-lg bg-zinc-950 border border-zinc-800 shrink-0">
+              <div class="flex-1 min-w-0 px-1">
+                <h4 class="text-xs font-bold text-white uppercase truncate">${item.nome}</h4>
+                <p class="text-[10px] font-mono text-zinc-400">Tam: ${item.tamanho} | Cor: ${item.cor}</p>
+                <p class="text-xs font-mono text-amber-400 font-bold mt-1">R$ ${(item.preco * item.quantidade).toFixed(2).replace('.', ',')}</p>
+              </div>
+              <div class="flex flex-col items-end gap-2 shrink-0">
+                <button onclick="alterarQuantidadeSacola(${item.id}, -${item.quantidade})" class="text-zinc-500 hover:text-red-400 transition">
+                  <i data-lucide="trash-2" class="w-4 h-4"></i>
+                </button>
+                <div class="flex items-center gap-2 bg-zinc-950 border border-zinc-800 rounded-lg px-2 py-1">
+                  <button onclick="alterarQuantidadeSacola(${item.id}, -1)" class="text-zinc-400 hover:text-white text-xs font-bold">-</button>
+                  <span class="text-xs font-mono text-white font-bold w-4 text-center">${item.quantidade}</span>
+                  <button onclick="alterarQuantidadeSacola(${item.id}, 1)" class="text-zinc-400 hover:text-white text-xs font-bold">+</button>
+                </div>
+              </div>
+            </div>
+          `).join('');
+        }
+        if (window.lucide) lucide.createIcons();
+      }
+      atualizarSacolaValores(subtotalGeral);
+    }
+
+    function alterarQuantidadeSacola(id, delta) {
+      const index = sacolaItens.findIndex(item => item.id === id);
+      if (index !== -1) {
+        sacolaItens[index].quantidade += delta;
+        if (sacolaItens[index].quantidade <= 0) sacolaItens.splice(index, 1);
+        salvarEstado();
+        renderizarItensSacola();
+      }
+    }
+
+    function atualizarContadorHeader() {
+      const contadores = document.querySelectorAll('#contador-sacola-header, .contador-sacola');
+      const totalItens = sacolaItens.reduce((acc, item) => acc + item.quantidade, 0);
+      contadores.forEach(contador => {
+        contador.innerText = totalItens;
+        contador.className = totalItens > 0 
+          ? "contador-sacola absolute -top-1 -right-1 bg-amber-400 text-black text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center transition-all shadow-md shadow-amber-400/20"
+          : "contador-sacola absolute -top-1 -right-1 bg-zinc-800 text-white text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center transition-all";
+      });
+    }
+
+    function atualizarSacolaValores(subtotal) {
+      const progressoElement = document.getElementById('frete-progresso');
+      const textoFreteElement = document.getElementById('frete-status-text');
+      if (progressoElement && textoFreteElement) {
+        let porcentagemFrete = Math.min((subtotal / FRETE_GRATIS_META) * 100, 100);
+        progressoElement.style.width = porcentagemFrete + '%';
+        if (subtotal >= FRETE_GRATIS_META) {
+          textoFreteElement.innerHTML = 'PARABENS! VOCE GANHOU <span class="text-amber-400 font-bold">FRETE GRATIS!</span>';
+        } else {
+          const falta = (FRETE_GRATIS_META - subtotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+          textoFreteElement.innerHTML = 'Falta apenas <span class="text-amber-400 font-bold">' + falta + '</span> para <span class="text-amber-400 font-bold">FRETE GRATIS</span>';
+        }
+      }
+      let valorDesconto = 0;
+      const linhaDesconto = document.getElementById('linhaDesconto');
+      const elementoValorDesconto = document.getElementById('valorDesconto');
+      if (cupomAtivo && cupomAtivo.porcentagem && subtotal > 0) {
+        valorDesconto = (subtotal * cupomAtivo.porcentagem) / 100;
+        if (elementoValorDesconto) elementoValorDesconto.innerText = '- ' + valorDesconto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        if (linhaDesconto) linhaDesconto.classList.remove('hidden');
+      } else if (linhaDesconto) {
+        linhaDesconto.classList.add('hidden');
+      }
+      const totalFinal = Math.max(0, subtotal - valorDesconto);
+      const elemSubtotal = document.getElementById('sacola-subtotal');
+      if (elemSubtotal) elemSubtotal.innerText = totalFinal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+
+    function aplicarCupom() {
+      const input = document.getElementById('inputCupom');
+      const msg = document.getElementById('mensagemCupom');
+      if (!input) return;
+      const codigo = input.value.trim().toUpperCase();
+      const cuponsCadastrados = JSON.parse(localStorage.getItem('mio_cupons_admin')) || { 'MIO10': 10, 'PEGASUS': 15, 'PRIMEIRACOMPRA': 20 };
+      if (cuponsCadastrados[codigo]) {
+        cupomAtivo = { codigo: codigo, porcentagem: cuponsCadastrados[codigo] };
+        salvarEstado();
+        msg.innerText = 'Cupom ' + codigo + ' aplicado (' + cupomAtivo.porcentagem + '% OFF)!';
+        msg.className = "text-[10px] font-mono mt-1 text-amber-400 font-bold";
+        msg.classList.remove('hidden');
+        renderizarItensSacola();
+      } else {
+        msg.innerText = "Cupom invalido!";
+        msg.className = "text-[10px] font-mono mt-1 text-red-400";
+        msg.classList.remove('hidden');
+      }
+    }
+
+    function toggleSacola() {
+      const sacola = document.getElementById('sacola');
+      const inner = document.getElementById('sacola-inner');
+      if (!sacola || !inner) return;
+      const isOpen = !sacola.classList.contains('pointer-events-none');
+      if (isOpen) {
+        sacola.classList.add('opacity-0', 'pointer-events-none');
+        inner.classList.add('translate-x-full');
+      } else {
+        sacola.classList.remove('opacity-0', 'pointer-events-none');
+        inner.classList.remove('translate-x-full');
+        renderizarItensSacola();
+      }
+    }
+
+    function fecharSacolaFora(event) { if (event.target.id === 'sacola') toggleSacola(); }
+    function irParaCheckout() {
+      if (sacolaItens.length === 0) { alert("Sua sacola esta vazia!"); return; }
+      window.location.href = 'checkout.html';
+    }
+
+    function toggleMenu() {
+      const sideMenu = document.getElementById('sideMenu');
+      const drawer = document.getElementById('sideMenuDrawer');
+      if (!sideMenu || !drawer) return;
+      const estaAberto = !sideMenu.classList.contains('pointer-events-none');
+      if (estaAberto) {
+        drawer.classList.add('-translate-x-full');
+        sideMenu.classList.add('opacity-0', 'pointer-events-none');
+      } else {
+        sideMenu.classList.remove('opacity-0', 'pointer-events-none');
+        drawer.classList.remove('-translate-x-full');
+      }
+    }
+    function fecharMenuAoClicarFora(e) { if (e.target.id === 'sideMenu') toggleMenu(); }
+    function toggleCategorias() {
+      const list = document.getElementById('categoriasList');
+      const arrow = document.getElementById('cat-arrow');
+      if (list) list.classList.toggle('hidden');
+      if (arrow) arrow.classList.toggle('rotate-180');
+    }
+    function filtrarPeloMenu(filtro) {
+      toggleMenu();
+      window.location.href = 'produto.html?filtro=' + filtro;
+    }
+
+    function toggleSearchMobile() { document.getElementById('searchMobileBar')?.classList.toggle('hidden'); }
+    function toggleBotaoLimpar() {
+      const input = document.getElementById('searchInput');
+      document.getElementById('clearSearchBtn')?.classList.toggle('hidden', input.value.trim() === '');
+    }
+    function limparBusca() {
+      const input = document.getElementById('searchInput');
+      if (input) { input.value = ''; toggleBotaoLimpar(); }
+    }
+    function realizarBusca() {
+      const query = document.getElementById('searchInput').value.trim();
+      if (query) window.location.href = 'produto.html?busca=' + encodeURIComponent(query);
+    }
+    function verificarEnter(e) { if (e.key === 'Enter') realizarBusca(); }
+
+    function toggleBotaoLimparMobile() {
+      const input = document.getElementById('searchMobileInput');
+      document.getElementById('clearSearchMobileBtn')?.classList.toggle('hidden', input.value.trim() === '');
+    }
+    function limparBuscaMobile() {
+      const input = document.getElementById('searchMobileInput');
+      if (input) { input.value = ''; toggleBotaoLimparMobile(); }
+    }
+    function realizarBuscaMobile() {
+      const query = document.getElementById('searchMobileInput').value.trim();
+      if (query) window.location.href = 'produto.html?busca=' + encodeURIComponent(query);
+    }
+    function verificarEnterMobile(e) { if (e.key === 'Enter') realizarBuscaMobile(); }
+
+    let freteGratisNotificado = false;
+
+    function criarConfete(x, y) {
+      const colors = ['#fbbf24', '#f59e0b', '#d97706', '#fcd34d', '#fbbf24'];
+      for (let i = 0; i < 40; i++) {
+        const confete = document.createElement('div');
+        confete.style.cssText = 'position: fixed; left: ' + x + 'px; top: ' + y + 'px; width: 8px; height: 8px; background: ' + colors[Math.floor(Math.random() * colors.length)] + '; border-radius: ' + (Math.random() > 0.5 ? '50%' : '2px') + '; pointer-events: none; z-index: 9999; transform: translate(0, 0) rotate(0deg);';
+        document.body.appendChild(confete);
+        const angle = (Math.random() * 360) * (Math.PI / 180);
+        const velocity = 3 + Math.random() * 6;
+        const vx = Math.cos(angle) * velocity;
+        const vy = Math.sin(angle) * velocity - 4;
+        let posX = 0, posY = 0, rot = 0, opacity = 1;
+        const anim = setInterval(() => {
+          posX += vx; posY += vy + 0.3; rot += 10; opacity -= 0.015;
+          confete.style.transform = 'translate(' + posX + 'px, ' + posY + 'px) rotate(' + rot + 'deg)';
+          confete.style.opacity = opacity;
+          if (opacity <= 0) { clearInterval(anim); confete.remove(); }
+        }, 16);
+      }
+    }
+
+    function mostrarFogueteFreteGratis() {
+      const sacolaBtn = document.querySelector('[onclick="toggleSacola()"]');
+      if (!sacolaBtn) return;
+      const rect = sacolaBtn.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      const foguete = document.createElement('div');
+      foguete.innerHTML = '&#128640;';
+      foguete.style.cssText = 'position: fixed; left: ' + centerX + 'px; top: ' + centerY + 'px; font-size: 32px; pointer-events: none; z-index: 9999; transform: translate(-50%, -50%) scale(0);';
+      document.body.appendChild(foguete);
+      let scale = 0, opacity = 1, y = 0;
+      const anim = setInterval(() => {
+        scale = Math.min(scale + 0.08, 1.5);
+        y -= 3;
+        foguete.style.transform = 'translate(-50%, calc(-50% + ' + y + 'px)) scale(' + scale + ')';
+        if (scale >= 1.5) {
+          clearInterval(anim);
+          criarConfete(centerX, centerY + y);
+          setTimeout(() => {
+            const fade = setInterval(() => {
+              opacity -= 0.05;
+              foguete.style.opacity = opacity;
+              if (opacity <= 0) { clearInterval(fade); foguete.remove(); }
+            }, 30);
+          }, 300);
+        }
+      }, 16);
+    }
+
+    function verificarNotificacaoFreteGratis() {
+      const subtotal = sacolaItens.reduce((acc, item) => acc + (item.preco * item.quantidade), 0);
+      if (subtotal >= FRETE_GRATIS_META && !freteGratisNotificado) {
+        freteGratisNotificado = true;
+        mostrarFogueteFreteGratis();
+        setTimeout(() => toggleSacola(), 1200);
+      } else if (subtotal < FRETE_GRATIS_META) {
+        freteGratisNotificado = false;
+      }
+    }
+
+    function renderizarTodosOsProdutos(listaProdutos) {
+      const wrapperDetalhes = document.getElementById('detalhes-produto-wrapper');
+      const containerVitrine = document.getElementById('vitrine-todos-container');
+      const grid = document.getElementById('grid-produtos-todos');
+      const contador = document.getElementById('contador-produtos-vitrine');
+      if (wrapperDetalhes) wrapperDetalhes.classList.add('hidden');
+      if (containerVitrine) containerVitrine.classList.remove('hidden');
+      if (contador) {
+        contador.innerText = listaProdutos.length + ' produto' + (listaProdutos.length !== 1 ? 's' : '') + ' encontrado' + (listaProdutos.length !== 1 ? 's' : '');
+      }
+      if (!grid) return;
+      if (listaProdutos.length === 0) {
+        grid.innerHTML = '<p class="col-span-full text-zinc-500 text-center py-12 text-xs font-mono uppercase">Nenhum produto encontrado.</p>';
+        return;
+      }
+      grid.innerHTML = listaProdutos.map(p => `
+        <div class="group border border-zinc-900 bg-zinc-950 p-2.5 rounded-xl flex flex-col justify-between transition-all hover:border-zinc-800">
+          <a href="produto.html?id=${p.id}" class="relative overflow-hidden aspect-square bg-zinc-900 mb-3 rounded-lg block" target="_self">
+            <img src="${p.imagem}" alt="${p.nome}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+            ${p.estaEmPromocao ? '<span class="absolute top-2 left-2 text-[10px] font-black uppercase px-2 py-1 rounded bg-amber-500 text-black">' + p.textoDestaquePromo + '</span>' : ''}
+          </a>
+          <span class="text-[10px] text-zinc-500 uppercase font-mono tracking-wider">${p.genero} | ${p.categoria}</span>
+          <div class="flex-grow mb-3">
+            <a href="produto.html?id=${p.id}" class="block mt-1" target="_self">
+              <h4 class="text-sm font-black text-white uppercase tracking-tight group-hover:text-amber-400 transition line-clamp-1">${p.nome}</h4>
+            </a>
+            <p class="text-lg font-black text-amber-400 font-mono">
+              ${p.precoOriginal ? '<span class="text-xs text-zinc-500 line-through block font-mono">R$ ' + p.precoOriginal.toFixed(2).replace('.', ',') + '</span>' : ''}
+              R$ ${p.preco.toFixed(2).replace('.', ',')}
+            </p>
+          </div>
+          <div class="flex flex-col gap-2 w-full">
+            <button onclick="adicionarASacolaGenerico(${p.id})" class="w-full bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 text-[10px] font-black uppercase tracking-wider py-2 rounded-lg transition flex items-center justify-center gap-1.5">
+              <i data-lucide="shopping-bag" class="w-3.5 h-3.5"></i> Add Sacola
+            </button>
+            <button onclick="comprarAgoraVitrine(${p.id})" class="w-full bg-amber-400 hover:bg-amber-300 text-black text-[10px] font-black uppercase tracking-wider py-2 rounded-lg transition text-center shadow-md shadow-amber-400/10">
+              Comprar Agora
+            </button>
+          </div>
+        </div>
+      `).join('');
+      if (window.lucide) lucide.createIcons();
+    }
+
+    if (cupomAtivo && !cupomAtivo.porcentagem) { cupomAtivo = null; localStorage.removeItem('mio_cupom_ativo'); }
+    cupomAtivo = null;
+    localStorage.removeItem('mio_cupom_ativo');
+
+    window.addEventListener('DOMContentLoaded', () => {
+      verificarSessaoUsuario();
+      renderizarItensSacola();
+      atualizarContadorHeader();
+      const urlParams = new URLSearchParams(window.location.search);
+      const idParam = urlParams.get('id');
+      const filtroParam = urlParams.get('filtro');
+      const buscaParam = urlParams.get('busca');
+      if (idParam) {
+        renderizarPaginaProduto(parseInt(idParam));
+        if (usuarioLogado && usuarioLogado.endereco) {
+          setTimeout(() => calcularFreteLogado(), 300);
+        }
+      } else if (filtroParam) {
+        let filtrados = produtosOriginais;
+        if (filtroParam !== 'todos') {
+          filtrados = produtosOriginais.filter(p => p.categoria === filtroParam || p.genero === filtroParam);
+        }
+        renderizarTodosOsProdutos(filtrados);
+      } else if (buscaParam) {
+        const termo = buscaParam.toLowerCase();
+        const resultados = produtosOriginais.filter(p => p.nome.toLowerCase().includes(termo));
+        renderizarTodosOsProdutos(resultados);
+      } else {
+        renderizarPaginaProduto(1);
+      }
+    });
+  </script>
+</body>
+</html>

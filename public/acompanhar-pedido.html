@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Acompanhar Pedido | MIO Streetwear</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-zinc-950 text-white font-sans antialiased min-h-screen flex flex-col justify-between">
+
+  <!-- TOPO -->
+  <header class="py-6 px-8 border-b border-zinc-900 bg-zinc-950">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+<a href="index.html" class="mio-logo text-2xl font-black tracking-widest text-white" data-logo-h="44">MIO</a>
+  </header>
+
+  <!-- FORMULÁRIO DE LOGIN / RASTREIO -->
+  <main class="max-w-md mx-auto px-4 py-16 w-full">
+    <div class="bg-zinc-900/60 p-8 rounded-xl border border-zinc-800 backdrop-blur-sm">
+      <div class="text-center mb-8">
+        <div class="w-12 h-12 bg-zinc-800 rounded-full flex items-center justify-center mx-auto mb-3">
+          <i data-lucide="package" class="w-6 h-6 text-white"></i>
+        </div>
+        <h1 class="text-xl font-black uppercase tracking-wider text-white">Acompanhar Pedido</h1>
+        <p class="text-xs text-zinc-400 mt-1">Entre com sua conta para localizar suas encomendas MIO.</p>
+      </div>
+
+      <form onsubmit="autenticarUsuario(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-1">E-mail</label>
+          <input type="email" id="emailInput" required placeholder="seu@email.com" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2.5 text-sm text-white focus:outline-none focus:border-white">
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-1">Senha</label>
+          <input type="password" id="senhaInput" required placeholder="••••••••" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2.5 text-sm text-white focus:outline-none focus:border-white">
+        </div>
+
+        <button type="submit" class="w-full bg-white text-black font-black text-xs uppercase tracking-widest py-3 rounded hover:bg-zinc-200 transition mt-2">
+          Acessar Meus Pedidos
+        </button>
+      </form>
+    </div>
+  </main>
+
+  <footer class="py-6 border-t border-zinc-900 text-center text-xs text-zinc-600">
+    © 2026 MIO Streetwear.
+  </footer>
+
+  <script>
+    lucide.createIcons();
+
+    async function autenticarUsuario(event) {
+      event.preventDefault();
+      const email = document.getElementById('emailInput').value.toLowerCase().trim();
+      const senha = document.getElementById('senhaInput').value;
+
+      if (email === "admin@miostreetwear.com.br") {
+        window.location.href = "admin.html";
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/clientes/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, senha })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.cliente || !data.token) {
+          alert(data.error || "E-mail ou senha incorretos!");
+          return;
+        }
+        localStorage.setItem('mio_usuario_logado', JSON.stringify(data.cliente));
+        localStorage.setItem('mio_usuario_token', data.token);
+        alert("Login efetuado com sucesso! Redirecionando para seus pedidos...");
+        window.location.href = "perfil.html?tab=acompanhar";
+      } catch (err) {
+        alert("Servidor indisponível. Tente novamente em instantes.");
+      }
+    }
+  </script>
+  <script src="js/logo.js"></script>
+</body>
+</html>

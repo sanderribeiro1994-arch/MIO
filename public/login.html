@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Entrar | MIO Streetwear</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+</head>
+<body class="bg-zinc-950 text-white font-sans antialiased min-h-screen flex flex-col justify-between">
+
+  <!-- CABEÇALHO -->
+  <header class="py-6 px-8 border-b border-zinc-900 bg-zinc-950">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+<a href="index.html" class="mio-logo text-2xl font-black tracking-widest text-white hover:opacity-80 transition" data-logo-h="44">MIO</a>
+    </div>
+  </header>
+
+  <!-- FORMULÁRIO DE LOGIN -->
+  <main class="max-w-md mx-auto px-4 py-12 w-full my-auto">
+    <div class="bg-zinc-900/60 p-8 rounded-2xl border border-zinc-800/80 backdrop-blur-sm shadow-2xl">
+      
+      <div class="text-center mb-8">
+        <span class="text-[10px] font-mono text-amber-400 uppercase tracking-widest">Área de Membros</span>
+        <h1 class="text-2xl md:text-3xl font-black uppercase tracking-wider text-white mt-1">ACESSAR CONTA</h1>
+        <p class="text-xs text-zinc-400 mt-2">Digite seus dados para entrar e ver seus pedidos.</p>
+      </div>
+
+      <form onsubmit="autenticarCliente(event)" class="space-y-4">
+        
+        <!-- E-MAIL -->
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-1">E-mail</label>
+          <input type="email" id="loginEmail" required placeholder="seu@email.com" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-3 text-sm text-white focus:outline-none focus:border-white transition">
+        </div>
+
+        <!-- SENHA -->
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-xs font-bold uppercase tracking-wider text-zinc-400">Senha</label>
+            <a href="#" onclick="alert('Entre em contato com o suporte para redefinir sua senha.')" class="text-[10px] text-zinc-500 hover:text-zinc-300">Esqueceu a senha?</a>
+          </div>
+          <input type="password" id="loginSenha" required placeholder="••••••••" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-3 text-sm text-white focus:outline-none focus:border-white transition">
+        </div>
+
+        <!-- BOTÃO ENTRAR -->
+        <button type="submit" class="w-full bg-amber-400 text-black font-black text-xs uppercase tracking-widest py-4 rounded-lg hover:bg-zinc-200 active:scale-[0.99] transition mt-4">
+          Entrar na Conta
+        </button>
+
+      </form>
+    </div>
+  </main>
+
+  <!-- RODAPÉ -->
+  <footer class="py-6 border-t border-zinc-900 text-center text-xs text-zinc-600">
+    © 2026 MIO Streetwear. Todos os direitos reservados.
+  </footer>
+
+  <!-- LÓGICA DE LOGIN -->
+  <script>
+    lucide.createIcons();
+
+async function autenticarCliente(event) {
+      event.preventDefault();
+
+      const email = document.getElementById('loginEmail').value.toLowerCase().trim();
+      const senha = document.getElementById('loginSenha').value;
+
+      // Busca no banco de dados do servidor (fonte de verdade).
+      let usuarioEncontrado = null;
+      try {
+        const res = await fetch('/api/clientes/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, senha })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.cliente && data.token) {
+          usuarioEncontrado = data.cliente;
+          localStorage.setItem('mio_usuario_token', data.token);
+        } else {
+          alert(data.error || "E-mail ou senha incorretos!");
+          return;
+        }
+      } catch (err) {
+        alert("Servidor indisponível. Tente novamente em instantes.");
+        return;
+      }
+
+      if (usuarioEncontrado) {
+        // Salva a sessão ativa do usuário (sem a senha em texto puro).
+        localStorage.setItem('mio_usuario_logado', JSON.stringify(usuarioEncontrado));
+        alert(`Bem-vindo de volta, ${usuarioEncontrado.nome}!`);
+
+        // Se veio redirecionado do checkout, volta para lá. Senão, vai pro Perfil/Home
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('redirect') === 'checkout') {
+          window.location.href = "checkout.html";
+        } else if (urlParams.get('redirect') === 'acompanhar') {
+          window.location.href = "perfil.html?tab=acompanhar";
+        } else {
+          window.location.href = "index.html";
+        }
+      } else {
+        alert("E-mail ou senha incorretos! Verifique os dados ou crie uma nova conta.");
+      }
+}
+  </script>
+  <script src="js/logo.js"></script>
+</body>
+</html>

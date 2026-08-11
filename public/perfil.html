@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Meu Perfil | MIO Streetwear</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+</head>
+<body class="bg-zinc-950 text-white font-sans antialiased min-h-screen flex flex-col justify-between">
+
+  <!-- CABEÇALHO (Ajustado na mesma proporção/altura da Home) -->
+  <header class="py-2 px-4 sm:px-8 border-b border-zinc-900 bg-zinc-950 sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto flex items-center justify-between h-10">
+<a href="index.html" class="mio-logo text-xl sm:text-2xl font-black tracking-widest text-white hover:opacity-80 transition leading-none" data-logo-h="44">MIO</a>
+      <div class="flex items-center gap-4">
+        <a href="index.html" class="text-xs text-zinc-400 hover:text-white transition uppercase font-mono flex items-center gap-1">
+          <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i> Voltar à Loja
+        </a>
+        <button onclick="deslogar()" class="text-xs text-red-400 hover:text-red-300 transition uppercase font-mono border border-red-900/50 px-3 py-1 rounded bg-red-950/30">
+          Sair
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- CONTEÚDO PRINCIPAL -->
+  <main class="max-w-6xl mx-auto px-4 py-10 w-full flex-1">
+    
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-8 items-start">
+      
+      <!-- COLUNA DA ESQUERDA: PERFIL + ABAS PRINCIPAIS -->
+      <div class="bg-zinc-900/60 p-6 rounded-2xl border border-zinc-800 text-center flex flex-col items-center">
+        
+        <!-- FOTO DE PERFIL COM MENU DE OPÇÕES -->
+        <div class="relative group mb-4">
+          <div id="avatarContainer" class="w-24 h-24 rounded-full bg-zinc-800 border-2 border-amber-400 flex items-center justify-center text-3xl font-black text-amber-400 overflow-hidden shadow-lg">
+          </div>
+          <button onclick="toggleMenuFoto()" class="absolute bottom-0 right-0 bg-white text-black p-2 rounded-full hover:scale-110 transition shadow-lg" title="Gerenciar foto">
+            <i data-lucide="camera" class="w-4 h-4"></i>
+          </button>
+
+          <!-- MENU OPÇÕES DA FOTO -->
+          <div id="menuFoto" class="hidden absolute top-28 left-1/2 -translate-x-1/2 bg-zinc-900 border border-zinc-800 rounded-xl p-2 w-44 shadow-2xl z-30 text-left space-y-1">
+            <label for="uploadFoto" class="flex items-center gap-2 px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-800 rounded-lg cursor-pointer transition">
+              <i data-lucide="upload" class="w-3.5 h-3.5 text-amber-400"></i> Alterar Foto
+              <input type="file" id="uploadFoto" accept="image/*" class="hidden" onchange="salvarFotoPerfil(event)">
+            </label>
+            <button onclick="removerFotoPerfil()" class="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-400 hover:bg-red-950/40 rounded-lg transition">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Remover Foto
+            </button>
+          </div>
+        </div>
+
+        <h2 id="nomeDisplay" class="text-lg font-black uppercase text-white">••••••••••••</h2>
+        <p id="emailDisplay" class="text-xs text-zinc-400 font-mono mb-3">••••••••@••••.com</p>
+        <span class="text-[10px] font-mono bg-zinc-800 text-amber-400 px-3 py-1 rounded-full uppercase border border-amber-400/20 mb-6">Membro Oficial MIO</span>
+
+        <!-- BOTÕES DAS ABAS PRINCIPAIS -->
+        <div class="w-full space-y-2 border-t border-zinc-800/80 pt-4">
+          <button id="btnAbaDados" onclick="trocarAbaPrincipal('dados')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition bg-amber-400 text-black shadow-lg">
+            <i data-lucide="user" class="w-4 h-4"></i> Dados Cadastrais
+          </button>
+
+          <button id="btnAbaHistorico" onclick="trocarAbaPrincipal('historico')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition text-zinc-400 hover:text-white hover:bg-zinc-800/60">
+            <i data-lucide="shopping-bag" class="w-4 h-4"></i> Histórico de Compras
+          </button>
+
+          <button id="btnAbaAcompanhar" onclick="trocarAbaPrincipal('acompanhar')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition text-zinc-400 hover:text-white hover:bg-zinc-800/60">
+            <i data-lucide="truck" class="w-4 h-4"></i> Acompanhar Pedidos
+          </button>
+        </div>
+
+      </div>
+
+      <!-- COLUNA DA DIREITA: PAINÉIS -->
+      <div class="md:col-span-2">
+        
+        <!-- ABA PRINCIPAL 1: DADOS CADASTRAIS -->
+        <div id="abaDados" class="bg-zinc-900/60 p-6 rounded-2xl border border-zinc-800">
+          
+          <!-- TOPO DA SEÇÃO DE DADOS -->
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-6 border-b border-zinc-800 pb-4">
+            <div>
+              <h3 class="text-sm font-black uppercase tracking-wider text-white flex items-center gap-2">
+                <i data-lucide="shield-check" class="w-4 h-4 text-amber-400"></i> Gestão de Conta e Cadastro
+              </h3>
+              <p id="avisoContagem" class="text-[11px] font-mono text-amber-400 mt-1">Próxima alteração liberada em 90 dias.</p>
+            </div>
+
+            <!-- BOTÃO OLHO (OCULTAR / EXIBIR DADOS) -->
+            <button onclick="toggleOcultarDados()" id="btnToggleOlho" class="flex items-center gap-2 text-xs font-mono bg-zinc-800 border border-zinc-700 hover:border-amber-400 text-zinc-300 px-3 py-1.5 rounded-lg transition">
+              <i data-lucide="eye-off" id="iconeOlho" class="w-4 h-4 text-amber-400"></i>
+              <span id="textoOlho">Exibir Dados</span>
+            </button>
+          </div>
+
+          <!-- NAVEGAÇÃO DE SUB-ABAS -->
+          <div class="flex flex-wrap gap-2 mb-6 border-b border-zinc-800 pb-3">
+            <button id="subBtnPessoais" onclick="trocarSubAba('pessoais')" class="text-xs font-bold uppercase px-3 py-2 rounded-lg text-amber-400 bg-amber-400/10 border border-amber-400/30 transition">
+              Informações Pessoais
+            </button>
+            <button id="subBtnEnderecos" onclick="trocarSubAba('enderecos')" class="text-xs font-bold uppercase px-3 py-2 rounded-lg text-zinc-400 hover:text-white transition">
+              Endereços
+            </button>
+            <button id="subBtnCartoes" onclick="trocarSubAba('cartoes')" class="text-xs font-bold uppercase px-3 py-2 rounded-lg text-zinc-400 hover:text-white transition">
+              Cartões
+            </button>
+            <button id="subBtnSeguranca" onclick="trocarSubAba('seguranca')" class="text-xs font-bold uppercase px-3 py-2 rounded-lg text-zinc-400 hover:text-white transition">
+              Segurança
+            </button>
+          </div>
+
+          <!-- SUB-ABA 1: INFORMAÇÕES PESSOAIS -->
+          <div id="subAbaPessoais" class="space-y-4">
+            <form onsubmit="confirmarSenhaESalvar('pessoais', event)" class="space-y-4">
+              <div>
+                <label class="block text-xs font-bold uppercase text-zinc-400 mb-1">Nome Completo*</label>
+                <input type="text" id="perfNome" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-2.5 text-sm text-zinc-200 focus:outline-none focus:border-amber-400">
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold uppercase text-zinc-400 mb-1">E-mail*</label>
+                <input type="email" id="perfEmail" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-2.5 text-sm text-zinc-200 focus:outline-none focus:border-amber-400">
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-bold uppercase text-zinc-400 mb-1">CPF*</label>
+                  <input type="text" id="perfCpf" oninput="aplicarMascaraCPF(this)" placeholder="000.000.000-00" maxlength="14" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-2.5 text-sm text-zinc-200 focus:outline-none focus:border-amber-400 font-mono">
+                </div>
+                <div>
+                  <label class="block text-xs font-bold uppercase text-amber-400 mb-1">Telefone/Whatsapp*</label>
+                  <input type="text" id="perfTelefone" oninput="aplicarMascaraTelefone(this)" placeholder="(41) 99999-9999" maxlength="15" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-2.5 text-sm text-zinc-200 focus:outline-none focus:border-amber-400 font-mono">
+                </div>
+              </div>
+
+<!-- CONSENTIMENTO DE WHATSAPP -->
+              <div class="flex items-start gap-3 bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-3 mt-4">
+                <input type="checkbox" id="perfWhatsapp" class="accent-amber-400 mt-1 w-4 h-4 shrink-0">
+                <div>
+                  <label for="perfWhatsapp" class="block text-xs font-bold uppercase text-zinc-200 cursor-pointer">Quero receber novidades e ofertas pelo WhatsApp</label>
+                  <p class="text-[10px] text-zinc-500 mt-1 leading-relaxed">Ao marcar, você concorda em receber mensagens de promoções, lançamentos e avisos de pedidos da MIO no seu WhatsApp. Você pode desativar a qualquer momento.</p>
+                </div>
+              </div>
+
+              <button type="submit" class="w-full bg-amber-400 text-black font-black text-xs uppercase tracking-widest py-3 rounded-lg hover:bg-amber-300 transition shadow-lg mt-4">
+                Salvar Alterações
+              </button>
+            </form>
+
+            <div class="pt-4 border-t border-zinc-900 text-right">
+              <button onclick="falarSuporte()" class="text-[11px] font-mono text-zinc-400 hover:text-amber-400 border border-zinc-800 px-3 py-1.5 rounded-lg transition inline-flex items-center gap-1.5">
+                <i data-lucide="message-circle" class="w-3.5 h-3.5"></i> Falar com o Suporte
+              </button>
+            </div>
+          </div>
+
+          <!-- SUB-ABA 2: ENDEREÇO DE ENTREGA -->
+          <div id="subAbaEnderecos" class="space-y-4 hidden">
+            <form onsubmit="confirmarSenhaESalvar('endereco', event)" class="space-y-4">
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div class="sm:col-span-1">
+                  <label class="block text-xs font-bold uppercase text-zinc-400 mb-1">CEP</label>
+                  <input type="text" id="endCep" placeholder="00000-000" maxlength="9" onblur="buscarCEP(this.value)" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-2.5 text-sm text-zinc-200 focus:outline-none focus:border-amber-400">
+                </div>
+                <div class="sm:col-span-2">
+                  <label class="block text-xs font-bold uppercase text-zinc-400 mb-1">Rua / Logradouro</label>
+                  <input type="text" id="endRua" placeholder="Rua Exemplo" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-2.5 text-sm text-zinc-200 focus:outline-none focus:border-amber-400">
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label class="block text-xs font-bold uppercase text-zinc-400 mb-1">Número</label>
+                  <input type="text" id="endNumero" placeholder="123" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-2.5 text-sm text-zinc-200 focus:outline-none focus:border-amber-400">
+                </div>
+                <div class="sm:col-span-2">
+                  <label class="block text-xs font-bold uppercase text-zinc-400 mb-1">Bairro</label>
+                  <input type="text" id="endBairro" placeholder="Centro" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-2.5 text-sm text-zinc-200 focus:outline-none focus:border-amber-400">
+                </div>
+              </div>
+
+              <!-- ESTADO (UF) E CIDADE -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-bold uppercase text-zinc-400 mb-1">Estado (UF)</label>
+                  <select id="endEstado" onchange="carregarCidades(this.value)" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-2.5 text-sm text-zinc-200 focus:outline-none focus:border-amber-400 cursor-pointer">
+                    <option value="">Selecione o Estado...</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-bold uppercase text-zinc-400 mb-1">Cidade</label>
+                  <select id="endCidade" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-2.5 text-sm text-zinc-200 focus:outline-none focus:border-amber-400 cursor-pointer">
+                    <option value="">Selecione primeiro a UF...</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- PONTO DE REFERÊNCIA -->
+              <div>
+                <label class="block text-xs font-bold uppercase text-zinc-400 mb-1">Ponto de Referência</label>
+                <input type="text" id="endReferencia" placeholder="Ex: Próximo ao mercado X, portão cinza" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-2.5 text-sm text-zinc-200 focus:outline-none focus:border-amber-400">
+              </div>
+
+              <button type="submit" class="w-full bg-amber-400 text-black font-black text-xs uppercase tracking-widest py-3 rounded-lg hover:bg-amber-300 transition shadow-lg mt-4">
+                Salvar Endereço
+              </button>
+            </form>
+
+            <div class="pt-4 border-t border-zinc-900 text-right">
+              <button onclick="falarSuporte()" class="text-[11px] font-mono text-zinc-400 hover:text-amber-400 border border-zinc-800 px-3 py-1.5 rounded-lg transition inline-flex items-center gap-1.5">
+                <i data-lucide="message-circle" class="w-3.5 h-3.5"></i> Falar com o Suporte
+              </button>
+            </div>
+          </div>
+
+          <!-- SUB-ABA 3: CARTÕES SALVOS -->
+          <div id="subAbaCartoes" class="space-y-4 hidden">
+            <p class="text-xs text-zinc-400">Seus cartões salvos para compras rápidas no checkout:</p>
+            
+            <div id="listaCartoesSalvos" class="space-y-3">
+              <!-- Cartões inseridos via JS -->
+            </div>
+
+            <div class="border-t border-zinc-800 pt-4 mt-6">
+              <h4 class="text-xs font-bold uppercase text-amber-400 mb-3">Cadastrar Novo Cartão</h4>
+              <form onsubmit="adicionarCartao(event)" class="space-y-3">
+                <div class="relative">
+                  <label class="block text-[10px] font-bold uppercase text-zinc-400 mb-1">Número do Cartão</label>
+                  <input type="text" id="cartaoNumero" placeholder="0000 0000 0000 0000" maxlength="19" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-2 text-sm text-zinc-200 focus:outline-none focus:border-amber-400">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-[10px] font-bold uppercase text-zinc-400 mb-1">Nome Impresso</label>
+                    <input type="text" id="cartaoNome" placeholder="NOME COMO NO CARTAO" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-2 text-sm text-zinc-200 focus:outline-none focus:border-amber-400 uppercase">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-bold uppercase text-zinc-400 mb-1">Validade (MM/AA)</label>
+                    <input type="text" id="cartaoValidade" placeholder="12/28" maxlength="5" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-2 text-sm text-zinc-200 focus:outline-none focus:border-amber-400">
+                  </div>
+                </div>
+
+                <button type="submit" class="w-full bg-zinc-800 hover:bg-amber-400 hover:text-black border border-zinc-700 text-white font-bold text-xs uppercase tracking-wider py-2.5 rounded-lg transition">
+                  Salvar Cartão
+                </button>
+              </form>
+            </div>
+          </div>
+
+          <!-- SUB-ABA 4: SEGURANÇA -->
+          <div id="subAbaSeguranca" class="space-y-4 hidden">
+            <h4 class="text-xs font-bold uppercase text-white mb-2">Alterar Senha de Acesso</h4>
+            
+            <form onsubmit="alterarSenhaSeguranca(event)" class="space-y-3">
+              <div>
+                <label class="block text-xs font-bold uppercase text-zinc-400 mb-1">Senha Atual</label>
+                <input type="password" id="senhaAtualSeg" required class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-2.5 text-sm text-zinc-200 focus:outline-none focus:border-amber-400">
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold uppercase text-zinc-400 mb-1">Nova Senha</label>
+                <input type="password" id="senhaNovaSeg" required class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-2.5 text-sm text-zinc-200 focus:outline-none focus:border-amber-400">
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold uppercase text-zinc-400 mb-1">Repetir Nova Senha</label>
+                <input type="password" id="senhaRepetirSeg" required class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-2.5 text-sm text-zinc-200 focus:outline-none focus:border-amber-400">
+              </div>
+
+<button type="submit" class="w-full bg-amber-400 text-black font-black text-xs uppercase tracking-widest py-3 rounded-lg hover:bg-amber-300 transition shadow-lg mt-2">
+                Atualizar Senha
+              </button>
+            </form>
+
+            <!-- ZONA DE RISCO: EXCLUSÃO DE CONTA -->
+            <div class="pt-5 mt-6 border-t-2 border-red-900/50">
+              <h4 class="text-xs font-black uppercase text-red-400 mb-1 flex items-center gap-2">
+                <i data-lucide="alert-triangle" class="w-4 h-4"></i> Zona de Risco
+              </h4>
+              <p class="text-[11px] text-zinc-500 mb-4">Ao excluir sua conta, todos os seus dados, histórico de compras e benefícios serão removidos permanentemente. Esta ação não pode ser desfeita.</p>
+
+              <button onclick="abrirFluxoExclusao()" class="w-full bg-red-950/40 hover:bg-red-600 hover:text-white text-red-400 border border-red-900 font-black text-xs uppercase tracking-widest py-3 rounded-lg transition flex items-center justify-center gap-2">
+                <i data-lucide="trash-2" class="w-4 h-4"></i> Excluir Minha Conta
+              </button>
+            </div>
+
+            <div class="pt-4 border-t border-zinc-900 text-right">
+              <button onclick="falarSuporte()" class="text-[11px] font-mono text-zinc-400 hover:text-amber-400 border border-zinc-800 px-3 py-1.5 rounded-lg transition inline-flex items-center gap-1.5">
+                <i data-lucide="message-circle" class="w-3.5 h-3.5"></i> Falar com o Suporte
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ABA PRINCIPAL 2: HISTÓRICO DE COMPRAS -->
+        <div id="abaHistorico" class="bg-zinc-900/60 p-6 rounded-2xl border border-zinc-800 hidden">
+          <h3 class="text-sm font-black uppercase tracking-wider text-white mb-4 border-b border-zinc-800 pb-3 flex items-center gap-2">
+            <i data-lucide="shopping-bag" class="w-4 h-4 text-amber-400"></i> Histórico de Compras
+          </h3>
+          <div id="listaHistoricoPedidos" class="space-y-4">
+            <p class="text-xs text-zinc-500 italic text-center py-8">Você ainda não realizou compras na MIO.</p>
+          </div>
+        </div>
+
+        <!-- ABA PRINCIPAL 3: ACOMPANHAR PEDIDOS -->
+        <div id="abaAcompanhar" class="bg-zinc-900/60 p-6 rounded-2xl border border-zinc-800 hidden">
+          <h3 class="text-sm font-black uppercase tracking-wider text-white mb-4 border-b border-zinc-800 pb-3 flex items-center gap-2">
+            <i data-lucide="truck" class="w-4 h-4 text-amber-400"></i> Status do Pedido Atual
+          </h3>
+          <div id="listaAcompanhamento" class="space-y-4">
+            <p class="text-xs text-zinc-500 italic text-center py-8">Nenhum pedido em andamento no momento.</p>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- MODAL DE CONFIRMAÇÃO DE SENHA -->
+  <div id="modalSenhaConfirmacao" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
+    <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 max-w-sm w-full space-y-4 text-center">
+      <i data-lucide="lock" class="w-8 h-8 text-amber-400 mx-auto"></i>
+      <h3 class="text-sm font-bold uppercase text-white">Confirmação de Segurança</h3>
+      <p class="text-xs text-zinc-400">Digite sua senha atual para autorizar as alterações:</p>
+      
+      <input type="password" id="inputSenhaAutorizacao" placeholder="Sua senha atual" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-2.5 text-sm text-center text-white focus:outline-none focus:border-amber-400">
+      
+<div class="flex gap-2">
+        <button onclick="fecharModalSenha()" class="w-1/2 bg-zinc-800 text-zinc-300 font-bold text-xs uppercase py-2.5 rounded-lg hover:bg-zinc-700 transition">Cancelar</button>
+        <button onclick="executarSalvarAposSenha()" class="w-1/2 bg-amber-400 text-black font-bold text-xs uppercase py-2.5 rounded-lg hover:bg-amber-300 transition">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE EXCLUSÃO DE CONTA (3 ETAPAS) -->
+  <div id="modalExclusao" class="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-[60] hidden">
+    <div class="bg-zinc-900 border border-red-900/50 rounded-2xl p-6 max-w-md w-full text-center">
+
+      <!-- ETAPA 1: AVISO -->
+      <div id="exclusaoEtapa1">
+        <i data-lucide="alert-triangle" class="w-10 h-10 text-red-500 mx-auto mb-3"></i>
+        <h3 class="text-sm font-black uppercase text-red-400 mb-2">Excluir Minha Conta?</h3>
+        <p class="text-xs text-zinc-400 mb-4 leading-relaxed">
+          Você está prestes a excluir <strong class="text-white">permanentemente</strong> sua conta e todos os seus dados:
+        </p>
+        <ul class="text-[11px] text-zinc-400 text-left list-disc pl-5 mb-4 space-y-1">
+          <li>Dados pessoais e cadastrais</li>
+          <li>Histórico de compras e pedidos</li>
+          <li>Cartões salvos e cupons</li>
+          <li>Benefícios de membro MIO</li>
+        </ul>
+        <p class="text-[11px] text-red-400 font-bold mb-4">⚠️ Esta ação é irreversível e não pode ser desfeita.</p>
+        <div class="flex gap-2">
+          <button onclick="fecharModalExclusao()" class="w-1/2 bg-zinc-800 text-zinc-300 font-bold text-xs uppercase py-2.5 rounded-lg hover:bg-zinc-700 transition">Cancelar</button>
+          <button onclick="exclusaoEtapa(2)" class="w-1/2 bg-red-600 text-white font-bold text-xs uppercase py-2.5 rounded-lg hover:bg-red-500 transition">Continuar</button>
+        </div>
+      </div>
+
+      <!-- ETAPA 2: CONFIRMAR SENHA -->
+      <div id="exclusaoEtapa2" class="hidden">
+        <i data-lucide="lock" class="w-10 h-10 text-amber-400 mx-auto mb-3"></i>
+        <h3 class="text-sm font-black uppercase text-white mb-2">Confirme sua Senha</h3>
+        <p class="text-xs text-zinc-400 mb-4">Digite sua senha atual para confirmar que é você.</p>
+        <input type="password" id="exclusaoSenha" placeholder="Sua senha atual" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-2.5 text-sm text-center text-white focus:outline-none focus:border-red-500 mb-4">
+        <p id="msgExclusaoSenha" class="hidden text-[11px] font-mono text-red-400 mb-3"></p>
+        <div class="flex gap-2">
+          <button onclick="exclusaoEtapa(1)" class="w-1/2 bg-zinc-800 text-zinc-300 font-bold text-xs uppercase py-2.5 rounded-lg hover:bg-zinc-700 transition">Voltar</button>
+          <button onclick="exclusaoEtapa(3)" class="w-1/2 bg-amber-400 text-black font-bold text-xs uppercase py-2.5 rounded-lg hover:bg-amber-300 transition">Confirmar Senha</button>
+        </div>
+      </div>
+
+      <!-- ETAPA 3: DIGITAR CONFIRMAÇÃO + EXCLUIR -->
+      <div id="exclusaoEtapa3" class="hidden">
+        <i data-lucide="trash-2" class="w-10 h-10 text-red-500 mx-auto mb-3"></i>
+        <h3 class="text-sm font-black uppercase text-red-400 mb-2">Última Confirmação</h3>
+        <p class="text-xs text-zinc-400 mb-2">Para confirmar, digite <strong class="text-red-400 uppercase">EXCLUIR</strong> no campo abaixo. Esta ação não pode ser desfeita.</p>
+        <input type="text" id="exclusaoConfirmacao" placeholder="Digite EXCLUIR" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-2.5 text-sm text-center text-white uppercase focus:outline-none focus:border-red-500 font-mono mb-4">
+        <p id="msgExclusaoFinal" class="hidden text-[11px] font-mono text-red-400 mb-3"></p>
+        <div class="flex gap-2">
+          <button onclick="exclusaoEtapa(2)" class="w-1/2 bg-zinc-800 text-zinc-300 font-bold text-xs uppercase py-2.5 rounded-lg hover:bg-zinc-700 transition">Voltar</button>
+          <button onclick="executarExclusaoConta()" class="w-1/2 bg-red-600 text-white font-bold text-xs uppercase py-2.5 rounded-lg hover:bg-red-500 transition">Excluir Definitivamente</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <footer class="py-6 border-t border-zinc-900 text-center text-xs text-zinc-600">
+    © 2026 MIO Streetwear.
+  </footer>
+
+  <!-- LÓGICA JAVASCRIPT -->
+  <script>
+    let usuarioAtual = JSON.parse(localStorage.getItem('mio_usuario_logado') || 'null');
+    let usuarioToken = localStorage.getItem('mio_usuario_token');
+    let dadosOcultos = true;
+    let acaoPendente = null;
+
+    const ESTADOS_BR = [
+      { uf: "AC", nome: "Acre" }, { uf: "AL", nome: "Alagoas" }, { uf: "AP", nome: "Amapá" },
+      { uf: "AM", nome: "Amazonas" }, { uf: "BA", nome: "Bahia" }, { uf: "CE", nome: "Ceará" },
+      { uf: "DF", nome: "Distrito Federal" }, { uf: "ES", nome: "Espírito Santo" }, { uf: "GO", nome: "Goiás" },
+      { uf: "MA", nome: "Maranhão" }, { uf: "MT", nome: "Mato Grosso" }, { uf: "MS", nome: "Mato Grosso do Sul" },
+      { uf: "MG", nome: "Minas Gerais" }, { uf: "PA", nome: "Pará" }, { uf: "PB", nome: "Paraíba" },
+      { uf: "PR", nome: "Paraná" }, { uf: "PE", nome: "Pernambuco" }, { uf: "PI", nome: "Piauí" },
+      { uf: "RJ", nome: "Rio de Janeiro" }, { uf: "RN", nome: "Rio Grande do Norte" }, { uf: "RS", nome: "Rio Grande do Sul" },
+      { uf: "RO", nome: "Rondônia" }, { uf: "RR", nome: "Roraima" }, { uf: "SC", nome: "Santa Catarina" },
+      { uf: "SP", nome: "São Paulo" }, { uf: "SE", nome: "Sergipe" }, { uf: "TO", nome: "Tocantins" }
+    ];
+
+    if (!usuarioAtual || !usuarioToken) {
+      localStorage.removeItem('mio_usuario_logado');
+      localStorage.removeItem('mio_usuario_token');
+      window.location.href = "login-membro.html";
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      popularEstados();
+      carregarPerfilDoServidor();
+      mascararCampos(true);
+      carregarCartoesSalvos();
+      iniciarContagemRegressiva();
+      const initialTab = new URLSearchParams(window.location.search).get('tab');
+      if (initialTab === 'acompanhar') {
+        trocarAbaPrincipal('acompanhar');
+      } else {
+        trocarAbaPrincipal('dados');
+      }
+    });
+
+    // Busca o perfil mais atual do cliente no banco de dados do servidor
+    // e atualiza a sessão local. Assim foto e dados aparecem mesmo depois
+    // de o cliente sair e voltar.
+    async function carregarPerfilDoServidor() {
+      if (!usuarioToken) return;
+      try {
+        const res = await fetch('/api/clientes/me', {
+          headers: { 'x-client-token': usuarioToken }
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.cliente) {
+          usuarioAtual = { ...usuarioAtual, ...data.cliente };
+          localStorage.setItem('mio_usuario_logado', JSON.stringify(usuarioAtual));
+          if (!dadosOcultos) carregarPerfil();
+          const cb = document.getElementById('perfWhatsapp');
+          if (cb) cb.checked = !!usuarioAtual.whatsapp_ok;
+        } else if (data.error && data.error.includes('Não autenticado')) {
+          deslogar();
+        }
+      } catch (err) {
+        console.warn("Erro ao carregar perfil do servidor:", err.message);
+      }
+    }
+
+    function popularEstados() {
+      const selectUF = document.getElementById('endEstado');
+      selectUF.innerHTML = '<option value="">Selecione o Estado...</option>';
+      ESTADOS_BR.forEach(e => {
+        selectUF.innerHTML += `<option value="${e.uf}">${e.nome} (${e.uf})</option>`;
+      });
+    }
+
+    async function carregarCidades(uf, cidadeSelecionada = "") {
+      const selectCidade = document.getElementById('endCidade');
+      if (!uf) {
+        selectCidade.innerHTML = '<option value="">Selecione primeiro a UF...</option>';
+        return;
+      }
+
+      selectCidade.innerHTML = '<option value="">Carregando cidades...</option>';
+
+      try {
+        const res = await fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${uf}/municipios`);
+        const cidades = await res.json();
+        
+        selectCidade.innerHTML = '<option value="">Selecione a Cidade...</option>';
+        cidades.sort((a,b) => a.nome.localeCompare(b.nome)).forEach(c => {
+          const selected = c.nome.toLowerCase() === cidadeSelecionada.toLowerCase() ? 'selected' : '';
+          selectCidade.innerHTML += `<option value="${c.nome}" ${selected}>${c.nome}</option>`;
+        });
+      } catch (e) {
+        selectCidade.innerHTML = '<option value="">Erro ao carregar cidades</option>';
+      }
+    }
+
+    // FUNÇÕES AUXILIARES DE FORMATAÇÃO DE CPF E TELEFONE COM DDD
+    function formatarCPFTexto(valor) {
+      if (!valor) return '';
+      let v = valor.replace(/\D/g, '');
+      if (v.length > 11) v = v.slice(0, 11);
+      v = v.replace(/(\d{3})(\d)/, '$1.$2');
+      v = v.replace(/(\d{3})(\d)/, '$1.$2');
+      v = v.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+      return v;
+    }
+
+    function formatarTelefoneTexto(valor) {
+      if (!valor) return '';
+      let v = valor.replace(/\D/g, '');
+      if (v.length > 11) v = v.slice(0, 11);
+      v = v.replace(/^(\d{2})(\d)/g, '($1) $2');
+      v = v.replace(/(\d{5})(\d)/, '$1-$2');
+      return v;
+    }
+
+    function aplicarMascaraCPF(input) {
+      input.value = formatarCPFTexto(input.value);
+    }
+
+    function aplicarMascaraTelefone(input) {
+      input.value = formatarTelefoneTexto(input.value);
+    }
+
+    // OCULTAR / EXIBIR DADOS (OLHO)
+    function toggleOcultarDados() {
+      dadosOcultos = !dadosOcultos;
+      const icone = document.getElementById('iconeOlho');
+      const texto = document.getElementById('textoOlho');
+
+      if (dadosOcultos) {
+        icone.setAttribute('data-lucide', 'eye-off');
+        texto.innerText = "Exibir Dados";
+        mascararCampos(true);
+      } else {
+        icone.setAttribute('data-lucide', 'eye');
+        texto.innerText = "Ocultar Dados";
+        carregarPerfil();
+      }
+      lucide.createIcons();
+    }
+
+    function mascararCampos(ativar) {
+      if (ativar) {
+        document.getElementById('nomeDisplay').innerText = "••••••••••••";
+        document.getElementById('emailDisplay').innerText = "••••••••@••••.com";
+
+        document.getElementById('perfNome').value = "••••••••••••••••";
+        document.getElementById('perfEmail').value = "••••••••@••••.com";
+        document.getElementById('perfCpf').value = "•••.•••.•••-••";
+        document.getElementById('perfTelefone').value = "(••) •••••-••••";
+
+        const container = document.getElementById('avatarContainer');
+        if (usuarioAtual.foto) {
+          container.innerHTML = `<img src="${usuarioAtual.foto}" class="w-full h-full object-cover">`;
+        } else {
+          container.innerText = (usuarioAtual.nome || 'M').charAt(0).toUpperCase();
+        }
+      }
+    }
+
+    // CARREGAR DADOS REAIS MANTENDO PONTOS, TRAÇOS E DDD FIXOS
+    function carregarPerfil() {
+      document.getElementById('nomeDisplay').innerText = usuarioAtual.nome || '';
+      document.getElementById('emailDisplay').innerText = usuarioAtual.email || '';
+
+      document.getElementById('perfNome').value = usuarioAtual.nome || '';
+      document.getElementById('perfEmail').value = usuarioAtual.email || '';
+      
+      // Aplica formatação explícita para CPF e Telefone (DDD com parênteses)
+      document.getElementById('perfCpf').value = formatarCPFTexto(usuarioAtual.cpf || '');
+      document.getElementById('perfTelefone').value = formatarTelefoneTexto(usuarioAtual.telefone || '');
+
+      // Endereço
+      if (usuarioAtual.endereco) {
+        document.getElementById('endCep').value = usuarioAtual.endereco.cep || '';
+        document.getElementById('endRua').value = usuarioAtual.endereco.rua || '';
+        document.getElementById('endNumero').value = usuarioAtual.endereco.numero || '';
+        document.getElementById('endBairro').value = usuarioAtual.endereco.bairro || '';
+        document.getElementById('endReferencia').value = usuarioAtual.endereco.referencia || '';
+
+        if (usuarioAtual.endereco.estado) {
+          document.getElementById('endEstado').value = usuarioAtual.endereco.estado;
+          carregarCidades(usuarioAtual.endereco.estado, usuarioAtual.endereco.cidade);
+        }
+      }
+    }
+
+    // FOTO DE PERFIL
+    function toggleMenuFoto() {
+      const menu = document.getElementById('menuFoto');
+      menu.classList.toggle('hidden');
+    }
+
+    function salvarFotoPerfil(e) {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = async function(event) {
+          usuarioAtual.foto = event.target.result;
+          atualizarUsuarioStorage();
+          await sincronizarPerfilServidor();
+          if (!dadosOcultos) carregarPerfil();
+          else mascararCampos(true);
+          toggleMenuFoto();
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+
+    function removerFotoPerfil() {
+      delete usuarioAtual.foto;
+      atualizarUsuarioStorage();
+      sincronizarPerfilServidor();
+      if (!dadosOcultos) carregarPerfil();
+      else mascararCampos(true);
+      toggleMenuFoto();
+    }
+
+    async function buscarCEP(cep) {
+      const cepLimpo = cep.replace(/\D/g, '');
+      if (cepLimpo.length === 8) {
+        try {
+          const res = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
+          const data = await res.json();
+          if (!data.erro) {
+            document.getElementById('endRua').value = data.logradouro;
+            document.getElementById('endBairro').value = data.bairro;
+            document.getElementById('endEstado').value = data.uf;
+            await carregarCidades(data.uf, data.localidade);
+          }
+        } catch (e) { console.error("Erro ao buscar CEP"); }
+      }
+    }
+
+    function iniciarContagemRegressiva() {
+      const aviso = document.getElementById('avisoContagem');
+      let diaAtual = 90;
+      if (usuarioAtual.ultimaAtualizacao) {
+        const ultima = new Date(usuarioAtual.ultimaAtualizacao);
+        const agora = new Date();
+        const diasPassados = Math.floor((agora - ultima) / (1000 * 60 * 60 * 24));
+        diaAtual = Math.max(1, 90 - diasPassados);
+      }
+      aviso.innerText = `Próxima alteração liberada em ${diaAtual} dias.`;
+    }
+
+    function trocarAbaPrincipal(aba) {
+      document.getElementById('abaDados').classList.add('hidden');
+      document.getElementById('abaHistorico').classList.add('hidden');
+      document.getElementById('abaAcompanhar').classList.add('hidden');
+
+      const estiloInativo = "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition text-zinc-400 hover:text-white hover:bg-zinc-800/60";
+      const estiloAtivo = "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition bg-amber-400 text-black shadow-lg";
+
+      document.getElementById('btnAbaDados').className = estiloInativo;
+      document.getElementById('btnAbaHistorico').className = estiloInativo;
+      document.getElementById('btnAbaAcompanhar').className = estiloInativo;
+
+      if (aba === 'dados') {
+        document.getElementById('abaDados').classList.remove('hidden');
+        document.getElementById('btnAbaDados').className = estiloAtivo;
+      } else if (aba === 'historico') {
+        document.getElementById('abaHistorico').classList.remove('hidden');
+        document.getElementById('btnAbaHistorico').className = estiloAtivo;
+      } else if (aba === 'acompanhar') {
+        document.getElementById('abaAcompanhar').classList.remove('hidden');
+        document.getElementById('btnAbaAcompanhar').className = estiloAtivo;
+      }
+    }
+
+    function trocarSubAba(sub) {
+      document.getElementById('subAbaPessoais').classList.add('hidden');
+      document.getElementById('subAbaEnderecos').classList.add('hidden');
+      document.getElementById('subAbaCartoes').classList.add('hidden');
+      document.getElementById('subAbaSeguranca').classList.add('hidden');
+
+      const estiloInativo = "text-xs font-bold uppercase px-3 py-2 rounded-lg text-zinc-400 hover:text-white transition";
+      const estiloAtivo = "text-xs font-bold uppercase px-3 py-2 rounded-lg text-amber-400 bg-amber-400/10 border border-amber-400/30 transition";
+
+      document.getElementById('subBtnPessoais').className = estiloInativo;
+      document.getElementById('subBtnEnderecos').className = estiloInativo;
+      document.getElementById('subBtnCartoes').className = estiloInativo;
+      document.getElementById('subBtnSeguranca').className = estiloInativo;
+
+      if (sub === 'pessoais') {
+        document.getElementById('subAbaPessoais').classList.remove('hidden');
+        document.getElementById('subBtnPessoais').className = estiloAtivo;
+      } else if (sub === 'enderecos') {
+        document.getElementById('subAbaEnderecos').classList.remove('hidden');
+        document.getElementById('subBtnEnderecos').className = estiloAtivo;
+      } else if (sub === 'cartoes') {
+        document.getElementById('subAbaCartoes').classList.remove('hidden');
+        document.getElementById('subBtnCartoes').className = estiloAtivo;
+      } else if (sub === 'seguranca') {
+        document.getElementById('subAbaSeguranca').classList.remove('hidden');
+        document.getElementById('subBtnSeguranca').className = estiloAtivo;
+      }
+    }
+
+    function confirmarSenhaESalvar(tipo, event) {
+      event.preventDefault();
+      acaoPendente = tipo;
+      document.getElementById('inputSenhaAutorizacao').value = '';
+      document.getElementById('modalSenhaConfirmacao').classList.remove('hidden');
+    }
+
+    function fecharModalSenha() {
+      document.getElementById('modalSenhaConfirmacao').classList.add('hidden');
+      acaoPendente = null;
+    }
+
+    function executarSalvarAposSenha() {
+      if (acaoPendente === 'pessoais') {
+        usuarioAtual.nome = document.getElementById('perfNome').value;
+        usuarioAtual.email = document.getElementById('perfEmail').value;
+        usuarioAtual.cpf = document.getElementById('perfCpf').value;
+        usuarioAtual.telefone = document.getElementById('perfTelefone').value;
+        const cbW = document.getElementById('perfWhatsapp');
+        usuarioAtual.receberWhatsapp = cbW ? cbW.checked : false;
+      } else if (acaoPendente === 'endereco') {
+        usuarioAtual.endereco = {
+          cep: document.getElementById('endCep').value,
+          rua: document.getElementById('endRua').value,
+          numero: document.getElementById('endNumero').value,
+          bairro: document.getElementById('endBairro').value,
+          estado: document.getElementById('endEstado').value,
+          cidade: document.getElementById('endCidade').value,
+          referencia: document.getElementById('endReferencia').value
+        };
+      }
+
+      usuarioAtual.ultimaAtualizacao = new Date().toISOString();
+      atualizarUsuarioStorage();
+      sincronizarPerfilServidor();
+
+      fecharModalSenha();
+      alert("Alterações salvas com sucesso!");
+      if (!dadosOcultos) carregarPerfil();
+    }
+
+    function atualizarUsuarioStorage() {
+      localStorage.setItem('mio_usuario_logado', JSON.stringify(usuarioAtual));
+    }
+
+    // Sincroniza o perfil do cliente com o banco de dados do servidor,
+    // para que foto e dados fiquem salvos e apareçam no painel do admin
+    // mesmo depois de o cliente sair e voltar.
+    async function sincronizarPerfilServidor() {
+      if (!usuarioToken) return;
+      try {
+        await fetch('/api/clientes/perfil', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'x-client-token': usuarioToken },
+          body: JSON.stringify({
+            dados: {
+              nome: usuarioAtual.nome || '',
+              cpf: usuarioAtual.cpf || '',
+              telefone: usuarioAtual.telefone || '',
+              endereco: usuarioAtual.endereco || {},
+              foto: usuarioAtual.foto || '',
+              whatsapp_ok: usuarioAtual.receberWhatsapp ? true : false
+            }
+          })
+        });
+      } catch (err) {
+        console.warn("Não foi possível sincronizar o perfil com o servidor:", err.message);
+      }
+    }
+
+    function falarSuporte() {
+      window.open("https://wa.me/5541995209813?text=Olá,%20preciso%20de%20ajuda%20com%20meus%20dados%20cadastrais%20na%20MIO.", "_blank");
+    }
+
+    function deslogar() {
+      localStorage.removeItem('mio_usuario_logado');
+      localStorage.removeItem('mio_usuario_token');
+      window.location.href = "index.html";
+    }
+
+    // ===== CARTÕES SALVOS =====
+    function carregarCartoesSalvos() {
+      const cartoes = usuarioAtual.cartoes || [];
+      const container = document.getElementById('listaCartoesSalvos');
+      if (cartoes.length === 0) {
+        container.innerHTML = '<p class="text-xs text-zinc-500 italic">Nenhum cartão salvo ainda.</p>';
+        return;
+      }
+      container.innerHTML = cartoes.map((c, idx) => `
+        <div class="flex items-center justify-between bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-3">
+          <div>
+            <p class="text-xs font-bold text-white font-mono">•••• •••• •••• ${c.numero.replace(/\D/g, '').slice(-4)}</p>
+            <p class="text-[10px] text-zinc-500 font-mono uppercase">${c.nome} • Vence ${c.validade}</p>
+          </div>
+          <button onclick="removerCartao(${idx})" class="text-red-400 hover:text-red-300 text-xs font-bold uppercase">Remover</button>
+        </div>
+      `).join('');
+    }
+
+    function removerCartao(idx) {
+      usuarioAtual.cartoes = (usuarioAtual.cartoes || []).filter((_, i) => i !== idx);
+      atualizarUsuarioStorage();
+      carregarCartoesSalvos();
+    }
+
+    function adicionarCartao(event) {
+      event.preventDefault();
+      const numero = document.getElementById('cartaoNumero').value;
+      const nome = document.getElementById('cartaoNome').value;
+      const validade = document.getElementById('cartaoValidade').value;
+
+      if (!numero || !nome || !validade) {
+        alert("Preencha todos os campos do cartão.");
+        return;
+      }
+
+      usuarioAtual.cartoes = usuarioAtual.cartoes || [];
+      usuarioAtual.cartoes.push({ numero, nome, validade });
+      atualizarUsuarioStorage();
+      carregarCartoesSalvos();
+
+      document.getElementById('cartaoNumero').value = '';
+      document.getElementById('cartaoNome').value = '';
+      document.getElementById('cartaoValidade').value = '';
+      alert("Cartão salvo com sucesso!");
+    }
+
+    // ===== ALTERAR SENHA =====
+    async function alterarSenhaSeguranca(event) {
+      event.preventDefault();
+      const atual = document.getElementById('senhaAtualSeg').value;
+      const nova = document.getElementById('senhaNovaSeg').value;
+      const repetir = document.getElementById('senhaRepetirSeg').value;
+
+      if (!usuarioToken) {
+        alert("Sessão inválida. Faça login novamente.");
+        return;
+      }
+      if (!atual) {
+        alert("Digite sua senha atual.");
+        return;
+      }
+      if (nova.length < 6) {
+        alert("A nova senha deve ter pelo menos 6 caracteres.");
+        return;
+      }
+      if (nova !== repetir) {
+        alert("As novas senhas não coincidem.");
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/clientes/senha', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-client-token': usuarioToken
+          },
+          body: JSON.stringify({ senhaAtual: atual, novaSenha: nova })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          alert(data.error || 'Não foi possível alterar a senha.');
+          return;
+        }
+        document.getElementById('senhaAtualSeg').value = '';
+        document.getElementById('senhaNovaSeg').value = '';
+        document.getElementById('senhaRepetirSeg').value = '';
+        alert("Senha atualizada com sucesso!");
+      } catch (err) {
+        alert('Erro ao alterar senha: ' + err.message);
+      }
+    }
+
+    // ===== HISTÓRICO DE COMPRAS =====
+    function carregarHistorico() {
+      const container = document.getElementById('listaHistoricoPedidos');
+      const pedidos = JSON.parse(localStorage.getItem('mio_historico_pedidos') || '[]')
+        .filter(p => p.cliente && p.cliente.email === usuarioAtual.email);
+
+      if (pedidos.length === 0) {
+        container.innerHTML = '<p class="text-xs text-zinc-500 italic text-center py-8">Você ainda não realizou compras na MIO.</p>';
+        return;
+      }
+
+      container.innerHTML = pedidos.map(p => `
+        <div class="bg-zinc-950 border border-zinc-800 rounded-lg p-4">
+          <div class="flex justify-between items-center mb-2">
+            <span class="text-xs font-black text-white font-mono">${p.numero}</span>
+            <span class="text-[10px] ${p.status === 'Pago' ? 'text-emerald-400' : 'text-amber-400'} font-bold uppercase">${p.status}</span>
+          </div>
+          <p class="text-[11px] text-zinc-500 font-mono">${new Date(p.data).toLocaleDateString('pt-BR')} • ${p.itens.length} item(ns)</p>
+          <p class="text-xs font-bold text-amber-400 font-mono mt-1">R$ ${Number(p.total || 0).toFixed(2).replace('.', ',')}</p>
+        </div>
+      `).join('');
+    }
+
+    // ===== ACOMPANHAR PEDIDO ATUAL =====
+    function carregarAcompanhamento() {
+      const container = document.getElementById('listaAcompanhamento');
+      const ultimoPedido = JSON.parse(localStorage.getItem('mio_ultimo_pedido') || 'null');
+
+      if (!ultimoPedido || (ultimoPedido.cliente && ultimoPedido.cliente.email !== usuarioAtual.email)) {
+        container.innerHTML = '<p class="text-xs text-zinc-500 italic text-center py-8">Nenhum pedido em andamento no momento.</p>';
+        return;
+      }
+
+      const status = ultimoPedido.status || 'Aguardando Pagamento';
+      const passos = ['Aguardando Pagamento', 'Pago', 'Em Separação', 'Enviado', 'Entregue'];
+      const idxAtual = Math.max(0, passos.indexOf(status));
+
+      container.innerHTML = `
+        <div class="bg-zinc-950 border border-zinc-800 rounded-lg p-4">
+          <p class="text-xs font-black text-white font-mono mb-1">Pedido ${ultimoPedido.numeroPedido || ultimoPedido.numero}</p>
+          <p class="text-[11px] text-zinc-500 font-mono mb-3">Status: <span class="text-amber-400 font-bold">${status}</span></p>
+          <div class="flex items-center gap-1">
+            ${passos.map((p, i) => `
+              <div class="flex-1 flex flex-col items-center gap-1">
+                <div class="w-full h-1 rounded ${i <= idxAtual ? 'bg-amber-400' : 'bg-zinc-800'}"></div>
+                <span class="text-[9px] font-mono ${i <= idxAtual ? 'text-amber-400' : 'text-zinc-600'} text-center">${p}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+// Integra as funções de histórico/acompanhamento ao trocar de aba
+    const _trocarAbaOriginal = trocarAbaPrincipal;
+    function trocarAbaPrincipal(aba) {
+      _trocarAbaOriginal(aba);
+      if (aba === 'historico') carregarHistorico();
+      if (aba === 'acompanhar') carregarAcompanhamento();
+    }
+
+    // ===== EXCLUSÃO DE CONTA (FLUXO EM 3 ETAPAS) =====
+    function abrirFluxoExclusao() {
+      document.getElementById('exclusaoEtapa1').classList.remove('hidden');
+      document.getElementById('exclusaoEtapa2').classList.add('hidden');
+      document.getElementById('exclusaoEtapa3').classList.add('hidden');
+      document.getElementById('exclusaoSenha').value = '';
+      document.getElementById('exclusaoConfirmacao').value = '';
+      document.getElementById('msgExclusaoSenha').classList.add('hidden');
+      document.getElementById('msgExclusaoFinal').classList.add('hidden');
+      document.getElementById('modalExclusao').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function fecharModalExclusao() {
+      document.getElementById('modalExclusao').classList.add('hidden');
+    }
+
+    function exclusaoEtapa(etapa) {
+      document.getElementById('exclusaoEtapa1').classList.add('hidden');
+      document.getElementById('exclusaoEtapa2').classList.add('hidden');
+      document.getElementById('exclusaoEtapa3').classList.add('hidden');
+      document.getElementById('exclusaoEtapa' + etapa).classList.remove('hidden');
+      // Limpa mensagens de erro ao navegar
+      if (etapa === 2) {
+        document.getElementById('msgExclusaoSenha').classList.add('hidden');
+      }
+      if (etapa === 3) {
+        document.getElementById('msgExclusaoFinal').classList.add('hidden');
+      }
+    }
+
+    async function executarExclusaoConta() {
+      const confirmacao = document.getElementById('exclusaoConfirmacao').value.trim().toUpperCase();
+      const msgFinal = document.getElementById('msgExclusaoFinal');
+
+      if (confirmacao !== 'EXCLUIR') {
+        msgFinal.innerText = 'Digite EXCLUIR no campo para confirmar.';
+        msgFinal.classList.remove('hidden');
+        return;
+      }
+
+      if (!usuarioToken) {
+        alert('Sessão inválida. Faça login novamente.');
+        return;
+      }
+
+      const email = usuarioAtual.email;
+      try {
+        const res = await fetch('/api/clientes', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json', 'x-client-token': usuarioToken },
+          body: JSON.stringify({ email })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          alert('Não foi possível excluir sua conta: ' + (data.error || 'erro inesperado'));
+          return;
+        }
+
+        localStorage.removeItem('mio_usuario_logado');
+        localStorage.removeItem('mio_usuario_token');
+        localStorage.removeItem('mio_ultimo_pedido');
+        localStorage.removeItem('mio_cupom_ativo');
+        localStorage.removeItem('mio_sacola_itens');
+
+        alert('Sua conta foi excluída com sucesso. Até logo! 👋');
+        window.location.href = 'index.html';
+      } catch (err) {
+        alert('Erro ao excluir a conta: ' + err.message);
+      }
+    }
+</script>
+  <script src="js/logo.js"></script>
+</body>
+</html>

@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MIO | Cupom de Boas-Vindas</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+<base target="_blank">
+</head>
+<body class="bg-zinc-950 text-white font-sans antialiased">
+
+  <header class="sticky top-0 z-50 bg-zinc-950/95 border-b border-zinc-900 backdrop-blur-md px-4 py-3 lg:px-8">
+    <div class="max-w-7xl mx-auto grid grid-cols-3 items-center">
+      <div class="flex items-center justify-start">
+        <button onclick="toggleMenu()" class="text-white hover:text-zinc-400 transition" title="Menu">
+          <i data-lucide="menu" class="w-6 h-6"></i>
+        </button>
+      </div>
+<div class="flex items-center justify-center">
+        <a href="index.html" class="mio-logo text-2xl font-black tracking-widest text-white hover:scale-105 transition-transform" target="_self">MIO</a>
+      </div>
+      <div class="flex items-center justify-end gap-3 md:gap-4">
+        <div class="hidden md:flex items-center relative w-48 lg:w-64">
+          <input type="text" id="searchInput" placeholder="Buscar..." 
+                 onkeydown="verificarEnter(event)"
+                 oninput="toggleBotaoLimpar()"
+                 class="w-full bg-zinc-900 text-xs text-white pl-3 pr-12 py-1.5 rounded-full border border-zinc-800 focus:outline-none focus:border-zinc-800 focus:ring-0 transition">
+          <button id="clearSearchBtn" onclick="limparBusca()" class="absolute right-8 text-zinc-500 hover:text-white transition hidden" title="Limpar busca">
+            <i data-lucide="x" class="w-3.5 h-3.5"></i>
+          </button>
+          <button onclick="realizarBusca()" class="absolute right-2.5 text-black hover:text-zinc-400" title="Pesquisar">
+            <i data-lucide="search" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+        <button onclick="toggleSearchMobile()" class="md:hidden text-black hover:text-zinc-400">
+          <i data-lucide="search" class="w-6 h-6"></i>
+        </button>
+        <button id="btnMembroHeader" onclick="window.location.href='/login-membro.html'" class="text-white hover:text-zinc-400 flex items-center transition" title="Área de Membros">
+          <i data-lucide="gem" class="w-6 h-6"></i>
+        </button>
+        <div class="relative">
+          <button onclick="toggleSacola()" class="p-2 text-zinc-400 hover:text-white transition block relative">
+            <i data-lucide="shopping-bag" class="w-5 h-5"></i>
+            <span id="contador-sacola-header" class="contador-sacola absolute -top-1 -right-1 bg-zinc-800 text-white text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center transition-all">0</span>
+          </button>
+        </div>
+      </div>
+    </div>
+    <div id="searchMobileBar" class="hidden mt-3 px-2 md:hidden">
+      <div class="relative">
+        <input type="text" id="searchMobileInput" placeholder="Buscar produtos..." 
+               oninput="toggleBotaoLimparMobile()"
+               class="w-full bg-zinc-900 text-sm text-white pl-4 pr-14 py-2 rounded-md border border-zinc-800 focus:outline-none focus:border-zinc-800 focus:ring-0">
+        <button id="clearSearchMobileBtn" onclick="limparBuscaMobile()" class="absolute right-10 top-3 text-black hover:text-white hidden" title="Limpar busca">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+        <button onclick="realizarBuscaMobile()" class="absolute right-3 top-2.5 text-black">
+          <i data-lucide="search" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div id="sideMenu" onclick="fecharMenuAoClicarFora(event)" class="fixed inset-0 z-50 bg-black/70 opacity-0 pointer-events-none transition-opacity duration-300">
+    <div id="sideMenuDrawer" class="fixed top-0 left-0 bottom-0 w-80 bg-zinc-950 border-r border-zinc-900 p-6 flex flex-col justify-between transform -translate-x-full transition-transform duration-300 ease-in-out overflow-hidden">
+      <div>
+        <div class="flex items-center justify-between mb-6 pb-4 border-b border-zinc-900">
+<span class="mio-logo text-xl font-black tracking-widest text-white" data-logo-h="44">MIO</span>
+          <button onclick="toggleMenu()" class="text-zinc-400 hover:text-white transition p-1">
+            <i data-lucide="x" class="w-6 h-6"></i>
+          </button>
+        </div>
+        <nav class="flex flex-col gap-4 text-sm font-semibold tracking-wider">
+          <a href="login-membro.html" id="linkMenuMembro" class="w-full py-2.5 px-4 rounded-md font-bold transition mb-1 flex items-center justify-center gap-2 text-center uppercase tracking-wider" target="_self">
+            <i data-lucide="gem" class="w-5 h-5"></i> Torne-se membro
+          </a>
+          <div class="border-t border-zinc-900 pt-3">
+            <div class="mb-3">
+              <button onclick="toggleCategorias()" class="flex items-center justify-between w-full py-3 text-zinc-300 hover:text-amber-400 transition uppercase text-xs font-mono tracking-widest">
+                <span>CATEGORIAS</span>
+                <i data-lucide="chevron-down" id="cat-arrow" class="w-4 h-4 transition-transform duration-300"></i>
+              </button>
+              <div id="categoriasList" class="hidden flex-col gap-2.5 pl-3 mt-2 border-l border-zinc-800 text-xs text-zinc-300">
+                <a href="javascript:void(0)" onclick="filtrarPeloMenu('feminino')" class="block py-2 hover:text-amber-400 transition" target="_self">Feminino</a>
+                <a href="javascript:void(0)" onclick="filtrarPeloMenu('masculino')" class="block py-2 hover:text-amber-400 transition" target="_self">Masculino</a>
+                <a href="javascript:void(0)" onclick="filtrarPeloMenu('infantil')" class="block py-2 hover:text-amber-400 transition" target="_self">Infantil</a>
+              </div>
+            </div>
+            <div class="flex flex-col">
+              <a href="javascript:void(0)" onclick="filtrarPeloMenu('todos')" class="block py-3 border-t border-zinc-900 text-zinc-300 hover:text-amber-400 hover:translate-x-1 transition-all duration-200" target="_self">TODOS OS PRODUTOS</a>
+              <a href="javascript:void(0)" onclick="filtrarPeloMenu('meias')" class="block py-3 border-t border-zinc-900 text-zinc-300 hover:text-amber-400 hover:translate-x-1 transition-all duration-200" target="_self">MEIAS CUSTOM DYED</a>
+              <a href="/sobre" class="block py-3 border-t border-b border-zinc-900 text-zinc-300 hover:text-amber-400 hover:translate-x-1 transition-all duration-200" target="_self">SOBRE A MIO</a>
+            </div>
+          </div>
+        </nav>
+      </div>
+      <div class="text-xs text-zinc-500 border-t border-zinc-900 pt-4 mt-6">&copy; 2026 MIO Streetwear.</div>
+    </div>
+  </div>
+
+  <div id="sacola" onclick="fecharSacolaFora(event)" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 transition-opacity duration-300 opacity-0 pointer-events-none">
+    <div id="sacola-inner" class="fixed right-0 top-0 h-full w-full max-w-md bg-zinc-950 border-l border-zinc-900 p-6 flex flex-col justify-between transition-transform duration-300 translate-x-full">
+      <div>
+        <div class="flex items-center justify-between pb-4 border-b border-zinc-900">
+          <h2 class="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+            <i data-lucide="shopping-bag" class="w-4 h-4 text-amber-400"></i> Sua Sacola
+          </h2>
+          <button onclick="toggleSacola()" class="text-zinc-500 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+        </div>
+        <div class="py-3 border-b border-zinc-900">
+          <p id="frete-status-text" class="text-[11px] font-mono text-zinc-400 mb-1"></p>
+          <div class="w-full bg-zinc-900 h-1.5 rounded-full overflow-hidden">
+            <div id="frete-progresso" class="bg-amber-400 h-full w-0 transition-all duration-500"></div>
+          </div>
+        </div>
+        <div id="sacola-itens-container" class="my-4 flex flex-col gap-3 max-h-[50vh] overflow-y-auto pr-1"></div>
+      </div>
+      <div class="border-t border-zinc-900 pt-4 flex flex-col gap-3">
+        <div class="flex gap-2">
+          <input type="text" id="inputCupomSacola" placeholder="CODIGO DO CUPOM" class="flex-1 bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-xs font-mono uppercase text-white placeholder-zinc-600 focus:outline-none focus:border-amber-400">
+          <button onclick="aplicarCupom()" class="bg-zinc-800 hover:bg-zinc-700 text-white px-4 text-xs font-bold uppercase rounded transition">Aplicar</button>
+        </div>
+        <p id="mensagemCupom" class="hidden text-[10px] font-mono"></p>
+        <div class="space-y-1 pt-2 border-t border-zinc-900">
+          <div id="linhaDesconto" class="hidden flex justify-between text-xs text-amber-400 font-mono">
+            <span>Desconto</span>
+            <span id="valorDesconto">- R$ 0,00</span>
+          </div>
+          <div class="flex justify-between text-sm font-black text-white uppercase tracking-tight">
+            <span>Total</span>
+            <span id="sacola-subtotal" class="text-amber-400 font-mono">R$ 0,00</span>
+          </div>
+        </div>
+        <button onclick="irParaCheckout()" class="w-full bg-amber-500 hover:bg-amber-400 text-black font-black text-xs uppercase tracking-widest py-3.5 rounded-md transition shadow-lg shadow-amber-500/10">Finalizar Compra</button>
+      </div>
+    </div>
+  </div>
+<main class="flex-grow max-w-4xl mx-auto px-4 py-12 text-center flex flex-col items-center justify-center">
+    
+    <!-- Ícone ou Detalhe visual de presente -->
+    <div class="bg-amber-500/10 text-amber-500 p-4 rounded-full border border-amber-500/20 mb-6 animate-bounce">
+      <i data-lucide="gift" class="w-10 h-10"></i>
+    </div>
+
+    <!-- Frase alegre, curta e direta -->
+    <h1 class="text-3xl md:text-5xl font-black uppercase italic tracking-wide text-white">
+      Você ganhou um presente da <span class="text-amber-400">MIO!</span>
+    </h1>
+    <p class="text-base md:text-lg text-zinc-300 mt-4 max-w-xl font-medium">
+      Sorria! Para deixar o seu primeiro Drop ainda mais especial, preparamos 10% de desconto exclusivo para você usar agora.
+    </p>
+
+  <!-- ================= ÁREA DO CUPOM E REGRAS LADO A LADO ================= -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center justify-center mt-10 w-full max-w-4xl text-left border-y border-zinc-900 py-8">
+      
+      <!-- Coluna da Esquerda: Caixinha do Cupom e Mensagem -->
+      <div class="flex flex-col items-center md:items-start justify-center w-full">
+        <h3 class="text-xs font-black uppercase tracking-widest text-amber-400 mb-3 text-center md:text-left">
+          Seu código de desconto:
+        </h3>
+        
+        <div class="flex items-center bg-zinc-900 border border-zinc-800 rounded-sm p-1.5 w-full max-w-sm shadow-2xl">
+          <!-- Input Invisível/Bloqueado com o Código -->
+          <input type="text" id="inputCupom" value="MIO10OFF" readonly 
+            class="bg-transparent text-center font-black tracking-widest text-xl text-amber-400 uppercase w-full focus:outline-none px-3 select-all">
+          
+          <!-- Botão Copiar -->
+          <button onclick="copiarCupom()" id="btnCopiar" 
+            class="bg-white hover:bg-zinc-200 text-black font-black text-xs uppercase tracking-wider px-5 py-3 transition rounded-sm flex items-center gap-2 shrink-0">
+            <i data-lucide="copy" class="w-3.5 h-3.5" id="iconeCopiar"></i>
+            <span id="textoCopiar">Copiar</span>
+          </button>
+        </div>
+
+        <!-- Mensagem flutuante de sucesso -->
+        <p id="msgSucesso" class="text-emerald-400 text-xs font-bold mt-3 opacity-0 transition-opacity duration-300 h-4">
+          ✓ Código copiado para a área de transferência!
+        </p>
+      </div>
+
+      <!-- Coluna da Direita: Como usar e Regras -->
+      <div class="bg-zinc-900/40 border border-zinc-900 p-6 rounded-sm w-full">
+        <h3 class="text-xs font-black uppercase tracking-widest text-white mb-3 flex items-center gap-2">
+          <i data-lucide="info" class="w-4 h-4 text-zinc-500"></i> Como usar o seu cupom:
+        </h3>
+        <p class="text-xs text-zinc-400 leading-relaxed">
+          Adicione seus produtos favoritos ao carrinho e insira o cupom <span class="text-white font-bold">'MIO10OFF'</span> quando finalizar a compra para ver o desconto ser aplicado automaticamente.
+        </p>
+        
+        <hr class="border-zinc-900 my-3">
+        
+        <ul class="text-[11px] text-zinc-500 space-y-1.5 list-disc pl-4">
+          <li>Cupom não cumulativo com outras promoções vigentes no site.</li>
+          <li>Válido exclusivamente para pedidos acima de <span class="text-zinc-400">R$ 200,00</span>.</li>
+          <li>Uso estritamente limitado a <span class="text-zinc-400">1 utilização por CPF</span>.</li>
+          <li>Validade do cupom de <span class="text-zinc-400">7 dias</span> a partir do recebimento.</li>
+        </ul>
+      </div>
+
+    </div>
+
+    <!-- ================= DIRECIONAMENTO COM 3 IMAGENS E BOTÕES ================= -->
+    <div class="mt-16 w-full">
+      <h3 class="text-xs font-black uppercase tracking-widest text-zinc-400 mb-6">Para onde vamos agora?</h3>
+      
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
+        <!-- Card 1: Novidades -->
+        <div class="relative h-48 bg-zinc-900 rounded-sm overflow-hidden border border-zinc-900 group">
+          <img src="https://images.unsplash.com/photo-1556821840-3a63f95609a7?q=80&w=300" class="w-full h-full object-cover opacity-40 group-hover:scale-105 transition-transform duration-500">
+          <div class="absolute inset-0 flex flex-col justify-end items-center p-4 bg-gradient-to-t from-black via-black/30 to-transparent">
+            <a href= "javascript:void(0)" onclick="filtrarPeloMenu('todos')" class="w-full bg-zinc-950 border border-zinc-800 hover:bg-white hover:text-black font-bold text-xs uppercase tracking-wider py-2 rounded-sm text-center transition">Ver Novidades</a>
+          </div>
+        </div>
+
+        <!-- Card 2: Ir Para a Loja -->
+        <div class="relative h-48 bg-zinc-900 rounded-sm overflow-hidden border border-zinc-900 group">
+          <img src="https://images.unsplash.com/photo-1582966772680-860e372bb558?q=80&w=300" class="w-full h-full object-cover opacity-40 group-hover:scale-105 transition-transform duration-500">
+          <div class="absolute inset-0 flex flex-col justify-end items-center p-4 bg-gradient-to-t from-black via-black/30 to-transparent">
+            <a href="javascript:void(0)" onclick="filtrarPeloMenu('todos')" class="w-full bg-amber-500 text-black hover:bg-amber-400 font-black text-xs uppercase tracking-wider py-2 rounded-sm text-center transition shadow-lg">Ir Para a Loja</a>
+          </div>
+        </div>
+
+        <!-- Card 3: Mais Vendidos -->
+        <div class="relative h-48 bg-zinc-900 rounded-sm overflow-hidden border border-zinc-900 group">
+          <img src="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=300" class="w-full h-full object-cover opacity-40 group-hover:scale-105 transition-transform duration-500">
+          <div class="absolute inset-0 flex flex-col justify-end items-center p-4 bg-gradient-to-t from-black via-black/30 to-transparent">
+            <a href="javascript:void(0)" onclick="filtrarPeloMenu('todos')" class="w-full bg-zinc-950 border border-zinc-800 hover:bg-white hover:text-black font-bold text-xs uppercase tracking-wider py-2 rounded-sm text-center transition">Mais Vendidos</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+  <footer class="bg-zinc-950 border-t border-zinc-900 pt-16 pb-8 px-4 text-white">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between gap-12 border-b border-zinc-900 pb-12 mb-8">
+      <div class="flex flex-col gap-6 max-w-md">
+        <div>
+<h2 class="mio-logo text-3xl font-black tracking-widest text-white mb-2" data-logo-h="40">MIO</h2>
+          <p class="text-xs text-zinc-400">"Design autentico, pecas exclusivas e estilo streetwear para expressar sua individualidade."</p>
+        </div>
+        <div class="flex flex-col gap-2 pt-2 border-t border-zinc-900/60">
+          <a href="fale-conosco.html" class="text-xs font-semibold text-zinc-300 hover:text-white transition flex items-center gap-2" target="_self"><span>&gt;</span> FALE CONOSCO</a>
+        </div>
+      </div>
+      <div class="flex flex-col gap-8 md:items-end text-left md:text-right">
+        <div>
+          <h3 class="text-xs font-bold tracking-wider text-zinc-400 uppercase mb-3">NOS SIGA NAS REDES SOCIAIS</h3>
+          <div class="flex items-center md:justify-end gap-5">
+            <a href="https://instagram.com" target="_blank" class="text-zinc-400 hover:text-white transition" title="Instagram MIO">
+              <svg class="w-6 h-6 fill-current" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+            </a>
+            <a href="https://tiktok.com" target="_blank" class="text-zinc-400 hover:text-white transition" title="TikTok MIO">
+              <svg class="w-6 h-6 fill-current" viewBox="0 0 24 24"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.82.56-1.32 1.56-1.28 2.56.02.83.42 1.64 1.09 2.14.8.61 1.87.77 2.82.44.97-.31 1.72-1.13 1.93-2.13.12-.66.11-1.34.11-2.01V.02z"/></svg>
+            </a>
+          </div>
+        </div>
+        <div>
+          <h3 class="text-xs font-bold tracking-wider text-zinc-400 uppercase mb-3">FORMAS DE PAGAMENTO</h3>
+          <div class="flex flex-wrap items-center md:justify-end gap-3 text-zinc-400 text-xs font-mono">
+            <span class="px-2.5 py-1 bg-zinc-900 border border-zinc-800 rounded font-bold text-white">VISA</span>
+            <span class="px-2.5 py-1 bg-zinc-900 border border-zinc-800 rounded font-bold text-white">MASTERCARD</span>
+            <span class="px-2.5 py-1 bg-zinc-900 border border-zinc-800 rounded font-bold text-white">ELO</span>
+            <span class="px-2.5 py-1 bg-zinc-900 border border-zinc-800 rounded font-bold text-white">HIPERCARD</span>
+            <span class="px-2.5 py-1 bg-zinc-900 border border-zinc-800 rounded font-bold text-white">AMEX</span>
+            <span class="px-2.5 py-1 bg-zinc-900 border border-zinc-800 rounded font-bold text-emerald-400">PIX</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between text-[11px] text-zinc-500 gap-4">
+      <div class="flex flex-wrap items-center justify-center md:justify-start gap-4">
+        <span>&copy; 2026 MIO Streetwear. Todos os direitos reservados.</span>
+        <a href="politicas.html" class="hover:text-zinc-300 transition underline underline-offset-2" target="_self">Politicas da Loja</a>
+        <a href="privacidade.html" class="hover:text-zinc-300 transition underline underline-offset-2" target="_self">Privacidade</a>
+      </div>
+    </div>
+  </footer>
+
+<script>
+    let sacolaItens = JSON.parse(localStorage.getItem('mio_sacola_itens')) || [];
+    let cupomAtivo = JSON.parse(localStorage.getItem('mio_cupom_ativo')) || null;
+    const FRETE_GRATIS_META = 249.00;
+    let freteGratisNotificado = false;
+
+    function criarConfete(x, y) {
+      const colors = ['#fbbf24', '#f59e0b', '#d97706', '#fcd34d', '#fbbf24'];
+      for (let i = 0; i < 40; i++) {
+        const confete = document.createElement('div');
+        confete.style.cssText = 'position: fixed; left: ' + x + 'px; top: ' + y + 'px; width: 8px; height: 8px; background: ' + colors[Math.floor(Math.random() * colors.length)] + '; border-radius: ' + (Math.random() > 0.5 ? '50%' : '2px') + '; pointer-events: none; z-index: 9999; transform: translate(0, 0) rotate(0deg);';
+        document.body.appendChild(confete);
+        const angle = (Math.random() * 360) * (Math.PI / 180);
+        const velocity = 3 + Math.random() * 6;
+        const vx = Math.cos(angle) * velocity;
+        const vy = Math.sin(angle) * velocity - 4;
+        let posX = 0, posY = 0, rot = 0, opacity = 1;
+        const anim = setInterval(function() {
+          posX += vx; posY += vy + 0.3; rot += 10; opacity -= 0.015;
+          confete.style.transform = 'translate(' + posX + 'px, ' + posY + 'px) rotate(' + rot + 'deg)';
+          confete.style.opacity = opacity;
+          if (opacity <= 0) { clearInterval(anim); confete.remove(); }
+        }, 16);
+      }
+    }
+
+    function mostrarFogueteFreteGratis() {
+      const sacolaBtn = document.querySelector('[onclick="toggleSacola()"]');
+      if (!sacolaBtn) return;
+      const rect = sacolaBtn.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      const foguete = document.createElement('div');
+      foguete.innerHTML = '🚀';
+      foguete.style.cssText = 'position: fixed; left: ' + centerX + 'px; top: ' + centerY + 'px; font-size: 32px; pointer-events: none; z-index: 9999; transform: translate(-50%, -50%) scale(0);';
+      document.body.appendChild(foguete);
+      let scale = 0, opacity = 1, y = 0;
+      const anim = setInterval(function() {
+        scale = Math.min(scale + 0.08, 1.5);
+        y -= 3;
+        foguete.style.transform = 'translate(-50%, calc(-50% + ' + y + 'px)) scale(' + scale + ')';
+        if (scale >= 1.5) {
+          clearInterval(anim);
+          criarConfete(centerX, centerY + y);
+          setTimeout(function() {
+            const fade = setInterval(function() {
+              opacity -= 0.05;
+              foguete.style.opacity = opacity;
+              if (opacity <= 0) { clearInterval(fade); foguete.remove(); }
+            }, 30);
+          }, 300);
+        }
+      }, 16);
+    }
+
+    function verificarNotificacaoFreteGratis() {
+      const subtotal = sacolaItens.reduce(function(acc, item) { return acc + (item.preco * item.quantidade); }, 0);
+      if (subtotal >= FRETE_GRATIS_META && !freteGratisNotificado) {
+        freteGratisNotificado = true;
+        mostrarFogueteFreteGratis();
+        setTimeout(function() { toggleSacola(); }, 1200);
+      } else if (subtotal < FRETE_GRATIS_META) {
+        freteGratisNotificado = false;
+      }
+    }
+
+    function salvarEstado() {
+      localStorage.setItem('mio_sacola_itens', JSON.stringify(sacolaItens));
+      localStorage.setItem('mio_cupom_ativo', JSON.stringify(cupomAtivo));
+      atualizarContadorHeader();
+      verificarNotificacaoFreteGratis();
+    }
+
+function alterarQuantidade(id, mudanca) {
+      const item = sacolaItens.find(function(i) { return i.id === id; });
+      if (!item) return;
+      item.quantidade += mudanca;
+      if (item.quantidade <= 0) {
+        sacolaItens = sacolaItens.filter(function(i) { return i.id !== id; });
+      }
+      salvarEstado();
+      renderizarItensSacola();
+      verificarNotificacaoFreteGratis();
+    }
+
+    function renderizarItensSacola() {
+      const containerItens = document.getElementById('sacola-itens-container');
+      let subtotalGeral = 0;
+      sacolaItens.forEach(function(i) { subtotalGeral += (i.preco * i.quantidade); });
+      if (containerItens) {
+        if (sacolaItens.length === 0) {
+          containerItens.innerHTML = '<div class="text-center py-10"><i data-lucide="shopping-bag" class="w-10 h-10 mx-auto text-zinc-600 mb-2"></i><p class="text-xs font-mono text-zinc-500 uppercase">Sua sacola está vazia</p></div>';
+        } else {
+          let htmlItens = '';
+          sacolaItens.forEach(function(item) {
+            htmlItens += 
+            '<div class="flex gap-3 bg-zinc-900/60 p-3 rounded-xl border border-zinc-800 items-center justify-between"><img src="' + item.imagem + '" alt="' + item.nome + '" class="w-14 h-14 object-cover rounded-lg bg-zinc-950 border border-zinc-800 shrink-0"><div class="flex-1 min-w-0 px-1"><h4 class="text-xs font-bold text-white uppercase truncate">' + item.nome + '</h4><p class="text-[10px] font-mono text-zinc-400">Tam: ' + item.tamanho + ' | Cor: ' + item.cor + '</p><p class="text-xs font-mono text-amber-400 font-bold mt-1">R$ ' + (item.preco * item.quantidade).toFixed(2).replace('.', ',') + '</p></div><div class="flex flex-col items-end gap-2 shrink-0"><button onclick="alterarQuantidade(' + item.id + ', -' + item.quantidade + ')" class="text-zinc-500 hover:text-red-400 transition"><i data-lucide="trash-2" class="w-4 h-4"></i></button><div class="flex items-center gap-2 bg-zinc-950 border border-zinc-800 rounded-lg px-2 py-1"><button onclick="alterarQuantidade(' + item.id + ', -1)" class="text-zinc-400 hover:text-white text-xs font-bold">-</button><span class="text-xs font-mono text-white font-bold w-4 text-center">' + item.quantidade + '</span><button onclick="alterarQuantidade(' + item.id + ', 1)" class="text-zinc-400 hover:text-white text-xs font-bold">+</button></div></div></div>';
+          });
+          containerItens.innerHTML = htmlItens;
+        }
+        if (window.lucide) lucide.createIcons();
+      }
+      atualizarSacolaValores(subtotalGeral);
+    }
+
+    function atualizarContadorHeader() {
+      const contadores = document.querySelectorAll('#contador-sacola-header, .contador-sacola');
+      const totalItens = sacolaItens.reduce(function(acc, item) { return acc + item.quantidade; }, 0);
+      contadores.forEach(function(contador) {
+        contador.innerText = totalItens;
+        if (totalItens > 0) {
+          contador.className = "contador-sacola absolute -top-1 -right-1 bg-amber-400 text-black text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center transition-all shadow-md shadow-amber-400/20";
+        } else {
+          contador.className = "contador-sacola absolute -top-1 -right-1 bg-zinc-800 text-white text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center transition-all";
+        }
+      });
+    }
+
+    function atualizarSacolaValores(subtotal) {
+      const progressoElement = document.getElementById('frete-progresso');
+      const textoFreteElement = document.getElementById('frete-status-text');
+      if (progressoElement && textoFreteElement) {
+        let porcentagemFrete = Math.min((subtotal / FRETE_GRATIS_META) * 100, 100);
+        progressoElement.style.width = porcentagemFrete + '%';
+        if (subtotal >= FRETE_GRATIS_META) {
+          textoFreteElement.innerHTML = '🎉 PARABÉNS! VOCÊ GANHOU <span class="text-amber-400 font-bold">FRETE GRÁTIS!</span>';
+        } else {
+          const falta = (FRETE_GRATIS_META - subtotal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+          textoFreteElement.innerHTML = 'Falta apenas <span class="text-amber-400 font-bold">' + falta + '</span> para <span class="text-amber-400 font-bold">FRETE GRÁTIS</span>';
+        }
+      }
+      let valorDesconto = 0;
+      const linhaDesconto = document.getElementById('linhaDesconto');
+      const elementoValorDesconto = document.getElementById('valorDesconto');
+      if (cupomAtivo && cupomAtivo.porcentagem && subtotal > 0) {
+        valorDesconto = (subtotal * cupomAtivo.porcentagem) / 100;
+        if (elementoValorDesconto) {
+          elementoValorDesconto.innerText = '- ' + valorDesconto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        }
+        if (linhaDesconto) linhaDesconto.classList.remove('hidden');
+      } else if (linhaDesconto) {
+        linhaDesconto.classList.add('hidden');
+      }
+      const totalFinal = Math.max(0, subtotal - valorDesconto);
+      const elemSubtotal = document.getElementById('sacola-subtotal');
+      if (elemSubtotal) {
+        elemSubtotal.innerText = totalFinal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      }
+    }
+
+    function aplicarCupom() {
+      const input = document.getElementById('inputCupomSacola');
+      const msg = document.getElementById('mensagemCupom');
+      if (!input) return;
+      const codigo = input.value.trim().toUpperCase();
+      const cuponsCadastrados = JSON.parse(localStorage.getItem('mio_cupons_admin')) || { 'MIO10': 10, 'PEGASUS': 15, 'PRIMEIRACOMPRA': 20 };
+      if (cuponsCadastrados[codigo]) {
+        cupomAtivo = { codigo: codigo, porcentagem: cuponsCadastrados[codigo] };
+        salvarEstado();
+        msg.innerText = 'Cupom ' + codigo + ' aplicado (' + cupomAtivo.porcentagem + '% OFF)!';
+        msg.className = "text-[10px] font-mono mt-1 text-amber-400 font-bold";
+        msg.classList.remove('hidden');
+        renderizarItensSacola();
+      } else {
+        msg.innerText = "Cupom inválido!";
+        msg.className = "text-[10px] font-mono mt-1 text-red-400";
+        msg.classList.remove('hidden');
+      }
+    }
+
+    function toggleSacola() {
+      const sacola = document.getElementById('sacola');
+      const inner = document.getElementById('sacola-inner');
+      if (!sacola || !inner) return;
+      const isOpen = !sacola.classList.contains('pointer-events-none');
+      if (isOpen) {
+        sacola.classList.add('opacity-0', 'pointer-events-none');
+        inner.classList.add('translate-x-full');
+      } else {
+        sacola.classList.remove('opacity-0', 'pointer-events-none');
+        inner.classList.remove('translate-x-full');
+        renderizarItensSacola();
+      }
+    }
+
+    function fecharSacolaFora(event) {
+      if (event.target.id === 'sacola') toggleSacola();
+    }
+
+    function irParaCheckout() {
+      if (sacolaItens.length === 0) {
+        alert("Sua sacola está vazia!");
+        return;
+      }
+      window.location.href = 'checkout.html';
+    }
+
+    function toggleMenu() {
+      const menu = document.getElementById('sideMenu');
+      if (!menu) return;
+      const inner = document.getElementById('sideMenuDrawer') || menu.querySelector('div');
+      if (menu.classList.contains('opacity-0')) {
+        menu.classList.remove('opacity-0', 'pointer-events-none');
+        inner.classList.remove('-translate-x-full');
+      } else {
+        menu.classList.add('opacity-0', 'pointer-events-none');
+        inner.classList.add('-translate-x-full');
+      }
+    }
+
+    function fecharMenuAoClicarFora(event) {
+      const drawer = document.getElementById('sideMenuDrawer');
+      if (drawer && !drawer.contains(event.target)) {
+        toggleMenu();
+      }
+    }
+
+    function toggleCategorias() {
+      const list = document.getElementById('categoriasList');
+      const arrow = document.getElementById('cat-arrow');
+      if (list && arrow) {
+        list.classList.toggle('hidden');
+        list.classList.toggle('flex');
+        arrow.classList.toggle('rotate-180');
+      }
+    }
+
+function filtrarPeloMenu(filtro) {
+      toggleMenu();
+      window.location.href = 'produto.html?filtro=' + filtro;
+    }
+
+    function toggleBotaoLimpar() {
+      const input = document.getElementById('searchInput');
+      const btn = document.getElementById('clearSearchBtn');
+      if (input && btn) {
+        btn.classList.toggle('hidden', input.value.trim().length === 0);
+      }
+    }
+
+    function limparBusca() {
+      const input = document.getElementById('searchInput');
+      if (input) { input.value = ''; input.focus(); }
+      toggleBotaoLimpar();
+    }
+
+    function realizarBusca() {
+      const query = document.getElementById('searchInput').value.trim();
+      if (query) window.location.href = 'produto.html?busca=' + encodeURIComponent(query);
+    }
+
+    function verificarEnter(e) {
+      if (e.key === 'Enter') realizarBusca();
+    }
+
+    function toggleSearchMobile() {
+      var el = document.getElementById('searchMobileBar');
+      if (el) el.classList.toggle('hidden');
+    }
+
+    function toggleBotaoLimparMobile() {
+      const input = document.getElementById('searchMobileInput');
+      var btn = document.getElementById('clearSearchMobileBtn');
+      if (btn && input) btn.classList.toggle('hidden', input.value.trim() === '');
+    }
+
+    function limparBuscaMobile() {
+      const input = document.getElementById('searchMobileInput');
+      if (input) { input.value = ''; toggleBotaoLimparMobile(); }
+    }
+
+    function realizarBuscaMobile() {
+      const query = document.getElementById('searchMobileInput').value.trim();
+      if (query) window.location.href = 'produto.html?busca=' + encodeURIComponent(query);
+    }
+
+    function verificarEnterMobile(e) {
+      if (e.key === 'Enter') realizarBuscaMobile();
+    }
+
+    function verificarSessaoUsuario() {
+      const usuarioLogado = JSON.parse(localStorage.getItem('mio_usuario_logado'));
+      const btnHeader = document.getElementById('btnMembroHeader');
+      const btnMenuMembro = document.getElementById('linkMenuMembro');
+      if (usuarioLogado && btnMenuMembro) {
+        btnMenuMembro.href = "perfil.html";
+        btnMenuMembro.removeAttribute('onclick');
+        btnMenuMembro.setAttribute("style", "background-color: #fbbf24 !important; color: #000000 !important; font-weight: 900 !important;");
+        btnMenuMembro.innerHTML = '<i data-lucide="user" class="w-5 h-5" style="color: #000000 !important;"></i> MEU PERFIL';
+        if (btnHeader) {
+          btnHeader.setAttribute('onclick', "window.location.href='perfil.html'");
+          btnHeader.title = "Meu Perfil";
+          if (usuarioLogado.foto) {
+            btnHeader.innerHTML = '<img src="' + usuarioLogado.foto + '" class="w-7 h-7 rounded-full object-cover border-2 border-amber-400">';
+          } else {
+            btnHeader.innerHTML = '<i data-lucide="user" class="w-6 h-6 text-amber-400"></i>';
+          }
+        }
+      } else if (btnMenuMembro) {
+        btnMenuMembro.setAttribute("style", "background-color: #ffffff !important; color: #000000 !important;");
+      }
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function copiarCupom() {
+      const inputCupom = document.getElementById('inputCupom');
+      const btnCopiar = document.getElementById('btnCopiar');
+      const textoCopiar = document.getElementById('textoCopiar');
+      const msgSucesso = document.getElementById('msgSucesso');
+      if (!inputCupom) return;
+      navigator.clipboard.writeText(inputCupom.value).then(function() {
+        textoCopiar.innerText = "Copiado!";
+        btnCopiar.classList.remove('bg-white');
+        btnCopiar.classList.add('bg-emerald-500', 'text-white');
+        msgSucesso.classList.remove('opacity-0');
+        setTimeout(function() {
+          textoCopiar.innerText = "Copiar";
+          btnCopiar.classList.remove('bg-emerald-500', 'text-white');
+          btnCopiar.classList.add('bg-white', 'text-black');
+          msgSucesso.classList.add('opacity-0');
+        }, 3000);
+      }).catch(function(err) {
+        console.error('Erro ao copiar código: ', err);
+      });
+    }
+
+    if (cupomAtivo && !cupomAtivo.porcentagem) { cupomAtivo = null; localStorage.removeItem('mio_cupom_ativo'); }
+    cupomAtivo = null;
+    localStorage.removeItem('mio_cupom_ativo');
+
+document.addEventListener("DOMContentLoaded", function() {
+      renderizarItensSacola();
+      atualizarContadorHeader();
+      verificarSessaoUsuario();
+      if (window.lucide) lucide.createIcons();
+    });
+  </script>
+  <script src="js/logo.js"></script>
+</body>
+</html>

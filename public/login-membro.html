@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Criar Conta | MIO Streetwear</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+</head>
+<body class="bg-zinc-950 text-white font-sans antialiased min-h-screen flex flex-col justify-between">
+
+<!-- CABEÇALHO -->
+  <header class="py-6 px-8 border-b border-zinc-900 bg-zinc-950">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+      <a href="index.html" class="mio-logo text-2xl font-black tracking-widest text-white hover:opacity-80 transition" data-logo-h="52">MIO</a>
+      <a href="login.html" class="text-xs font-bold uppercase tracking-wider text-zinc-400 hover:text-white transition">Já tenho conta</a>
+    </div>
+  </header>
+
+  <!-- FORMULÁRIO DE CADASTRO -->
+  <main class="max-w-md mx-auto px-4 py-12 w-full my-auto">
+    <div class="bg-zinc-900/60 p-8 rounded-2xl border border-zinc-800/80 backdrop-blur-sm shadow-2xl">
+
+      <div class="text-center mb-8">
+        <span class="text-[10px] font-mono text-amber-400 uppercase tracking-widest">Torne-se Membro</span>
+        <h1 class="text-2xl md:text-3xl font-black uppercase tracking-wider text-white mt-1">CRIAR CONTA</h1>
+        <p class="text-xs text-zinc-400 mt-2">Cadastre-se para acompanhar seus pedidos e ganhar vantagens exclusivas.</p>
+      </div>
+
+      <form onsubmit="cadastrarUsuario(event)" class="space-y-4">
+
+        <!-- NOME -->
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-1">Nome Completo *</label>
+          <input type="text" id="regNome" required placeholder="Seu nome completo" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-3 text-sm text-white focus:outline-none focus:border-white transition">
+        </div>
+
+        <!-- E-MAIL -->
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-1">E-mail *</label>
+          <input type="email" id="regEmail" required placeholder="seu@email.com" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-3 text-sm text-white focus:outline-none focus:border-white transition">
+        </div>
+
+        <!-- CPF -->
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-1">CPF (opcional)</label>
+          <input type="text" id="regCpf" placeholder="000.000.000-00" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-3 text-sm text-white focus:outline-none focus:border-white transition">
+        </div>
+
+        <!-- TELEFONE -->
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-1">WhatsApp / Telefone *</label>
+          <input type="tel" id="regTelefone" required placeholder="(00) 00000-0000" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-3 text-sm text-white focus:outline-none focus:border-white transition">
+        </div>
+
+        <!-- SENHA -->
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-1">Senha *</label>
+          <input type="password" id="regSenha" required minlength="6" placeholder="Mínimo 6 caracteres" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-3 text-sm text-white focus:outline-none focus:border-white transition">
+        </div>
+
+<!-- CONSENTIMENTOS -->
+        <div class="space-y-3 pt-1">
+          <!-- Concordo com os termos -->
+          <label class="flex items-start gap-3 cursor-pointer select-none">
+            <input type="checkbox" id="regTermos" class="mt-0.5 accent-amber-400 w-4 h-4 shrink-0">
+            <span class="text-[11px] text-zinc-400 leading-relaxed">
+              Li e concordo com os <a href="politicas.html" target="_blank" class="text-amber-400 hover:text-amber-300 underline underline-offset-2">Termos de Uso</a> e a <a href="privacidade.html" target="_blank" class="text-amber-400 hover:text-amber-300 underline underline-offset-2">Política de Privacidade</a> da MIO. *
+            </span>
+          </label>
+
+          <!-- Concordo em receber ofertas via WhatsApp -->
+          <label class="flex items-start gap-3 cursor-pointer select-none">
+            <input type="checkbox" id="regWhatsapp" checked class="mt-0.5 accent-amber-400 w-4 h-4 shrink-0">
+            <span class="text-[11px] text-zinc-400 leading-relaxed">
+              Concordo em receber <span class="text-amber-400 font-bold">cupons e atualizações de promoções</span> via WhatsApp.
+            </span>
+          </label>
+        </div>
+
+        <!-- BOTÃO CADASTRAR -->
+        <button type="submit" id="btnCadastrar" class="w-full bg-amber-400 text-black font-black text-xs uppercase tracking-widest py-4 rounded-lg hover:bg-zinc-200 active:scale-[0.99] transition mt-4">
+          Criar Minha Conta
+        </button>
+
+        <p id="msgCadastro" class="hidden text-xs font-mono text-center"></p>
+      </form>
+    </div>
+  </main>
+
+  <!-- RODAPÉ -->
+  <footer class="py-6 border-t border-zinc-900 text-center text-xs text-zinc-600">
+    © 2026 MIO Streetwear. Todos os direitos reservados.
+  </footer>
+
+  <!-- LÓGICA DE CADASTRO -->
+  <script>
+    lucide.createIcons();
+
+    async function cadastrarUsuario(event) {
+      event.preventDefault();
+
+      const nome = document.getElementById('regNome').value.trim();
+      const email = document.getElementById('regEmail').value.toLowerCase().trim();
+      const cpf = document.getElementById('regCpf').value.trim();
+      const telefone = document.getElementById('regTelefone').value.trim();
+      const senha = document.getElementById('regSenha').value;
+      const msg = document.getElementById('msgCadastro');
+      const btn = document.getElementById('btnCadastrar');
+
+if (!nome || !email || !telefone || !senha) {
+        msg.innerText = "Preencha os campos obrigatórios.";
+        msg.className = "hidden text-xs font-mono text-center text-red-400";
+        msg.classList.remove('hidden');
+        return;
+      }
+
+      // Exige concordância com os Termos de Uso / Política de Privacidade
+      const concordoTermos = document.getElementById('regTermos').checked;
+      if (!concordoTermos) {
+        msg.innerText = "Você precisa concordar com os Termos de Uso e a Política de Privacidade para criar sua conta.";
+        msg.className = "hidden text-xs font-mono text-center text-red-400";
+        msg.classList.remove('hidden');
+        return;
+      }
+
+      // 1º: Sincroniza com o banco do servidor (tabela clientes) — fonte da aba Clientes
+      btn.disabled = true;
+      btn.innerText = 'Cadastrando...';
+      msg.classList.add('hidden');
+      try {
+        const res = await fetch('/api/clientes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nome, email, cpf, telefone, senha })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          // Se o servidor diz que o e-mail já está cadastrado, avisa e para
+          alert(data.error || 'Erro ao salvar no servidor.');
+          btn.disabled = false;
+          btn.innerText = 'Criar Minha Conta';
+          return;
+        }
+      } catch (err) {
+        console.error("Erro ao sincronizar com o servidor:", err);
+        alert("⚠️ Não foi possível salvar sua conta no servidor. Confirme que o servidor está rodando e tente novamente para que seus dados apareçam no painel do administrador.");
+        btn.disabled = false;
+        btn.innerText = 'Criar Minha Conta';
+        return;
+      }
+
+      // 2º: Efetua login para obter token de sessão e evitar expor a senha localmente.
+      try {
+        const loginRes = await fetch('/api/clientes/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, senha })
+        });
+        const loginData = await loginRes.json().catch(() => ({}));
+        if (!loginRes.ok || !loginData.cliente || !loginData.token) {
+          throw new Error(loginData.error || 'Não foi possível efetuar o login após cadastro.');
+        }
+        localStorage.setItem('mio_usuario_logado', JSON.stringify(loginData.cliente));
+        localStorage.setItem('mio_usuario_token', loginData.token);
+      } catch (err) {
+        console.warn("Erro ao efetuar login após cadastro:", err);
+        alert("Conta criada, mas não foi possível manter você logado automaticamente. Faça login na página de membros.");
+        window.location.href = "login.html";
+        return;
+      }
+
+      alert("Conta criada com sucesso! Bem-vindo à MIO.");
+
+      // Se veio da sacola/checkout, redireciona de volta. Senão, vai para a home.
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('redirect') === 'checkout') {
+        window.location.href = "checkout.html";
+      } else {
+        window.location.href = "index.html";
+      }
+    }
+</script>
+  <script src="js/logo.js"></script>
+</body>
+</html>

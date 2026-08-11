@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MIO | Checkout por Etapas</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-black text-zinc-100 min-h-screen p-4 md:p-8 flex justify-center items-start">
+
+  <div class="w-full max-w-4xl grid grid-cols-1 md:grid-cols-12 gap-6">
+
+    <!-- COLUNA DA ESQUERDA: FLUXO EM ETAPAS -->
+    <div class="md:col-span-7 bg-zinc-950 border border-zinc-900 p-6 rounded-2xl flex flex-col justify-between min-h-[500px]">
+      
+      <div>
+        <!-- CABEÇALHO COM BARRAS DE PROGRESSO -->
+        <div class="mb-6">
+          <h2 class="text-xl font-bold uppercase tracking-widest text-amber-400 mb-4">Finalizar Compra</h2>
+          
+          <div class="grid grid-cols-3 gap-2 text-center text-[10px] font-mono uppercase">
+            <div id="indicadorEtapa1" class="py-2 border-b-2 border-amber-400 text-amber-400 font-bold">1. Dados</div>
+            <div id="indicadorEtapa2" class="py-2 border-b-2 border-zinc-800 text-zinc-600">2. Entrega</div>
+            <div id="indicadorEtapa3" class="py-2 border-b-2 border-zinc-800 text-zinc-600">3. Pagamento</div>
+          </div>
+        </div>
+
+        <form id="formCheckout" onsubmit="concluirCompra(event)">
+          
+          <!-- ETAPA 1: DADOS PESSOAIS -->
+          <div id="etapa1" class="space-y-4">
+            <h3 class="text-xs font-mono uppercase text-zinc-400 border-b border-zinc-900 pb-2">Identificação do Cliente</h3>
+            
+            <div>
+              <label class="block text-[11px] font-mono text-zinc-500 uppercase mb-1">Nome Completo *</label>
+              <input type="text" id="cliNome" required placeholder="Seu nome completo" class="w-full bg-zinc-900 border border-zinc-800 text-sm text-white p-3 rounded-lg focus:outline-none focus:border-amber-400">
+            </div>
+            
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-[11px] font-mono text-zinc-500 uppercase mb-1">CPF (Para Nota Fiscal) *</label>
+                <input type="text" id="cliCpf" required placeholder="000.000.000-00" class="w-full bg-zinc-900 border border-zinc-800 text-sm text-white p-3 rounded-lg focus:outline-none focus:border-amber-400 font-mono">
+              </div>
+              <div>
+                <label class="block text-[11px] font-mono text-zinc-500 uppercase mb-1">WhatsApp / Telefone *</label>
+                <input type="tel" id="cliTelefone" required placeholder="(00) 00000-0000" class="w-full bg-zinc-900 border border-zinc-800 text-sm text-white p-3 rounded-lg focus:outline-none focus:border-amber-400 font-mono">
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-[11px] font-mono text-zinc-500 uppercase mb-1">E-mail (Para Rastreamento) *</label>
+              <input type="email" id="cliEmail" required placeholder="seu@email.com" class="w-full bg-zinc-900 border border-zinc-800 text-sm text-white p-3 rounded-lg focus:outline-none focus:border-amber-400">
+            </div>
+
+            <button type="button" onclick="avancarParaEtapa(2)" class="w-full bg-amber-400 hover:bg-amber-500 text-black font-black uppercase text-xs py-4 rounded-xl transition tracking-wider mt-4">
+              Ir para Endereço de Entrega →
+            </button>
+          </div>
+
+          <!-- ETAPA 2: ENDEREÇO DE ENTREGA -->
+          <div id="etapa2" class="space-y-4 hidden">
+            <h3 class="text-xs font-mono uppercase text-zinc-400 border-b border-zinc-900 pb-2">Endereço para Envio</h3>
+            
+            <div class="grid grid-cols-3 gap-3">
+              <div class="col-span-1">
+                <label class="block text-[11px] font-mono text-zinc-500 uppercase mb-1">CEP *</label>
+                <input type="text" id="endCep" onblur="buscarCep(this.value)" placeholder="00000-000" class="w-full bg-zinc-900 border border-zinc-800 text-sm text-white p-3 rounded-lg focus:outline-none focus:border-amber-400 font-mono">
+              </div>
+              <div class="col-span-2">
+                <label class="block text-[11px] font-mono text-zinc-500 uppercase mb-1">Rua / Logradouro *</label>
+                <input type="text" id="endRua" placeholder="Rua, Avenida..." class="w-full bg-zinc-900 border border-zinc-800 text-sm text-white p-3 rounded-lg focus:outline-none focus:border-amber-400">
+              </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-3">
+              <div>
+                <label class="block text-[11px] font-mono text-zinc-500 uppercase mb-1">Número *</label>
+                <input type="text" id="endNumero" placeholder="123" class="w-full bg-zinc-900 border border-zinc-800 text-sm text-white p-3 rounded-lg focus:outline-none focus:border-amber-400">
+              </div>
+              <div class="col-span-2">
+                <label class="block text-[11px] font-mono text-zinc-500 uppercase mb-1">Complemento</label>
+                <input type="text" id="endComplemento" placeholder="Apto, Bloco, etc." class="w-full bg-zinc-900 border border-zinc-800 text-sm text-white p-3 rounded-lg focus:outline-none focus:border-amber-400">
+              </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-3">
+              <div>
+                <label class="block text-[11px] font-mono text-zinc-500 uppercase mb-1">Bairro *</label>
+                <input type="text" id="endBairro" placeholder="Bairro" class="w-full bg-zinc-900 border border-zinc-800 text-sm text-white p-3 rounded-lg focus:outline-none focus:border-amber-400">
+              </div>
+              <div>
+                <label class="block text-[11px] font-mono text-zinc-500 uppercase mb-1">Cidade *</label>
+                <input type="text" id="endCidade" placeholder="Cidade" class="w-full bg-zinc-900 border border-zinc-800 text-sm text-white p-3 rounded-lg focus:outline-none focus:border-amber-400">
+              </div>
+              <div>
+                <label class="block text-[11px] font-mono text-zinc-500 uppercase mb-1">UF *</label>
+                <input type="text" id="endUf" placeholder="SP" maxlength="2" class="w-full bg-zinc-900 border border-zinc-800 text-sm text-white p-3 rounded-lg focus:outline-none focus:border-amber-400 uppercase font-mono">
+              </div>
+            </div>
+
+<!-- OPÇÕES DE FRETE -->
+            <div class="pt-4 border-t border-zinc-900">
+              <h4 class="text-xs font-mono uppercase text-zinc-400 border-b border-zinc-900 pb-2 mb-3">Opções de Entrega</h4>
+              <div id="opcoesFrete" class="space-y-2">
+                <p class="text-xs text-zinc-500 font-mono py-2">Informe o CEP acima e clique em "Calcular Frete" para ver as opções disponíveis.</p>
+              </div>
+              <button type="button" onclick="calcularFrete()" id="btnCalcularFrete" class="mt-2 w-full bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 text-xs font-bold uppercase py-2.5 rounded-lg transition">
+                📦 Calcular Frete
+              </button>
+              <p id="msgFrete" class="hidden text-[11px] font-mono mt-2"></p>
+            </div>
+
+            <div class="flex gap-3 mt-4">
+              <button type="button" onclick="avancarParaEtapa(1)" class="w-1/3 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-bold uppercase text-xs py-4 rounded-xl border border-zinc-800 transition">
+                ← Voltar
+              </button>
+              <button type="button" onclick="avancarParaEtapa(3)" class="w-2/3 bg-amber-400 hover:bg-amber-500 text-black font-black uppercase text-xs py-4 rounded-xl transition tracking-wider">
+                Ir para Pagamento →
+              </button>
+            </div>
+          </div>
+
+          <!-- ETAPA 3: FORMA DE PAGAMENTO -->
+          <div id="etapa3" class="space-y-4 hidden">
+            <h3 class="text-xs font-mono uppercase text-zinc-400 border-b border-zinc-900 pb-2">Opções de Pagamento</h3>
+            
+            <div class="grid grid-cols-2 gap-3 mb-4">
+              <button type="button" id="btnPix" onclick="selecionarMetodo('pix')" class="p-3 border border-amber-400 bg-amber-400/10 text-amber-400 font-bold rounded-lg text-xs uppercase transition">
+                ⚡ PIX
+              </button>
+              <button type="button" id="btnCartao" onclick="selecionarMetodo('cartao')" class="p-3 border border-zinc-800 bg-zinc-900 text-zinc-400 font-bold rounded-lg text-xs uppercase transition">
+                💳 Cartão
+              </button>
+            </div>
+
+<div id="boxCartao" class="hidden space-y-3 p-4 bg-zinc-900/50 border border-zinc-900 rounded-lg">
+              <div>
+                <label class="block text-[11px] font-mono text-zinc-500 uppercase mb-1">Número do Cartão</label>
+                <input type="text" id="cartaoNumero" placeholder="0000 0000 0000 0000" maxlength="19" class="w-full bg-zinc-900 border border-zinc-800 text-sm text-white p-3 rounded-lg focus:outline-none focus:border-amber-400 font-mono">
+              </div>
+              <div>
+                <label class="block text-[11px] font-mono text-zinc-500 uppercase mb-1">Nome Impresso</label>
+                <input type="text" id="cartaoNome" placeholder="NOME COMO ESTÁ NO CARTÃO" class="w-full bg-zinc-900 border border-zinc-800 text-sm text-white p-3 rounded-lg focus:outline-none focus:border-amber-400 uppercase">
+              </div>
+              <div class="grid grid-cols-3 gap-3">
+                <div>
+                  <label class="block text-[11px] font-mono text-zinc-500 uppercase mb-1">Validade</label>
+                  <input type="text" id="cartaoValidade" placeholder="MM/AA" maxlength="5" class="w-full bg-zinc-900 border border-zinc-800 text-sm text-white p-3 rounded-lg focus:outline-none focus:border-amber-400 font-mono">
+                </div>
+                <div>
+                  <label class="block text-[11px] font-mono text-zinc-500 uppercase mb-1">CVV</label>
+                  <input type="text" id="cartaoCvv" placeholder="123" maxlength="4" class="w-full bg-zinc-900 border border-zinc-800 text-sm text-white p-3 rounded-lg focus:outline-none focus:border-amber-400 font-mono">
+                </div>
+                <div>
+                  <label class="block text-[11px] font-mono text-zinc-500 uppercase mb-1">Parcelas</label>
+                  <select id="cartaoParcelas" class="w-full bg-zinc-900 border border-zinc-800 text-sm text-white p-3 rounded-lg focus:outline-none focus:border-amber-400 font-mono">
+                    <option value="1">1x</option>
+                    <option value="2">2x</option>
+                    <option value="3">3x</option>
+                    <option value="4">4x</option>
+                    <option value="5">5x</option>
+                    <option value="6">6x</option>
+                    <option value="7">7x</option>
+                    <option value="8">8x</option>
+                    <option value="9">9x</option>
+                    <option value="10">10x</option>
+                    <option value="11">11x</option>
+                    <option value="12">12x</option>
+                  </select>
+                </div>
+              </div>
+              <p id="msgCartao" class="hidden text-[11px] font-mono pt-1"></p>
+            </div>
+
+            <div class="flex gap-3 mt-4">
+              <button type="button" onclick="avancarParaEtapa(2)" class="w-1/3 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-bold uppercase text-xs py-4 rounded-xl border border-zinc-800 transition">
+                ← Voltar
+              </button>
+              <button type="submit" class="w-2/3 bg-amber-400 hover:bg-amber-500 text-black font-black uppercase text-xs py-4 rounded-xl transition tracking-wider">
+                Finalizar e Pagar
+              </button>
+            </div>
+          </div>
+
+        </form>
+      </div>
+
+    </div>
+
+    <!-- COLUNA DA DIREITA: RESUMO COM CUPOM E ITENS -->
+    <div class="md:col-span-5 bg-zinc-950 border border-zinc-900 p-6 rounded-2xl flex flex-col justify-between h-fit">
+      <div>
+        <h2 class="text-xl font-bold uppercase tracking-widest text-white mb-6 border-b border-zinc-900 pb-3">
+          Resumo da Compra
+        </h2>
+
+        <div id="listaItensCheckout" class="space-y-4 max-h-64 overflow-y-auto mb-6 pr-1">
+          <!-- Injetado via JS -->
+        </div>
+
+        <div class="border-t border-zinc-900 pt-4 space-y-2 font-mono text-xs">
+          <div class="flex justify-between text-zinc-400">
+            <span>Subtotal:</span>
+            <span id="subtotalCheckout">R$ 0,00</span>
+          </div>
+
+          <!-- LINHA DE EXIBIÇÃO DO CUPOM -->
+          <div id="linhaCupom" class="hidden flex justify-between text-amber-400">
+            <span>Cupom (<span id="nomeCupom"></span>):</span>
+            <span id="descontoCupom">- R$ 0,00</span>
+          </div>
+
+          <div class="flex justify-between text-zinc-400">
+            <span>Frete:</span>
+            <span id="freteCheckout" class="text-white font-bold">R$ 14,90</span>
+          </div>
+
+          <div class="flex justify-between text-amber-400 font-bold text-base pt-2 border-t border-zinc-900">
+            <span>TOTAL:</span>
+            <span id="totalFinalCheckout">R$ 0,00</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- TELA DE QR CODE PIX -->
+      <div id="boxResultadoPix" class="hidden mt-6 p-4 bg-zinc-900 rounded-xl border border-zinc-800 text-center">
+        <h4 class="text-amber-400 font-bold uppercase text-xs mb-2">Aguardando Pagamento PIX</h4>
+        <div class="bg-white p-3 rounded-lg w-40 h-40 mx-auto mb-3 flex items-center justify-center">
+          <img id="qrCodePixImg" src="" alt="QR Code PIX" class="w-full h-full">
+        </div>
+        <button onclick="copiarPix()" class="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-mono text-xs py-2 rounded transition border border-zinc-700">
+          📋 Copiar Código PIX
+        </button>
+      </div>
+
+    </div>
+
+  </div>
+
+<script>
+    let etapaAtual = 1;
+    let metodoPagamento = 'pix';
+    const FRETE_FIXO = 14.90;
+    const META_FRETE_GRATIS = 249.00;
+    // Frete cotado via Melhor Envio (ou fallback pela UF). Padrão: R$ 14,90
+    let freteCotado = { valor: FRETE_FIXO, prazo: '5 dias úteis', origem: 'padrão' };
+    let opcoesFrete = [];
+    let pedidoCriado = null;
+
+    document.addEventListener('DOMContentLoaded', () => {
+      carregarItensCheckout();
+      preencherDadosUsuarioLogado();
+    });
+
+    // Navegação em Etapas com validação simples
+    function avancarParaEtapa(proximaEtapa) {
+      if (proximaEtapa > etapaAtual) {
+        if (etapaAtual === 1) {
+          const nome = document.getElementById('cliNome').value;
+          const cpf = document.getElementById('cliCpf').value;
+          const tel = document.getElementById('cliTelefone').value;
+          const email = document.getElementById('cliEmail').value;
+          
+          if (!nome || !cpf || !tel || !email) {
+            alert('Por favor, preencha todos os campos obrigatórios da Identificação.');
+            return;
+          }
+        }
+
+        if (etapaAtual === 2 && proximaEtapa === 3) {
+          const cep = document.getElementById('endCep').value;
+          const rua = document.getElementById('endRua').value;
+          const num = document.getElementById('endNumero').value;
+          
+          if (!cep || !rua || !num) {
+            alert('Por favor, preencha o CEP, Rua e Número para entrega.');
+            return;
+          }
+        }
+      }
+
+// Ao ir para a etapa 3 (pagamento), dispara a cotação de frete em segundo plano
+      if (proximaEtapa === 3 && (etapaAtual === 2 || etapaAtual === 1)) {
+        const cep = document.getElementById('endCep').value;
+        cotarFrete(cep).then(() => carregarItensCheckout());
+      }
+
+      // Oculta todas
+      document.getElementById('etapa1').classList.add('hidden');
+      document.getElementById('etapa2').classList.add('hidden');
+      document.getElementById('etapa3').classList.add('hidden');
+
+      // Exibe a desejada
+      document.getElementById(`etapa${proximaEtapa}`).classList.remove('hidden');
+
+      // Atualiza Indicadores Superiores
+      for (let i = 1; i <= 3; i++) {
+        const ind = document.getElementById(`indicadorEtapa${i}`);
+        if (i === proximaEtapa) {
+          ind.className = "py-2 border-b-2 border-amber-400 text-amber-400 font-bold";
+        } else if (i < proximaEtapa) {
+          ind.className = "py-2 border-b-2 border-zinc-600 text-zinc-300 font-bold";
+        } else {
+          ind.className = "py-2 border-b-2 border-zinc-800 text-zinc-600";
+        }
+      }
+
+      etapaAtual = proximaEtapa;
+    }
+
+    // Carrega Produtos e Calcula Cupom de Desconto
+    function carregarItensCheckout() {
+      const sacola = JSON.parse(localStorage.getItem('mio_sacola_itens') || '[]');
+      const cupomAtivo = JSON.parse(localStorage.getItem('mio_cupom_ativo') || 'null');
+      const containerItens = document.getElementById('listaItensCheckout');
+      
+      let subtotal = 0;
+      containerItens.innerHTML = '';
+
+      if (sacola.length === 0) {
+        containerItens.innerHTML = `<p class="text-xs text-zinc-500">Nenhum item na sacola.</p>`;
+      } else {
+        sacola.forEach(item => {
+          subtotal += item.preco * item.quantidade;
+          const imgUrl = item.imagem || 'https://via.placeholder.com/80?text=MIO';
+
+          containerItens.innerHTML += `
+            <div class="flex items-center gap-3 border-b border-zinc-900 pb-3">
+              <img src="${imgUrl}" alt="${item.nome}" class="w-12 h-12 object-cover rounded-lg bg-zinc-900 border border-zinc-800 shrink-0">
+              <div class="flex-1 min-w-0">
+                <p class="font-bold text-xs text-white uppercase truncate">${item.nome}</p>
+                <p class="text-[11px] text-zinc-500 font-mono">${item.quantidade}x R$ ${item.preco.toFixed(2).replace('.', ',')}</p>
+              </div>
+              <span class="font-mono text-xs font-bold text-zinc-200">R$ ${(item.preco * item.quantidade).toFixed(2).replace('.', ',')}</span>
+            </div>
+          `;
+        });
+      }
+
+      // Cálculo do Desconto do Cupom
+      let valorDesconto = 0;
+      if (cupomAtivo) {
+        if (cupomAtivo.tipo === 'porcentagem') {
+          valorDesconto = subtotal * (cupomAtivo.valor / 100);
+        } else {
+          valorDesconto = cupomAtivo.valor;
+        }
+
+        document.getElementById('linhaCupom').classList.remove('hidden');
+        document.getElementById('nomeCupom').innerText = cupomAtivo.codigo;
+        document.getElementById('descontoCupom').innerText = `- R$ ${valorDesconto.toFixed(2).replace('.', ',')}`;
+      }
+
+// Frete: usa o valor cotado (Melhor Envio ou fallback), respeitando a meta de frete grátis
+      const valorFrete = subtotal >= META_FRETE_GRATIS ? 0 : freteCotado.valor;
+      const totalFinal = Math.max(0, subtotal - valorDesconto) + valorFrete;
+
+      document.getElementById('subtotalCheckout').innerText = `R$ ${subtotal.toFixed(2).replace('.', ',')}`;
+      document.getElementById('freteCheckout').innerText = valorFrete === 0 ? 'GRÁTIS' : `R$ ${valorFrete.toFixed(2).replace('.', ',')}`;
+      document.getElementById('totalFinalCheckout').innerText = `R$ ${totalFinal.toFixed(2).replace('.', ',')}`;
+    }
+
+    // Tabela de frete por UF (fallback quando Melhor Envio não configurado)
+    const TABELA_FRETE_UF = {
+      SP: { valor: 14.90, prazo: '2 a 4 dias úteis' }, RJ: { valor: 16.50, prazo: '3 a 5 dias úteis' },
+      MG: { valor: 17.90, prazo: '3 a 6 dias úteis' }, ES: { valor: 18.50, prazo: '4 a 6 dias úteis' },
+      PR: { valor: 19.90, prazo: '4 a 7 dias úteis' }, SC: { valor: 21.50, prazo: '5 a 8 dias úteis' },
+      RS: { valor: 23.90, prazo: '5 a 9 dias úteis' }, DF: { valor: 19.90, prazo: '4 a 7 dias úteis' },
+      GO: { valor: 20.50, prazo: '4 a 7 dias úteis' }, BA: { valor: 24.90, prazo: '5 a 9 dias úteis' },
+      CE: { valor: 29.90, prazo: '7 a 11 dias úteis' }, PE: { valor: 27.50, prazo: '6 a 10 dias úteis' }
+    };
+
+    // Cotação de frete via Melhor Envio (POST /api/envio/calcular) com fallback por UF
+    async function cotarFrete(cepDestino) {
+      const itens = JSON.parse(localStorage.getItem('mio_sacola_itens') || '[]');
+      const cepLimpo = (cepDestino || '').replace(/\D/g, '');
+      if (cepLimpo.length !== 8) return;
+
+      try {
+        const res = await fetch('/api/envio/calcular', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cepDestino: cepLimpo, itens })
+        });
+        const data = await res.json();
+
+        if (data.ok && data.opcoes && data.opcoes.length > 0) {
+          opcoesFrete = data.opcoes;
+          // Seleciona a opção mais barata por padrão
+          const maisBarato = data.opcoes.reduce((a, b) => (a.preco < b.preco ? a : b));
+          freteCotado = { valor: maisBarato.preco, prazo: maisBarato.prazo, origem: data.demo ? 'demo' : 'melhorenvio' };
+          return freteCotado;
+        }
+
+        // Fallback: usa a tabela por UF consultando o ViaCEP
+        const viaCep = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`).then(r => r.json());
+        const uf = (viaCep.uf || '').toUpperCase();
+        const regiao = TABELA_FRETE_UF[uf] || { valor: FRETE_FIXO, prazo: '5 a 10 dias úteis' };
+        freteCotado = { valor: regiao.valor, prazo: regiao.prazo, origem: 'fallback' };
+        return freteCotado;
+      } catch (err) {
+        console.error('Erro ao cotar frete', err);
+        freteCotado = { valor: FRETE_FIXO, prazo: '5 dias úteis', origem: 'padrão' };
+        return freteCotado;
+      }
+    }
+
+// Exibe as opções de frete calculadas e deixa o cliente escolher
+    function renderizarOpcoesFrete() {
+      const container = document.getElementById('opcoesFrete');
+      if (opcoesFrete.length === 0) {
+        container.innerHTML = `<p class="text-xs text-zinc-500 font-mono py-2">Nenhuma opção de frete disponível. Usando o valor padrão.</p>`;
+        return;
+      }
+      container.innerHTML = opcoesFrete.map((o, idx) => `
+        <label class="flex items-center gap-3 bg-zinc-900 border ${o.preco === freteCotado.valor ? 'border-amber-400' : 'border-zinc-800'} rounded-lg px-3 py-2.5 cursor-pointer hover:border-amber-400 transition">
+          <input type="radio" name="opcaoFrete" value="${idx}" ${o.preco === freteCotado.valor ? 'checked' : ''} onchange="selecionarFrete(${idx})" class="accent-amber-400">
+          <div class="flex-1">
+            <p class="text-xs font-bold text-white uppercase">${o.nome}</p>
+            <p class="text-[10px] font-mono text-zinc-500">${o.prazo}</p>
+          </div>
+          <span class="text-sm font-black font-mono text-amber-400">R$ ${Number(o.preco).toFixed(2).replace('.', ',')}</span>
+        </label>
+      `).join('');
+    }
+
+    // Botão "Calcular Frete" na etapa de entrega
+    async function calcularFrete() {
+      const cepInput = document.getElementById('endCep').value;
+      const msg = document.getElementById('msgFrete');
+      if (!cepInput || cepInput.replace(/\D/g, '').length !== 8) {
+        msg.innerText = '⚠️ Informe um CEP válido para calcular o frete.';
+        msg.className = 'text-[11px] font-mono mt-2 text-red-400';
+        msg.classList.remove('hidden');
+        return;
+      }
+      msg.innerText = 'Calculando frete...';
+      msg.className = 'text-[11px] font-mono mt-2 text-zinc-400';
+      msg.classList.remove('hidden');
+
+      const cepLimpo = cepInput.replace(/\D/g, '');
+      const itens = JSON.parse(localStorage.getItem('mio_sacola_itens') || '[]');
+      try {
+        const res = await fetch('/api/envio/calcular', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cepDestino: cepLimpo, itens })
+        });
+        const data = await res.json();
+
+        if (data.ok && data.opcoes && data.opcoes.length > 0) {
+          opcoesFrete = data.opcoes;
+          const maisBarato = data.opcoes.reduce((a, b) => (a.preco < b.preco ? a : b));
+          freteCotado = { valor: maisBarato.preco, prazo: maisBarato.prazo, origem: data.demo ? 'demo' : 'melhorenvio' };
+          msg.innerText = data.message || 'Selecione uma opção de entrega:';
+          msg.className = 'text-[11px] font-mono mt-2 text-emerald-400';
+        } else {
+          // Fallback por UF
+          const viaCep = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`).then(r => r.json());
+          const uf = (viaCep.uf || '').toUpperCase();
+          const regiao = TABELA_FRETE_UF[uf] || { valor: FRETE_FIXO, prazo: '5 a 10 dias úteis' };
+          freteCotado = { valor: regiao.valor, prazo: regiao.prazo, origem: 'fallback' };
+          opcoesFrete = [{ nome: 'Entrega Padrão', preco: regiao.valor, prazo: regiao.prazo }];
+          msg.innerText = 'Frete calculado com base na sua região:';
+          msg.className = 'text-[11px] font-mono mt-2 text-emerald-400';
+        }
+        msg.classList.remove('hidden');
+        renderizarOpcoesFrete();
+        carregarItensCheckout();
+      } catch (err) {
+        console.error('Erro ao calcular frete', err);
+        freteCotado = { valor: FRETE_FIXO, prazo: '5 dias úteis', origem: 'padrão' };
+        opcoesFrete = [{ nome: 'Entrega Padrão', preco: FRETE_FIXO, prazo: '5 dias úteis' }];
+        msg.innerText = 'Não foi possível cotar online. Usando frete padrão.';
+        msg.className = 'text-[11px] font-mono mt-2 text-amber-400';
+        msg.classList.remove('hidden');
+        renderizarOpcoesFrete();
+        carregarItensCheckout();
+      }
+    }
+
+    // Quando o cliente escolhe uma opção de frete
+    function selecionarFrete(idx) {
+      const opcao = opcoesFrete[idx];
+      if (!opcao) return;
+      freteCotado = { valor: Number(opcao.preco), prazo: opcao.prazo, origem: 'selecionado' };
+      carregarItensCheckout();
+    }
+
+    function preencherDadosUsuarioLogado() {
+      const usuarioLogado = JSON.parse(localStorage.getItem('mio_usuario_logado'));
+      if (usuarioLogado) {
+        if (usuarioLogado.nome) document.getElementById('cliNome').value = usuarioLogado.nome;
+        if (usuarioLogado.cpf) document.getElementById('cliCpf').value = usuarioLogado.cpf;
+        if (usuarioLogado.telefone) document.getElementById('cliTelefone').value = usuarioLogado.telefone;
+        if (usuarioLogado.email) document.getElementById('cliEmail').value = usuarioLogado.email;
+
+        if (usuarioLogado.cep) document.getElementById('endCep').value = usuarioLogado.cep;
+        if (usuarioLogado.rua) document.getElementById('endRua').value = usuarioLogado.rua;
+        if (usuarioLogado.numero) document.getElementById('endNumero').value = usuarioLogado.numero;
+        if (usuarioLogado.complemento) document.getElementById('endComplemento').value = usuarioLogado.complemento;
+        if (usuarioLogado.bairro) document.getElementById('endBairro').value = usuarioLogado.bairro;
+        if (usuarioLogado.cidade) document.getElementById('endCidade').value = usuarioLogado.cidade;
+        if (usuarioLogado.uf) document.getElementById('endUf').value = usuarioLogado.uf;
+      }
+    }
+
+    async function buscarCep(cep) {
+      const cepLimpo = cep.replace(/\D/g, '');
+      if (cepLimpo.length !== 8) return;
+
+      try {
+        const res = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
+        const data = await res.json();
+        
+        if (!data.erro) {
+          document.getElementById('endRua').value = data.logradouro;
+          document.getElementById('endBairro').value = data.bairro;
+          document.getElementById('endCidade').value = data.localidade;
+          document.getElementById('endUf').value = data.uf;
+          document.getElementById('endNumero').focus();
+        }
+      } catch (e) {
+        console.error("Erro ao buscar CEP", e);
+      }
+    }
+
+    function selecionarMetodo(metodo) {
+      metodoPagamento = metodo;
+      const btnPix = document.getElementById('btnPix');
+      const btnCartao = document.getElementById('btnCartao');
+      const boxCartao = document.getElementById('boxCartao');
+
+      if (metodo === 'pix') {
+        btnPix.className = "p-3 border border-amber-400 bg-amber-400/10 text-amber-400 font-bold rounded-lg text-xs uppercase transition";
+        btnCartao.className = "p-3 border border-zinc-800 bg-zinc-900 text-zinc-400 font-bold rounded-lg text-xs uppercase transition";
+        boxCartao.classList.add('hidden');
+      } else {
+        btnCartao.className = "p-3 border border-amber-400 bg-amber-400/10 text-amber-400 font-bold rounded-lg text-xs uppercase transition";
+        btnPix.className = "p-3 border border-zinc-800 bg-zinc-900 text-zinc-400 font-bold rounded-lg text-xs uppercase transition";
+        boxCartao.classList.remove('hidden');
+      }
+    }
+
+// Guarda o código Pix copia-e-cola gerado (para o botão de copiar)
+    let codigoPixAtual = "";
+
+    // Calcula o total final (subtotal - desconto + frete)
+    function calcularTotaisCheckout() {
+      const sacola = JSON.parse(localStorage.getItem('mio_sacola_itens') || '[]');
+      const cupomAtivo = JSON.parse(localStorage.getItem('mio_cupom_ativo') || 'null');
+      let subtotal = sacola.reduce((acc, i) => acc + (i.preco * i.quantidade), 0);
+      let valorDesconto = 0;
+      if (cupomAtivo) {
+        valorDesconto = cupomAtivo.tipo === 'porcentagem'
+          ? subtotal * (cupomAtivo.valor / 100)
+          : cupomAtivo.valor;
+      }
+      const valorFrete = subtotal >= META_FRETE_GRATIS ? 0 : freteCotado.valor;
+      return {
+        subtotal,
+        desconto: valorDesconto,
+        frete: valorFrete,
+        total: Math.max(0, subtotal - valorDesconto) + valorFrete
+      };
+    }
+
+    async function concluirCompra(e) {
+      e.preventDefault();
+
+      const sacola = JSON.parse(localStorage.getItem('mio_sacola_itens') || '[]');
+      if (sacola.length === 0) {
+        alert("Sua sacola está vazia!");
+        return;
+      }
+
+      const numeroPedido = `MIO-${Math.floor(100000 + Math.random() * 900000)}`;
+      const totais = calcularTotaisCheckout();
+
+      const pedidoMio = {
+        numero: numeroPedido,
+        data: new Date().toISOString(),
+        cliente: {
+          nome: document.getElementById('cliNome').value,
+          cpf: document.getElementById('cliCpf').value,
+          telefone: document.getElementById('cliTelefone').value,
+          email: document.getElementById('cliEmail').value
+        },
+        endereco: {
+          cep: document.getElementById('endCep').value,
+          rua: document.getElementById('endRua').value,
+          numero: document.getElementById('endNumero').value,
+          complemento: document.getElementById('endComplemento').value,
+          bairro: document.getElementById('endBairro').value,
+          cidade: document.getElementById('endCidade').value,
+          uf: document.getElementById('endUf').value
+        },
+        itens: sacola,
+        cupom: JSON.parse(localStorage.getItem('mio_cupom_ativo') || 'null'),
+        metodo: metodoPagamento,
+        status: "Aguardando Pagamento",
+        frete: totais.frete,
+        desconto: totais.desconto,
+        total: totais.total
+      };
+
+      // Salva o pedido no backend (POST /api/pedidos)
+      try {
+        const resPedido = await fetch('/api/pedidos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(pedidoMio)
+        });
+        if (!resPedido.ok) console.warn("Falha ao salvar pedido no servidor.");
+      } catch (err) {
+        console.error("Erro ao salvar pedido", err);
+      }
+
+      // Persiste o pedido localmente para a tela de acompanhamento
+      pedidoMio.numeroPedido = numeroPedido;
+      pedidoMio.enderecoEntrega = pedidoMio.endereco;
+      localStorage.setItem('mio_ultimo_pedido', JSON.stringify(pedidoMio));
+
+      if (metodoPagamento === 'pix') {
+        // Gera PIX real via backend PagSeguro (POST /api/pagamento/pix)
+        try {
+          const resPix = await fetch('/api/pagamento/pix', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              valor: totais.total,
+              cliente: pedidoMio.cliente,
+              numeroPedido
+            })
+          });
+          const data = await resPix.json();
+
+          const codigoPix = data.copiaECola || data.qrCodeText || codigoPixAtual;
+          codigoPixAtual = codigoPix;
+
+          document.getElementById('boxResultadoPix').classList.remove('hidden');
+          document.getElementById('qrCodePixImg').src =
+            `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(codigoPix)}`;
+        } catch (pixErr) {
+          console.error("Erro ao gerar PIX", pixErr);
+          codigoPixAtual = `MIO_PIX_${numeroPedido}`;
+          document.getElementById('boxResultadoPix').classList.remove('hidden');
+          document.getElementById('qrCodePixImg').src =
+            `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(codigoPixAtual)}`;
+        }
+        alert(`🔥 Pedido ${numeroPedido} gerado! Faça o pagamento no QR Code.`);
+} else {
+        // Cartão: cobrança REAL via PagSeguro (POST /api/pagamento/cartao)
+        const msgCartao = document.getElementById('msgCartao');
+        const numero = document.getElementById('cartaoNumero').value.trim();
+        const nome = document.getElementById('cartaoNome').value.trim();
+        const validade = document.getElementById('cartaoValidade').value.trim();
+        const cvv = document.getElementById('cartaoCvv').value.trim();
+        const parcelas = document.getElementById('cartaoParcelas').value;
+
+        if (!numero || !nome || !validade || !cvv) {
+          msgCartao.innerText = 'Preencha todos os dados do cartão.';
+          msgCartao.className = 'text-[11px] font-mono pt-1 text-red-400';
+          msgCartao.classList.remove('hidden');
+          return;
+        }
+        msgCartao.innerText = 'Processando pagamento...';
+        msgCartao.className = 'text-[11px] font-mono pt-1 text-amber-400';
+        msgCartao.classList.remove('hidden');
+
+        try {
+          const resCartao = await fetch('/api/pagamento/cartao', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              valor: totais.total,
+              cliente: pedidoMio.cliente,
+              numeroPedido,
+              parcelas,
+              itens: sacola,
+              cartao: { numero, nome, validade, cvv }
+            })
+          });
+          const data = await resCartao.json();
+
+          if (!resCartao.ok || !data.ok) {
+            msgCartao.innerText = '❌ ' + (data.error || data.mensagem || 'Pagamento recusado. Verifique os dados do cartão.');
+            msgCartao.className = 'text-[11px] font-mono pt-1 text-red-400';
+            msgCartao.classList.remove('hidden');
+            return;
+          }
+
+          if (data.aprovado) {
+            // Atualiza o status do pedido para "Pago"
+            try {
+              await fetch('/api/pedidos/atualizar-status', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ numero: numeroPedido, status: 'Pago' })
+              });
+            } catch (e) {}
+            msgCartao.innerText = '✅ ' + (data.mensagem || 'Pagamento aprovado!');
+            msgCartao.className = 'text-[11px] font-mono pt-1 text-emerald-400';
+            msgCartao.classList.remove('hidden');
+            alert(`✅ Pedido ${numeroPedido} aprovado! Enviaremos a confirmação por e-mail.`);
+            localStorage.removeItem('mio_sacola_itens');
+            localStorage.removeItem('mio_cupom_ativo');
+            window.location.href = 'index.html';
+          } else {
+            msgCartao.innerText = '⚠️ ' + (data.mensagem || 'Pagamento pendente. Tente novamente.');
+            msgCartao.className = 'text-[11px] font-mono pt-1 text-amber-400';
+            msgCartao.classList.remove('hidden');
+          }
+        } catch (err) {
+          console.error('Erro ao processar cartão', err);
+          msgCartao.innerText = '❌ Não foi possível processar o pagamento. Tente novamente.';
+          msgCartao.className = 'text-[11px] font-mono pt-1 text-red-400';
+          msgCartao.classList.remove('hidden');
+        }
+      }
+    }
+
+    function copiarPix() {
+      navigator.clipboard.writeText(codigoPixAtual || "00020126360014BR.GOV.BCB.PIX0114mio@exemplo.com520400005303986540574.705802BR5903MIO6009SAO PAULO62070503***6304E2CA");
+      alert("Código Copia e Cola do PIX copiado!");
+    }
+  </script>
+</body>
+</html>

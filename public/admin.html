@@ -1,0 +1,1450 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MIO | Painel de Administração</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .toast { animation: slideIn .3s ease forwards; }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        [x-cloak]{display:none!important}
+    </style>
+</head>
+<body class="bg-zinc-950 text-white font-sans antialiased">
+
+    <!-- ============ TELA DE LOGIN ============ -->
+    <div id="telaLogin" class="min-h-screen flex items-center justify-center p-4">
+        <div class="w-full max-w-md">
+            <div class="text-center mb-8">
+                <span class="text-4xl font-black tracking-widest text-white">MIO</span>
+                <span class="block text-[10px] bg-white text-black font-mono font-bold px-2 py-0.5 rounded-sm mt-2 inline-block">PAINEL ADMINISTRATIVO</span>
+            </div>
+            <div class="bg-zinc-900/50 border border-zinc-900 rounded-xl p-8">
+                <h1 class="text-lg font-black uppercase tracking-tight mb-1">Acesso Restrito</h1>
+                <p class="text-xs text-zinc-500 mb-6">Entre com suas credenciais de administrador.</p>
+<form id="formLogin" class="flex flex-col gap-4">
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Email</label>
+                        <input type="email" id="loginEmail" required class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2.5 text-sm focus:outline-none focus:border-amber-400" placeholder="seu@email.com">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Senha</label>
+                        <input type="password" id="loginSenha" required class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2.5 text-sm focus:outline-none focus:border-amber-400" placeholder="••••••••">
+                    </div>
+                    <p id="erroLogin" class="hidden text-xs text-red-400 font-mono"></p>
+                    <button type="submit" class="w-full bg-amber-500 hover:bg-amber-400 text-black font-black text-xs uppercase tracking-widest py-3 rounded transition shadow-lg shadow-amber-500/10 flex items-center justify-center gap-2">
+                        <i data-lucide="log-in" class="w-4 h-4"></i> Entrar no Painel
+                    </button>
+                </form>
+                <a href="/" target="_blank" class="mt-6 block text-center text-xs text-zinc-500 hover:text-white flex items-center justify-center gap-1">
+                    <i data-lucide="external-link" class="w-3.5 h-3.5"></i> Ver Loja Oficial
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============ PAINEL PRINCIPAL ============ -->
+    <div id="painelAdmin" class="hidden min-h-screen flex">
+        <!-- SIDEBAR -->
+        <aside class="w-56 lg:w-64 bg-zinc-900/50 border-r border-zinc-900 flex flex-col justify-between shrink-0">
+            <div>
+                <div class="flex items-center justify-between px-6 py-5 border-b border-zinc-900">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xl font-black tracking-widest text-white">MIO</span>
+                        <span class="text-[9px] bg-white text-black font-mono font-bold px-1.5 py-0.5 rounded">ADMIN</span>
+                    </div>
+                </div>
+                <nav class="p-3 flex flex-col gap-1 text-xs font-bold uppercase tracking-wider text-zinc-400">
+                    <button data-tab="dashboard" class="tab-btn flex items-center gap-3 px-3 py-2.5 rounded hover:bg-zinc-900 hover:text-white transition">
+                        <i data-lucide="layout-dashboard" class="w-4 h-4"></i> Dashboard
+                    </button>
+                    <button data-tab="produtos" class="tab-btn flex items-center gap-3 px-3 py-2.5 rounded hover:bg-zinc-900 hover:text-white transition">
+                        <i data-lucide="shopping-bag" class="w-4 h-4"></i> Produtos
+                    </button>
+                    <button data-tab="pedidos" class="tab-btn flex items-center gap-3 px-3 py-2.5 rounded hover:bg-zinc-900 hover:text-white transition">
+                        <i data-lucide="package" class="w-4 h-4"></i> Pedidos
+                    </button>
+                    <button data-tab="clientes" class="tab-btn flex items-center gap-3 px-3 py-2.5 rounded hover:bg-zinc-900 hover:text-white transition">
+                        <i data-lucide="users" class="w-4 h-4"></i> Clientes
+                    </button>
+                    <button data-tab="cupons" class="tab-btn flex items-center gap-3 px-3 py-2.5 rounded hover:bg-zinc-900 hover:text-white transition">
+                        <i data-lucide="ticket-percent" class="w-4 h-4"></i> Cupons
+                    </button>
+                    <button data-tab="conteudo" class="tab-btn flex items-center gap-3 px-3 py-2.5 rounded hover:bg-zinc-900 hover:text-white transition">
+                        <i data-lucide="layout" class="w-4 h-4"></i> Conteúdo do Site
+                    </button>
+<button data-tab="config" class="tab-btn flex items-center gap-3 px-3 py-2.5 rounded hover:bg-zinc-900 hover:text-white transition">
+                        <i data-lucide="settings" class="w-4 h-4"></i> Configurações
+                    </button>
+                    <button data-tab="pagamentos" class="tab-btn flex items-center gap-3 px-3 py-2.5 rounded hover:bg-zinc-900 hover:text-white transition">
+                        <i data-lucide="credit-card" class="w-4 h-4"></i> Pagamentos
+                    </button>
+                    <button data-tab="envio" class="tab-btn flex items-center gap-3 px-3 py-2.5 rounded hover:bg-zinc-900 hover:text-white transition">
+                        <i data-lucide="truck" class="w-4 h-4"></i> Envio & Expedição
+                    </button>
+                </nav>
+            </div>
+            <div class="p-4 border-t border-zinc-900">
+                <p class="text-[10px] text-zinc-500 mb-2">Operador: <span id="adminEmailLabel" class="text-white font-mono"></span></p>
+                <a href="/" target="_blank" class="flex items-center gap-2 text-xs text-zinc-400 hover:text-white py-2 transition">
+                    <i data-lucide="external-link" class="w-4 h-4"></i> Ver Site Oficial
+                </a>
+                <button onclick="sairAdmin()" class="w-full mt-2 flex items-center gap-2 text-xs text-red-400 hover:bg-red-500/10 px-3 py-2 rounded transition">
+                    <i data-lucide="log-out" class="w-4 h-4"></i> Sair
+                </button>
+            </div>
+        </aside>
+
+        <!-- CONTEÚDO -->
+        <main class="flex-1 p-6 lg:p-8 overflow-y-auto max-h-screen">
+
+            <!-- HEADER -->
+            <div class="flex items-center justify-between mb-8">
+                <div>
+                    <h1 id="tituloPagina" class="text-2xl font-black uppercase tracking-tight">Dashboard</h1>
+                    <p id="subtituloPagina" class="text-xs text-zinc-500 mt-1">Visão geral do seu negócio</p>
+                </div>
+                <button id="btnNovoProduto" class="hidden bg-amber-500 hover:bg-amber-400 text-black font-black text-xs uppercase tracking-widest px-4 py-2.5 rounded transition flex items-center gap-2">
+                    <i data-lucide="plus" class="w-4 h-4"></i> Novo Produto
+                </button>
+            </div>
+
+            <!-- TAB: DASHBOARD -->
+            <section id="tab-dashboard" class="tab-content">
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                    <div class="bg-zinc-900/40 border border-zinc-900 rounded-xl p-5">
+                        <p class="text-[10px] font-mono uppercase text-zinc-500 mb-1">Faturamento</p>
+                        <p id="statFaturamento" class="text-2xl font-black text-amber-400 font-mono">R$ 0,00</p>
+                        <p class="text-[10px] text-zinc-600 mt-1">pedidos confirmados</p>
+                    </div>
+                    <div class="bg-zinc-900/40 border border-zinc-900 rounded-xl p-5">
+                        <p class="text-[10px] font-mono uppercase text-zinc-500 mb-1">Pedidos</p>
+                        <p id="statPedidos" class="text-2xl font-black font-mono">0</p>
+                        <p class="text-[10px] text-zinc-600 mt-1">total registrado</p>
+                    </div>
+                    <div class="bg-zinc-900/40 border border-zinc-900 rounded-xl p-5">
+                        <p class="text-[10px] font-mono uppercase text-zinc-500 mb-1">Clientes</p>
+                        <p id="statClientes" class="text-2xl font-black font-mono">0</p>
+                        <p class="text-[10px] text-zinc-600 mt-1">cadastrados</p>
+                    </div>
+                    <div class="bg-zinc-900/40 border border-zinc-900 rounded-xl p-5">
+                        <p class="text-[10px] font-mono uppercase text-zinc-500 mb-1">Produtos</p>
+                        <p id="statProdutos" class="text-2xl font-black font-mono">0</p>
+                        <p class="text-[10px] text-zinc-600 mt-1">no catálogo</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-zinc-900/10 border border-zinc-900 rounded-xl p-5">
+                        <h3 class="text-sm font-bold uppercase mb-4 flex items-center gap-2">
+                            <i data-lucide="trending-up" class="w-4 h-4 text-amber-400"></i> Faturamento por Dia
+                        </h3>
+                        <canvas id="graficoDias" height="200"></canvas>
+                    </div>
+                    <div class="bg-zinc-900/10 border border-zinc-900 rounded-xl p-5">
+                        <h3 class="text-sm font-bold uppercase mb-4 flex items-center gap-2">
+                            <i data-lucide="pie-chart" class="w-4 h-4 text-amber-400"></i> Vendas por Categoria
+                        </h3>
+                        <canvas id="graficoCategorias" height="200"></canvas>
+                    </div>
+                </div>
+                <div class="bg-zinc-900/10 border border-zinc-900 rounded-xl p-5 mt-6">
+                    <h3 class="text-sm font-bold uppercase mb-4 flex items-center gap-2">
+                        <i data-lucide="bar-chart-3" class="w-4 h-4 text-amber-400"></i> Produtos Mais Vendidos
+                    </h3>
+                    <div id="rankingProdutos" class="space-y-3"></div>
+                </div>
+            </section>
+
+            <!-- TAB: PRODUTOS -->
+            <section id="tab-produtos" class="tab-content hidden">
+                <!-- Lista de produtos -->
+                <div id="listaProdutos" class="space-y-3"></div>
+            </section>
+
+            <!-- TAB: PEDIDOS -->
+            <section id="tab-pedidos" class="tab-content hidden">
+                <div id="listaPedidos" class="space-y-3"></div>
+            </section>
+
+            <!-- TAB: CLIENTES -->
+            <section id="tab-clientes" class="tab-content hidden">
+                <div id="listaClientes" class="space-y-3"></div>
+            </section>
+
+            <!-- TAB: CUPONS -->
+            <section id="tab-cupons" class="tab-content hidden">
+                <div class="flex justify-end mb-4">
+                    <button onclick="abrirFormCupom()" class="bg-amber-500 hover:bg-amber-400 text-black font-black text-xs uppercase tracking-widest px-4 py-2.5 rounded transition flex items-center gap-2">
+                        <i data-lucide="plus" class="w-4 h-4"></i> Novo Cupom
+                    </button>
+                </div>
+                <div id="listaCupons" class="space-y-3"></div>
+            </section>
+
+            <!-- TAB: CONTEÚDO DO SITE -->
+            <section id="tab-conteudo" class="tab-content hidden">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Carrossel -->
+                    <div class="bg-zinc-900/10 border border-zinc-900 rounded-xl p-5">
+                        <h3 class="text-sm font-bold uppercase mb-4 flex items-center gap-2">
+                            <i data-lucide="sliders" class="w-4 h-4 text-amber-400"></i> Carrossel Principal (3 slides)
+                        </h3>
+                        <div id="formCarrossel" class="space-y-4"></div>
+                    </div>
+                    <!-- Banners -->
+                    <div class="bg-zinc-900/10 border border-zinc-900 rounded-xl p-5">
+                        <h3 class="text-sm font-bold uppercase mb-4 flex items-center gap-2">
+                            <i data-lucide="layout-grid" class="w-4 h-4 text-amber-400"></i> Três Banners (Drop)
+                        </h3>
+                        <div id="formBanners" class="space-y-4"></div>
+                    </div>
+                </div>
+                <div class="bg-zinc-900/10 border border-zinc-900 rounded-xl p-5 mt-6">
+                    <h3 class="text-sm font-bold uppercase mb-4 flex items-center gap-2">
+                        <i data-lucide="image" class="w-4 h-4 text-amber-400"></i> Banner Intermediário
+                    </h3>
+                    <div id="formBannerIntermediario" class="space-y-4"></div>
+                </div>
+                <div class="bg-zinc-900/10 border border-zinc-900 rounded-xl p-5 mt-6">
+                    <h3 class="text-sm font-bold uppercase mb-4 flex items-center gap-2">
+                        <i data-lucide="file-text" class="w-4 h-4 text-amber-400"></i> Conteúdo de Páginas
+                    </h3>
+                    <div id="formPaginas" class="space-y-4"></div>
+                </div>
+                <div class="bg-zinc-900/10 border border-zinc-900 rounded-xl p-5 mt-6">
+                    <h3 class="text-sm font-bold uppercase mb-4 flex items-center gap-2">
+                        <i data-lucide="layers" class="w-4 h-4 text-amber-400"></i> Texto do Rodapé
+                    </h3>
+                    <div id="formRodape" class="space-y-4"></div>
+                </div>
+                <div class="mt-6 flex justify-end">
+                    <button onclick="salvarConteudo()" class="bg-amber-500 hover:bg-amber-400 text-black font-black text-xs uppercase tracking-widest px-6 py-3 rounded transition flex items-center gap-2">
+                        <i data-lucide="save" class="w-4 h-4"></i> Salvar Conteúdo
+                    </button>
+                </div>
+            </section>
+
+            <!-- TAB: CONFIGURAÇÕES -->
+            <section id="tab-config" class="tab-content hidden">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-zinc-900/10 border border-zinc-900 rounded-xl p-5">
+                        <h3 class="text-sm font-bold uppercase mb-4 flex items-center gap-2">
+                            <i data-lucide="message-circle" class="w-4 h-4 text-amber-400"></i> Canais de Contato
+                        </h3>
+                        <div id="formContato" class="space-y-3"></div>
+                    </div>
+                    <div class="bg-zinc-900/10 border border-zinc-900 rounded-xl p-5">
+                        <h3 class="text-sm font-bold uppercase mb-4 flex items-center gap-2">
+                            <i data-lucide="share-2" class="w-4 h-4 text-amber-400"></i> Redes Sociais & Logo
+                        </h3>
+                        <div id="formRedes" class="space-y-3"></div>
+                    </div>
+                </div>
+
+                <!-- Endereço da Loja -->
+                <div class="bg-zinc-900/10 border border-zinc-900 rounded-xl p-5 mt-6">
+                    <h3 class="text-sm font-bold uppercase mb-1 flex items-center gap-2">
+                        <i data-lucide="map-pin" class="w-4 h-4 text-amber-400"></i> Endereço da Loja
+                    </h3>
+                    <p class="text-[11px] text-zinc-500 mb-4">Usado como origem no cálculo de frete. Ao alterar o endereço, o frete das novas vendas é recalculado automaticamente conforme o novo CEP.</p>
+                    <div id="formEnderecoLoja" class="grid grid-cols-2 md:grid-cols-4 gap-3"></div>
+                </div>
+                <div class="bg-zinc-900/10 border border-zinc-900 rounded-xl p-5 mt-6">
+                    <h3 class="text-sm font-bold uppercase mb-4 flex items-center gap-2">
+                        <i data-lucide="shield" class="w-4 h-4 text-amber-400"></i> Segurança do Administrador
+                    </h3>
+                    <form id="formTrocarSenha" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <input type="password" id="senhaAtual" placeholder="Senha atual" class="bg-zinc-950 border border-zinc-800 rounded px-3 py-2.5 text-sm focus:outline-none focus:border-amber-400">
+                        <input type="password" id="novaSenha" placeholder="Nova senha" class="bg-zinc-950 border border-zinc-800 rounded px-3 py-2.5 text-sm focus:outline-none focus:border-amber-400">
+                        <button type="submit" class="bg-amber-500 hover:bg-amber-400 text-black font-black text-xs uppercase tracking-widest px-4 py-2.5 rounded transition">Alterar Senha</button>
+                    </form>
+                    <p id="msgSenha" class="text-xs font-mono mt-3 hidden"></p>
+                </div>
+<div class="mt-6 flex justify-end">
+                    <button onclick="salvarConfig()" class="bg-amber-500 hover:bg-amber-400 text-black font-black text-xs uppercase tracking-widest px-6 py-3 rounded transition flex items-center gap-2">
+                        <i data-lucide="save" class="w-4 h-4"></i> Salvar Configurações
+                    </button>
+                </div>
+            </section>
+
+            <!-- TAB: PAGAMENTOS -->
+            <section id="tab-pagamentos" class="tab-content hidden">
+                <div class="bg-zinc-900/10 border border-zinc-900 rounded-xl p-5">
+                    <h3 class="text-sm font-bold uppercase mb-4 flex items-center gap-2">
+                        <i data-lucide="credit-card" class="w-4 h-4 text-amber-400"></i> PagSeguro
+                    </h3>
+                    <p class="text-[11px] text-zinc-500 mb-4">Configure sua conta do PagSeguro para receber pagamentos PIX e Cartão. Cole as credenciais obtidas no painel do PagSeguro.</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Ambiente</label>
+                            <select id="pg-modo" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2.5 text-sm focus:outline-none focus:border-amber-400">
+                                <option value="sandbox">Sandbox (Testes)</option>
+                                <option value="produção">Produção</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">E-mail PagSeguro</label>
+                            <input type="email" id="pg-email" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2.5 text-sm focus:outline-none focus:border-amber-400">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Token</label>
+                            <input type="text" id="pg-token" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2.5 text-sm focus:outline-none focus:border-amber-400">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Application ID</label>
+                            <input type="text" id="pg-appId" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2.5 text-sm focus:outline-none focus:border-amber-400">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Application Key</label>
+                            <input type="text" id="pg-appKey" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2.5 text-sm focus:outline-none focus:border-amber-400">
+                        </div>
+                        <div class="flex items-center gap-2 pt-6">
+                            <input type="checkbox" id="pg-ativo" class="accent-amber-500">
+                            <label class="text-xs text-zinc-400">Ativar recebimento via PagSeguro</label>
+                        </div>
+                    </div>
+                    <div class="mt-4 flex gap-3">
+                        <button onclick="testarIntegracao('pagamento')" class="bg-zinc-800 hover:bg-zinc-700 px-4 py-2.5 rounded text-xs font-bold uppercase transition flex items-center gap-2">
+                            <i data-lucide="plug-zap" class="w-4 h-4"></i> Testar Conexão
+                        </button>
+                        <button onclick="salvarIntegracoes()" class="bg-amber-500 hover:bg-amber-400 text-black px-5 py-2.5 rounded text-xs font-black uppercase transition flex items-center gap-2">
+                            <i data-lucide="save" class="w-4 h-4"></i> Salvar Pagamentos
+                        </button>
+                    </div>
+                    <p id="msg-pg" class="text-xs font-mono mt-3 hidden"></p>
+                </div>
+            </section>
+
+            <!-- TAB: ENVIO & EXPEDIÇÃO -->
+            <section id="tab-envio" class="tab-content hidden">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-zinc-900/10 border border-zinc-900 rounded-xl p-5">
+                        <h3 class="text-sm font-bold uppercase mb-4 flex items-center gap-2">
+                            <i data-lucide="truck" class="w-4 h-4 text-amber-400"></i> Melhor Envio
+                        </h3>
+                        <p class="text-[11px] text-zinc-500 mb-4">Calcule o frete automaticamente com as transportadoras do Melhor Envio.</p>
+                        <div class="space-y-3">
+                            <div>
+                                <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Token da API</label>
+                                <input type="text" id="me-token" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2.5 text-sm focus:outline-none focus:border-amber-400">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">CEP de Origem</label>
+                                <input type="text" id="me-cepOrigem" placeholder="00000-000" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2.5 text-sm focus:outline-none focus:border-amber-400 font-mono">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Ambiente</label>
+                                <select id="me-modo" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2.5 text-sm focus:outline-none focus:border-amber-400">
+                                    <option value="sandbox">Sandbox (Testes)</option>
+                                    <option value="produção">Produção</option>
+                                </select>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <input type="checkbox" id="me-ativo" class="accent-amber-500">
+                                <label class="text-xs text-zinc-400">Ativar cotação de frete no checkout</label>
+                            </div>
+                        </div>
+                        <div class="mt-4 flex gap-3">
+                            <button onclick="testarIntegracao('envio')" class="bg-zinc-800 hover:bg-zinc-700 px-4 py-2.5 rounded text-xs font-bold uppercase transition flex items-center gap-2">
+                                <i data-lucide="plug-zap" class="w-4 h-4"></i> Testar
+                            </button>
+                            <button onclick="salvarIntegracoes()" class="bg-amber-500 hover:bg-amber-400 text-black px-5 py-2.5 rounded text-xs font-black uppercase transition flex items-center gap-2">
+                                <i data-lucide="save" class="w-4 h-4"></i> Salvar Envio
+                            </button>
+                        </div>
+                        <p id="msg-me" class="text-xs font-mono mt-3 hidden"></p>
+                    </div>
+
+                    <div class="bg-zinc-900/10 border border-zinc-900 rounded-xl p-5">
+                        <h3 class="text-sm font-bold uppercase mb-4 flex items-center gap-2">
+                            <i data-lucide="package" class="w-4 h-4 text-amber-400"></i> Upseller (Expedição)
+                        </h3>
+                        <p class="text-[11px] text-zinc-500 mb-4">Envie os pedidos aprovados para o Upseller controlar a expedição.</p>
+                        <div class="space-y-3">
+                            <div>
+                                <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Token da API</label>
+                                <input type="text" id="up-token" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2.5 text-sm focus:outline-none focus:border-amber-400">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Store ID</label>
+                                <input type="text" id="up-storeId" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2.5 text-sm focus:outline-none focus:border-amber-400">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">URL da API</label>
+                                <input type="text" id="up-url" value="https://api.upseller.com.br" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2.5 text-sm focus:outline-none focus:border-amber-400">
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <input type="checkbox" id="up-ativo" class="accent-amber-500">
+                                <label class="text-xs text-zinc-400">Ativar envio automático de pedidos ao Upseller</label>
+                            </div>
+                        </div>
+                        <div class="mt-4 flex gap-3">
+                            <button onclick="testarIntegracao('upseller')" class="bg-zinc-800 hover:bg-zinc-700 px-4 py-2.5 rounded text-xs font-bold uppercase transition flex items-center gap-2">
+                                <i data-lucide="plug-zap" class="w-4 h-4"></i> Testar
+                            </button>
+                            <button onclick="salvarIntegracoes()" class="bg-amber-500 hover:bg-amber-400 text-black px-5 py-2.5 rounded text-xs font-black uppercase transition flex items-center gap-2">
+                                <i data-lucide="save" class="w-4 h-4"></i> Salvar Expedição
+                            </button>
+                        </div>
+                        <p id="msg-up" class="text-xs font-mono mt-3 hidden"></p>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- ============ MODAL PRODUTO ============ -->
+    <div id="modalProduto" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-zinc-900 border border-zinc-800 rounded-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between mb-6">
+                <h3 id="modalProdutoTitulo" class="text-lg font-black uppercase">Novo Produto</h3>
+                <button onclick="fecharModalProduto()" class="text-zinc-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <form id="formProduto" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <input type="hidden" id="produtoId">
+                <div class="md:col-span-2">
+                    <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Nome do Produto</label>
+                    <input type="text" id="p-nome" required class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Preço (R$)</label>
+                    <input type="number" step="0.01" id="p-preco" required class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Preço Original (R$)</label>
+                    <input type="number" step="0.01" id="p-precoOriginal" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Categoria</label>
+                    <select id="p-categoria" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400">
+                        <option value="meias">Meias</option>
+                        <option value="roupas">Roupas</option>
+                        <option value="organizadores">Organizadores MDF</option>
+                        <option value="acessorios">Acessórios</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Gênero / Segmento</label>
+                    <select id="p-genero" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400">
+                        <option value="masculino">Masculino</option>
+                        <option value="feminino">Feminino</option>
+                        <option value="infantil">Infantil</option>
+                        <option value="unissex">Unissex</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Estoque</label>
+                    <input type="number" id="p-estoque" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Relevância</label>
+                    <input type="number" id="p-relevancia" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400">
+                </div>
+<div class="md:col-span-2">
+                    <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Imagem (URL)</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="p-imagem" class="flex-1 bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400">
+                        <button type="button" onclick="document.getElementById('fileProdutoImg').click()" class="shrink-0 bg-zinc-800 hover:bg-zinc-700 text-xs font-bold text-white px-3 py-2 rounded transition flex items-center gap-1"><i data-lucide="upload" class="w-4 h-4"></i> Enviar</button>
+                        <input type="file" id="fileProdutoImg" accept="image/*" class="hidden" onchange="enviarImagem(this, 'p-imagem')">
+                    </div>
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Fotos (URLs separadas por vírgula)</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="p-fotos" class="flex-1 bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400">
+                        <button type="button" onclick="document.getElementById('fileProdutoFotos').click()" class="shrink-0 bg-zinc-800 hover:bg-zinc-700 text-xs font-bold text-white px-3 py-2 rounded transition flex items-center gap-1"><i data-lucide="upload" class="w-4 h-4"></i> Enviar</button>
+                        <input type="file" id="fileProdutoFotos" accept="image/*" class="hidden" onchange="enviarImagem(this, 'p-fotos', true)">
+                    </div>
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Cores - formato: Nome:#hex;Nome2:#hex (ex: Preto:#000000)</label>
+                    <input type="text" id="p-cores" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Tamanhos (separados por vírgula)</label>
+                    <input type="text" id="p-tamanhos" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Descrição</label>
+                    <textarea id="p-descricao" rows="3" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400"></textarea>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" id="p-promocao" class="accent-amber-500">
+                    <label class="text-xs text-zinc-400">Em promoção</label>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Texto do selo promo</label>
+                    <input type="text" id="p-textoPromo" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400">
+                </div>
+                <div class="md:col-span-2 flex gap-3 justify-end pt-2">
+                    <button type="button" onclick="fecharModalProduto()" class="px-5 py-2.5 text-xs font-bold uppercase rounded bg-zinc-800 hover:bg-zinc-700">Cancelar</button>
+                    <button type="submit" class="px-6 py-2.5 text-xs font-black uppercase rounded bg-amber-500 hover:bg-amber-400 text-black">Salvar Produto</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ============ MODAL CUPOM ============ -->
+    <div id="modalCupom" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-zinc-900 border border-zinc-800 rounded-xl max-w-md w-full p-6">
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="text-lg font-black uppercase">Novo Cupom</h3>
+                <button onclick="fecharModalCupom()" class="text-zinc-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <form id="formCupom" class="grid grid-cols-1 gap-4">
+                <input type="hidden" id="cupomId">
+                <div>
+                    <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Código</label>
+                    <input type="text" id="c-codigo" required class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm uppercase focus:outline-none focus:border-amber-400">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Tipo</label>
+                        <select id="c-tipo" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400">
+                            <option value="porcentagem">Porcentagem (%)</option>
+                            <option value="fixo">Valor Fixo (R$)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Valor</label>
+                        <input type="number" step="0.01" id="c-valor" required class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Limite de usos</label>
+                        <input type="number" id="c-limite" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Validade</label>
+                        <input type="date" id="c-validade" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400">
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" id="c-ativo" checked class="accent-amber-500">
+                    <label class="text-xs text-zinc-400">Cupom ativo</label>
+                </div>
+                <div class="flex gap-3 justify-end pt-2">
+                    <button type="button" onclick="fecharModalCupom()" class="px-5 py-2.5 text-xs font-bold uppercase rounded bg-zinc-800 hover:bg-zinc-700">Cancelar</button>
+                    <button type="submit" class="px-6 py-2.5 text-xs font-black uppercase rounded bg-amber-500 hover:bg-amber-400 text-black">Salvar Cupom</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- TOAST -->
+    <div id="toastContainer" class="fixed bottom-6 right-6 z-[100] flex flex-col gap-2"></div>
+
+    <script>
+        // =============== ESTADO GLOBAL ===============
+        let token = null;
+        let produtos = [];
+        let pedidos = [];
+        let clientes = [];
+        let cupons = [];
+let config = {};
+        let adminPerfil = { endereco: {} };
+        let pedidoAtivo = null;
+        let graficoDias = null;
+        let graficoCategorias = null;
+
+        const API = (path, options = {}) => {
+            const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+            if (token) headers['x-admin-token'] = token;
+            return fetch(path, { ...options, headers }).then(async (res) => {
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.error || 'Erro na requisição');
+                return data;
+            });
+        };
+
+        // =============== TOAST ===============
+        function toast(msg, tipo = 'ok') {
+            const container = document.getElementById('toastContainer');
+            const cores = { ok: 'bg-emerald-500', erro: 'bg-red-500', info: 'bg-zinc-700' };
+            const el = document.createElement('div');
+            el.className = `toast ${cores[tipo] || cores.ok} text-black text-xs font-black uppercase px-4 py-3 rounded shadow-lg`;
+            el.innerText = msg;
+            container.appendChild(el);
+            setTimeout(() => el.remove(), 3000);
+        }
+
+// =============== LOGIN / LOGOUT ===============
+        document.getElementById('formLogin').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('loginEmail').value;
+            const senha = document.getElementById('loginSenha').value;
+            try {
+                const data = await API('/api/admin/login', { method: 'POST', body: JSON.stringify({ email, senha }) });
+                token = data.token;
+                localStorage.setItem('mio_admin_token', data.token);
+                localStorage.setItem('mio_admin_email', data.email);
+                document.getElementById('adminEmailLabel').innerText = data.email;
+                document.getElementById('telaLogin').classList.add('hidden');
+                document.getElementById('painelAdmin').classList.remove('hidden');
+                document.getElementById('painelAdmin').classList.add('flex');
+                carregarTudo();
+                toast('Bem-vindo ao painel!');
+            } catch (err) {
+                const el = document.getElementById('erroLogin');
+                el.innerText = err.message;
+                el.classList.remove('hidden');
+            }
+        });
+
+        async function sairAdmin() {
+            try { await API('/api/admin/logout', { method: 'POST' }); } catch (e) {}
+            token = null;
+            localStorage.removeItem('mio_admin_token');
+            localStorage.removeItem('mio_admin_email');
+            localStorage.removeItem('mio_admin_logado');
+            document.getElementById('painelAdmin').classList.add('hidden');
+            document.getElementById('painelAdmin').classList.remove('flex');
+            document.getElementById('telaLogin').classList.remove('hidden');
+        }
+
+        // =============== NAVEGAÇÃO DE ABAS ===============
+        const titulos = {
+            dashboard: ['Dashboard', 'Visão geral do seu negócio'],
+            produtos: ['Produtos', 'Gerencie seu catálogo'],
+            pedidos: ['Pedidos', 'Acompanhe e atualize os pedidos'],
+            clientes: ['Clientes', 'Base de clientes cadastrados'],
+            cupons: ['Cupons', 'Crie e gerencie cupons de desconto'],
+conteudo: ['Conteúdo do Site', 'Edite banners, carrossel e destaques'],
+            config: ['Configurações', 'Contatos, redes e segurança'],
+            pagamentos: ['Pagamentos', 'Integração com PagSeguro'],
+            envio: ['Envio & Expedição', 'Melhor Envio e Upseller']
+        };
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const tab = btn.dataset.tab;
+                // ativa botão
+                document.querySelectorAll('.tab-btn').forEach(b => {
+                    b.classList.remove('bg-zinc-900', 'text-white');
+                    b.classList.add('text-zinc-400');
+                });
+                btn.classList.add('bg-zinc-900', 'text-white');
+                btn.classList.remove('text-zinc-400');
+                // ativa conteúdo
+                document.querySelectorAll('.tab-content').forEach(s => s.classList.add('hidden'));
+                document.getElementById('tab-' + tab).classList.remove('hidden');
+                document.getElementById('tituloPagina').innerText = titulos[tab][0];
+                document.getElementById('subtituloPagina').innerText = titulos[tab][1];
+                document.getElementById('btnNovoProduto').classList.toggle('hidden', tab !== 'produtos');
+                if (tab === 'produtos') renderizarProdutos();
+            });
+        });
+
+        // =============== BUSCA GLOBAL ===============
+        async function carregarTudo() {
+            try {
+                const [stats, prods, peds, clis, cups, cfg] = await Promise.all([
+                    API('/api/estatisticas'),
+                    API('/api/produtos'),
+                    API('/api/pedidos'),
+                    API('/api/clientes'),
+                    API('/api/cupons'),
+                    API('/api/config')
+                ]);
+                produtos = prods;
+                pedidos = peds;
+                clientes = clis;
+                cupons = cups;
+                config = cfg;
+                const perfil = await API('/api/admin/perfil');
+                adminPerfil = perfil;
+                renderizarDashboard(stats);
+                renderizarProdutos();
+                renderizarPedidos();
+                renderizarClientes();
+                renderizarCupons();
+renderizarConteudo();
+                renderizarConfig();
+                renderizarIntegracoes();
+            } catch (err) {
+                toast(err.message, 'erro');
+            }
+        }
+
+        // =============== DASHBOARD ===============
+        function renderizarDashboard(stats) {
+            document.getElementById('statFaturamento').innerText = 'R$ ' + (stats.faturamento || 0).toFixed(2).replace('.', ',');
+            document.getElementById('statPedidos').innerText = stats.totalPedidos || 0;
+            document.getElementById('statClientes').innerText = stats.totalClientes || 0;
+            document.getElementById('statProdutos').innerText = produtos.length;
+
+            // Gráfico por dia
+            const dias = Object.keys(stats.porDia || {}).sort();
+            const valoresDias = dias.map(d => stats.porDia[d]);
+            const ctxDias = document.getElementById('graficoDias').getContext('2d');
+            if (graficoDias) graficoDias.destroy();
+            graficoDias = new Chart(ctxDias, {
+                type: 'line',
+                data: { labels: dias, datasets: [{ label: 'R$ vendidos', data: valoresDias, borderColor: '#fbbf24', backgroundColor: 'rgba(251,191,36,0.1)', fill: true, tension: 0.4 }] },
+                options: { plugins: { legend: { labels: { color: '#fff' } } }, scales: { x: { ticks: { color: '#71717a' } }, y: { ticks: { color: '#71717a' } } } }
+            });
+
+            // Gráfico por categoria
+            const cats = Object.keys(stats.porCategoria || {});
+            const ctxCat = document.getElementById('graficoCategorias').getContext('2d');
+            if (graficoCategorias) graficoCategorias.destroy();
+            graficoCategorias = new Chart(ctxCat, {
+                type: 'pie',
+                data: { labels: cats, datasets: [{ data: cats.map(c => stats.porCategoria[c].total), backgroundColor: ['#fbbf24', '#06b6d4', '#22c55e', '#ec4899', '#8b5cf6', '#f97316'] }] },
+                options: { plugins: { legend: { labels: { color: '#fff' } } } }
+            });
+
+            // Ranking de produtos
+            const rank = Object.entries(stats.porProduto || {}).sort((a, b) => b[1].qtd - a[1].qtd).slice(0, 6);
+            const contRank = document.getElementById('rankingProdutos');
+            if (rank.length === 0) {
+                contRank.innerHTML = '<p class="text-xs font-mono text-zinc-500">Nenhuma venda registrada ainda.</p>';
+                return;
+            }
+            const maxQtd = rank[0][1].qtd;
+            contRank.innerHTML = rank.map(([nome, d]) => `
+                <div class="flex items-center gap-4">
+                    <div class="flex-1">
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="font-bold text-zinc-300">${nome}</span>
+                            <span class="font-mono text-zinc-500">${d.qtd} vendidos</span>
+                        </div>
+                        <div class="h-2 bg-zinc-900 rounded-full overflow-hidden">
+                            <div class="h-full bg-amber-400" style="width:${(d.qtd/maxQtd)*100}%"></div>
+                        </div>
+                    </div>
+                    <span class="text-xs font-black font-mono text-amber-400">R$ ${d.total.toFixed(2).replace('.', ',')}</span>
+                </div>
+            `).join('');
+        }
+
+        // =============== PRODUTOS ===============
+        function renderizarProdutos() {
+            const cont = document.getElementById('listaProdutos');
+            if (produtos.length === 0) {
+                cont.innerHTML = '<p class="text-xs font-mono text-zinc-500 text-center py-10">Nenhum produto cadastrado.</p>';
+                return;
+            }
+            cont.innerHTML = produtos.map(p => `
+                <div class="bg-zinc-900/40 border border-zinc-900 rounded-xl p-4 flex items-center gap-4">
+                    <img src="${p.imagem || 'https://via.placeholder.com/60'}" class="w-14 h-14 object-cover rounded-lg bg-zinc-950 border border-zinc-800">
+                    <div class="flex-1 min-w-0">
+                        <h4 class="text-sm font-bold text-white truncate">${p.nome}</h4>
+                        <p class="text-[10px] font-mono text-zinc-500 uppercase">${p.genero} | ${p.categoria} | estoque: ${p.estoque}</p>
+                        <div class="flex items-center gap-2 mt-1">
+                            <span class="text-sm font-black text-amber-400 font-mono">R$ ${(+p.preco).toFixed(2).replace('.', ',')}</span>
+                            ${p.estaEmPromocao ? '<span class="text-[9px] bg-amber-500 text-black font-black uppercase px-1.5 py-0.5 rounded">' + (p.textoDestaquePromo || 'Promo') + '</span>' : ''}
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                        <button onclick="abrirFormProduto(${p.id})" class="p-2 bg-zinc-800 hover:bg-zinc-700 rounded transition" title="Editar"><i data-lucide="pencil" class="w-4 h-4"></i></button>
+                        <button onclick="excluirProduto(${p.id})" class="p-2 bg-zinc-800 hover:bg-red-500/20 hover:text-red-400 rounded transition" title="Excluir"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                    </div>
+                </div>
+            `).join('');
+            if (window.lucide) lucide.createIcons();
+        }
+
+        const btnNovo = document.getElementById('btnNovoProduto');
+        btnNovo.addEventListener('click', () => abrirFormProduto(null));
+
+        function abrirFormProduto(id) {
+            document.getElementById('modalProdutoTitulo').innerText = id ? 'Editar Produto' : 'Novo Produto';
+            document.getElementById('formProduto').reset();
+            document.getElementById('produtoId').value = '';
+            if (id) {
+                const p = produtos.find(x => x.id === id);
+                if (p) {
+                    document.getElementById('produtoId').value = p.id;
+                    document.getElementById('p-nome').value = p.nome;
+                    document.getElementById('p-preco').value = p.preco;
+                    document.getElementById('p-precoOriginal').value = p.precoOriginal || '';
+                    document.getElementById('p-categoria').value = p.categoria;
+                    document.getElementById('p-genero').value = p.genero;
+                    document.getElementById('p-estoque').value = p.estoque;
+                    document.getElementById('p-relevancia').value = p.relevancia;
+                    document.getElementById('p-imagem').value = p.imagem || '';
+                    document.getElementById('p-fotos').value = (p.fotos || []).join(', ');
+                    document.getElementById('p-cores').value = (p.cores || []).map(c => c.nome + ':' + c.codigoHex).join(';');
+                    document.getElementById('p-tamanhos').value = (p.tamanhos || []).join(', ');
+                    document.getElementById('p-descricao').value = (p.descricao || '').replace(/<[^>]+>/g, '');
+                    document.getElementById('p-promocao').checked = !!p.estaEmPromocao;
+                    document.getElementById('p-textoPromo').value = p.textoDestaquePromo || '';
+                }
+            }
+            document.getElementById('modalProduto').classList.remove('hidden');
+            document.getElementById('modalProduto').classList.add('flex');
+        }
+
+        function fecharModalProduto() {
+            document.getElementById('modalProduto').classList.add('hidden');
+            document.getElementById('modalProduto').classList.remove('flex');
+        }
+
+        document.getElementById('formProduto').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('produtoId').value;
+            const coresRaw = document.getElementById('p-cores').value.split(';').filter(Boolean).map(c => {
+                const [nome, hex] = c.split(':');
+                return nome ? { nome: nome.trim(), codigoHex: (hex || '#fff').trim() } : null;
+            }).filter(Boolean);
+            const produto = {
+                nome: document.getElementById('p-nome').value,
+                preco: parseFloat(document.getElementById('p-preco').value),
+                precoOriginal: document.getElementById('p-precoOriginal').value ? parseFloat(document.getElementById('p-precoOriginal').value) : null,
+                categoria: document.getElementById('p-categoria').value,
+                genero: document.getElementById('p-genero').value,
+                estoque: parseInt(document.getElementById('p-estoque').value) || 0,
+                relevancia: parseInt(document.getElementById('p-relevancia').value) || 0,
+                imagem: document.getElementById('p-imagem').value,
+                fotos: document.getElementById('p-fotos').value.split(',').map(f => f.trim()).filter(Boolean),
+                cores: coresRaw,
+                tamanhos: document.getElementById('p-tamanhos').value.split(',').map(t => t.trim()).filter(Boolean),
+                descricao: '<p>' + document.getElementById('p-descricao').value + '</p>',
+                estaEmPromocao: document.getElementById('p-promocao').checked,
+                textoDestaquePromo: document.getElementById('p-textoPromo').value
+            };
+            try {
+                if (id) {
+                    await API('/api/produtos/' + id, { method: 'PUT', body: JSON.stringify(produto) });
+                    toast('Produto atualizado!');
+                } else {
+                    await API('/api/produtos', { method: 'POST', body: JSON.stringify(produto) });
+                    toast('Produto criado!');
+                }
+                fecharModalProduto();
+                produtos = await API('/api/produtos');
+                renderizarProdutos();
+            } catch (err) { toast(err.message, 'erro'); }
+        });
+
+        async function excluirProduto(id) {
+            if (!confirm('Excluir este produto?')) return;
+            try {
+                await API('/api/produtos/' + id, { method: 'DELETE' });
+                produtos = await API('/api/produtos');
+                renderizarProdutos();
+                toast('Produto excluído');
+            } catch (err) { toast(err.message, 'erro'); }
+        }
+
+        // =============== PEDIDOS ===============
+        function renderizarPedidos() {
+            const cont = document.getElementById('listaPedidos');
+            if (pedidos.length === 0) {
+                cont.innerHTML = '<p class="text-xs font-mono text-zinc-500 text-center py-10">Nenhum pedido registrado.</p>';
+                return;
+            }
+            const statusCores = {
+                'Aguardando Pagamento': 'bg-yellow-500/20 text-yellow-400',
+                'Pago': 'bg-emerald-500/20 text-emerald-400',
+                'Em Preparação': 'bg-blue-500/20 text-blue-400',
+                'Enviado': 'bg-purple-500/20 text-purple-400',
+                'Entregue': 'bg-zinc-500/20 text-zinc-300',
+                'Cancelado': 'bg-red-500/20 text-red-400'
+            };
+            cont.innerHTML = pedidos.map(p => {
+                const itens = p.itens || [];
+                const totalItens = itens.reduce((a, i) => a + i.quantidade, 0);
+                return `
+                <div class="bg-zinc-900/40 border border-zinc-900 rounded-xl p-4">
+                    <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+                        <div class="flex items-center gap-3">
+                            <span class="text-xs font-black text-amber-400 font-mono">#${p.numero}</span>
+                            <span class="text-[10px] font-mono text-zinc-500">${(p.data || '').slice(0, 16).replace('T', ' ')}</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-black font-mono">R$ ${(+p.total).toFixed(2).replace('.', ',')}</span>
+                            <select onchange="atualizarStatusPedido(${p.id}, this.value)" class="text-[10px] font-mono bg-zinc-950 border border-zinc-800 rounded px-2 py-1 focus:outline-none ${statusCores[p.status] || 'text-zinc-400'}">
+                                ${Object.keys(statusCores).map(s => '<option value="' + s + '" ' + (p.status === s ? 'selected' : '') + '>' + s + '</option>').join('')}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="text-xs text-zinc-400 mb-2">
+                        <span class="font-bold text-white">${p.cliente?.nome || 'Cliente'}</span> · ${p.cliente?.email || ''} · ${p.metodo} · ${totalItens} itens
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
+                        <div class="bg-zinc-950 border border-zinc-800 rounded-lg p-3">
+                            <p class="text-[9px] font-mono uppercase text-zinc-500 mb-1">Resumo dos Itens</p>
+                            ${(itens).map(i => '<div class="flex justify-between text-[11px] py-0.5"><span class="text-zinc-300">' + i.quantidade + 'x ' + i.nome + '</span><span class="font-mono text-amber-400">R$ ' + (+(i.preco * i.quantidade)).toFixed(2).replace('.', ',') + '</span></div>').join('') || '<span class="text-[11px] text-zinc-500">Sem itens</span>'}
+                        </div>
+                        <div class="bg-zinc-950 border border-zinc-800 rounded-lg p-3">
+                            <p class="text-[9px] font-mono uppercase text-zinc-500 mb-1">Endereço de Entrega</p>
+                            <p class="text-[11px] leading-relaxed">${Object.values(p.endereco || {}).filter(Boolean).join(', ') || '—'}</p>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+            if (window.lucide) lucide.createIcons();
+        }
+
+        async function atualizarStatusPedido(id, status) {
+            try {
+                await API('/api/pedidos/' + id, { method: 'PUT', body: JSON.stringify({ status }) });
+                toast('Status atualizado');
+            } catch (err) { toast(err.message, 'erro'); }
+        }
+
+// =============== CLIENTES ===============
+        // Extrai apenas os dígitos de um telefone para montar o link do WhatsApp
+        function soDigitos(valor) {
+            return String(valor || '').replace(/\D/g, '');
+        }
+
+        function renderizarClientes() {
+            const cont = document.getElementById('listaClientes');
+            if (clientes.length === 0) {
+                cont.innerHTML = '<p class="text-xs font-mono text-zinc-500 text-center py-10">Nenhum cliente cadastrado.</p>';
+                return;
+            }
+            cont.innerHTML = clientes.map(c => {
+                const tel = soDigitos(c.telefone);
+                const waLink = tel ? 'https://wa.me/55' + tel : '#';
+                const temWhats = c.whatsapp_ok ? '<span class="text-[9px] bg-emerald-500/20 text-emerald-400 font-black uppercase px-1.5 py-0.5 rounded ml-1">WhatsOK</span>' : '';
+                return `
+                <div class="bg-zinc-900/40 border border-zinc-900 rounded-xl p-4 flex items-center gap-4">
+                    <div class="w-10 h-10 bg-zinc-800 rounded-full flex items-center justify-center overflow-hidden shrink-0">
+                        ${c.foto ? '<img src="' + c.foto + '" class="w-full h-full object-cover">' : '<span class="text-sm font-black text-amber-400">' + (c.nome || '?').charAt(0).toUpperCase() + '</span>'}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <h4 class="text-sm font-bold truncate">${c.nome}${temWhats}</h4>
+                        <p class="text-[10px] font-mono text-zinc-500">${c.email} · ${c.telefone || 'sem telefone'} · desde ${c.data_cadastro || '—'}</p>
+                        <p class="text-[10px] text-zinc-600 truncate">${Object.values(c.endereco || {}).filter(Boolean).join(', ') || 'sem endereço'}</p>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                        <a href="${waLink}" target="_blank" title="${tel ? 'Chamar no WhatsApp' : 'Cliente sem telefone'}" class="p-2 bg-zinc-800 hover:bg-emerald-500/20 hover:text-emerald-400 rounded transition ${tel ? '' : 'opacity-40 pointer-events-none'}"><i data-lucide="message-circle" class="w-4 h-4"></i></a>
+                        <a href="${c.email ? 'mailto:' + c.email : '#'}" title="${c.email ? 'Enviar e-mail' : 'Cliente sem e-mail'}" class="p-2 bg-zinc-800 hover:bg-sky-500/20 hover:text-sky-400 rounded transition ${c.email ? '' : 'opacity-40 pointer-events-none'}"><i data-lucide="mail" class="w-4 h-4"></i></a>
+                        <button onclick="resetarSenhaCliente(${c.id}, '${c.nome || ''}')" title="Enviar senha temporária" class="p-2 bg-zinc-800 hover:bg-amber-500/20 hover:text-amber-400 rounded transition"><i data-lucide="key-round" class="w-4 h-4"></i></button>
+                    </div>
+                </div>`;
+            }).join('');
+            if (window.lucide) lucide.createIcons();
+        }
+
+        // Gera e aplica uma senha temporária para o cliente, devolvendo-a
+        // para o administrador repassar ao cliente (por WhatsApp/e-mail).
+        async function resetarSenhaCliente(id, nome) {
+            if (!confirm('Gerar uma senha temporária para "' + (nome || 'este cliente') + '"?\n\nA senha atual será substituída. Você deverá repassar a nova senha ao cliente.')) return;
+            try {
+                const data = await API('/api/admin/clientes/' + id + '/reset-senha', { method: 'POST' });
+                await navigator.clipboard.writeText(data.senhaTemporaria).catch(() => {});
+                toast('Senha temporária gerada!');
+                alert('Senha temporária de "' + nome + '":\n\n' + data.senhaTemporaria + '\n\nCopiada para a área de transferência. Envie para o cliente via WhatsApp ou e-mail.');
+            } catch (err) {
+                toast(err.message, 'erro');
+            }
+        }
+
+        // =============== CUPONS ===============
+        function renderizarCupons() {
+            const cont = document.getElementById('listaCupons');
+            if (cupons.length === 0) {
+                cont.innerHTML = '<p class="text-xs font-mono text-zinc-500 text-center py-10">Nenhum cupom cadastrado.</p>';
+                return;
+            }
+            cont.innerHTML = cupons.map(c => `
+                <div class="bg-zinc-900/40 border border-zinc-900 rounded-xl p-4 flex items-center gap-4">
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm font-black text-amber-400 font-mono">${c.codigo}</span>
+                            ${c.ativo ? '<span class="text-[9px] bg-emerald-500/20 text-emerald-400 font-black uppercase px-1.5 py-0.5 rounded">Ativo</span>' : '<span class="text-[9px] bg-red-500/20 text-red-400 font-black uppercase px-1.5 py-0.5 rounded">Inativo</span>'}
+                        </div>
+                        <p class="text-[10px] font-mono text-zinc-500 mt-1">
+                            ${c.tipo === 'porcentagem' ? c.valor + '% OFF' : 'R$ ' + (+c.valor).toFixed(2).replace('.', ',') + ' OFF'}
+                            · usos: ${c.usos || 0}/${c.limiteUso || '∞'} · validade: ${c.validade || 'sem validade'}
+                        </p>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                        <button onclick="abrirFormCupom(${c.id})" class="p-2 bg-zinc-800 hover:bg-zinc-700 rounded transition" title="Editar"><i data-lucide="pencil" class="w-4 h-4"></i></button>
+                        <button onclick="excluirCupom(${c.id})" class="p-2 bg-zinc-800 hover:bg-red-500/20 hover:text-red-400 rounded transition" title="Excluir"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                    </div>
+                </div>
+            `).join('');
+            if (window.lucide) lucide.createIcons();
+        }
+
+        function abrirFormCupom(id) {
+            document.getElementById('formCupom').reset();
+            document.getElementById('cupomId').value = '';
+            document.getElementById('c-ativo').checked = true;
+            if (id) {
+                const c = cupons.find(x => x.id === id);
+                if (c) {
+                    document.getElementById('cupomId').value = c.id;
+                    document.getElementById('c-codigo').value = c.codigo;
+                    document.getElementById('c-tipo').value = c.tipo;
+                    document.getElementById('c-valor').value = c.valor;
+                    document.getElementById('c-limite').value = c.limiteUso || '';
+                    document.getElementById('c-validade').value = c.validade || '';
+                    document.getElementById('c-ativo').checked = !!c.ativo;
+                }
+            }
+            document.getElementById('modalCupom').classList.remove('hidden');
+            document.getElementById('modalCupom').classList.add('flex');
+        }
+
+        function fecharModalCupom() {
+            document.getElementById('modalCupom').classList.add('hidden');
+            document.getElementById('modalCupom').classList.remove('flex');
+        }
+
+        document.getElementById('formCupom').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('cupomId').value;
+            const cupom = {
+                codigo: document.getElementById('c-codigo').value,
+                tipo: document.getElementById('c-tipo').value,
+                valor: parseFloat(document.getElementById('c-valor').value),
+                limiteUso: parseInt(document.getElementById('c-limite').value) || 0,
+                validade: document.getElementById('c-validade').value || null,
+                ativo: document.getElementById('c-ativo').checked
+            };
+            try {
+                if (id) await API('/api/cupons/' + id, { method: 'PUT', body: JSON.stringify(cupom) });
+                else await API('/api/cupons', { method: 'POST', body: JSON.stringify(cupom) });
+                fecharModalCupom();
+                cupons = await API('/api/cupons');
+                renderizarCupons();
+                toast('Cupom salvo!');
+            } catch (err) { toast(err.message, 'erro'); }
+        });
+
+        async function excluirCupom(id) {
+            if (!confirm('Excluir este cupom?')) return;
+            try {
+                await API('/api/cupons/' + id, { method: 'DELETE' });
+                cupons = await API('/api/cupons');
+                renderizarCupons();
+                toast('Cupom excluído');
+            } catch (err) { toast(err.message, 'erro'); }
+        }
+
+        // =============== CONTEÚDO DO SITE ===============
+        function campoTexto(id, label, valor, placeholder) {
+            return `<div><label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">${label}</label>
+                <input type="text" id="${id}" value="${(valor || '').replace(/"/g, '"')}" placeholder="${placeholder || ''}" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-xs focus:outline-none focus:border-amber-400"></div>`;
+        }
+
+        function campoUpload(id, label, valor, fileInputId) {
+            return `<div><label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">${label}</label>
+                <div class="flex gap-2">
+                    <input type="text" id="${id}" value="${(valor || '').replace(/"/g, '"')}" placeholder="https://... ou /uploads/arquivo.jpg" class="flex-1 bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-xs focus:outline-none focus:border-amber-400">
+                    <button type="button" onclick="document.getElementById('${fileInputId}').click()" class="shrink-0 bg-zinc-800 hover:bg-zinc-700 text-xs font-bold text-white px-3 py-2 rounded transition">Upload</button>
+                    <input type="file" id="${fileInputId}" accept="image/*" class="hidden" onchange="enviarImagem(this, '${id}')">
+                </div>
+                <p class="text-[10px] text-zinc-600 mt-1">Envie arquivo ou cole URL para preencher o campo.</p></div>`;
+        }
+
+        function renderizarConteudo() {
+            // Carrossel
+            const carrossel = config.carrossel || [];
+            document.getElementById('formCarrossel').innerHTML = carrossel.map((s, i) => `
+                <div class="bg-zinc-950 border border-zinc-800 rounded-lg p-3 space-y-2">
+                    <p class="text-[10px] font-black text-amber-400 uppercase">Slide ${i + 1}</p>
+                    ${campoTexto('cs-etiqueta-' + i, 'Etiqueta', s.etiqueta)}
+                    ${campoTexto('cs-titulo-' + i, 'Título', s.titulo)}
+                    ${campoTexto('cs-texto-' + i, 'Texto', s.texto)}
+                    ${campoTexto('cs-botao-' + i, 'Texto do Botão', s.botao)}
+                    ${campoTexto('cs-link-' + i, 'Link do Botão', s.link)}
+                    ${campoTexto('cs-imagem-' + i, 'Imagem', s.imagem)}
+                </div>
+            `).join('');
+
+            // Banners da grade
+            const banners = config.bannersGrelha || [];
+            document.getElementById('formBanners').innerHTML = banners.map((b, i) => `
+                <div class="bg-zinc-950 border border-zinc-800 rounded-lg p-3 space-y-2">
+                    <p class="text-[10px] font-black text-amber-400 uppercase">Banner ${i + 1}</p>
+                    ${campoTexto('bn-titulo-' + i, 'Título', b.titulo)}
+                    ${campoTexto('bn-texto-' + i, 'Texto', b.texto)}
+                    ${campoTexto('bn-link-' + i, 'Link', b.link)}
+                    ${campoTexto('bn-imagem-' + i, 'Imagem', b.imagem)}
+                </div>
+            `).join('');
+
+            // Banner intermediário
+            const bi = config.bannerIntermediario || {};
+            document.getElementById('formBannerIntermediario').innerHTML = `
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    ${campoTexto('bi-titulo', 'Título', bi.titulo)}
+                    ${campoTexto('bi-texto', 'Texto', bi.texto)}
+                    ${campoTexto('bi-botao', 'Texto do Botão', bi.botao)}
+                    ${campoTexto('bi-link', 'Link', bi.link)}
+                </div>
+                ${campoTexto('bi-imagem', 'Imagem de Fundo', bi.imagem)}
+            `;
+
+            const paginas = config.paginas || {};
+            const sobre = paginas.sobre || {};
+            const politicas = paginas.politicas || {};
+            const faleConosco = paginas.faleConosco || {};
+            document.getElementById('formPaginas').innerHTML = `
+                <div class="grid grid-cols-1 gap-4">
+                    <div class="bg-zinc-950 border border-zinc-800 rounded-lg p-4">
+                        <p class="text-[10px] font-black text-amber-400 uppercase">Página Sobre</p>
+                        ${campoTexto('sobre-titulo', 'Título da Página', sobre.titulo)}
+                        ${campoTexto('sobre-texto1', 'Parágrafo 1', sobre.texto1)}
+                        ${campoTexto('sobre-texto2', 'Parágrafo 2', sobre.texto2)}
+                        ${campoUpload('sobre-imagem-1', 'URL da Imagem 1', (sobre.imagens || [])[0], 'fileSobreImagem1')}
+                        ${campoUpload('sobre-imagem-2', 'URL da Imagem 2', (sobre.imagens || [])[1], 'fileSobreImagem2')}
+                        ${campoUpload('sobre-imagem-3', 'URL da Imagem 3', (sobre.imagens || [])[2], 'fileSobreImagem3')}
+                    </div>
+                    <div class="bg-zinc-950 border border-zinc-800 rounded-lg p-4">
+                        <p class="text-[10px] font-black text-amber-400 uppercase">Página Políticas</p>
+                        ${campoTexto('politicas-titulo', 'Título da Página', politicas.titulo)}
+                        ${campoTexto('politicas-sec1-titulo', 'Título Seção 1', politicas.sec1Titulo)}
+                        ${campoTexto('politicas-sec1-texto', 'Texto Seção 1', politicas.sec1Texto)}
+                        ${campoTexto('politicas-sec2-titulo', 'Título Seção 2', politicas.sec2Titulo)}
+                        ${campoTexto('politicas-sec2-texto', 'Texto Seção 2', politicas.sec2Texto)}
+                        ${campoTexto('politicas-sec3-titulo', 'Título Seção 3', politicas.sec3Titulo)}
+                        ${campoTexto('politicas-sec3-texto', 'Texto Seção 3', politicas.sec3Texto)}
+                    </div>
+                    <div class="bg-zinc-950 border border-zinc-800 rounded-lg p-4">
+                        <p class="text-[10px] font-black text-amber-400 uppercase">Página Fale Conosco</p>
+                        ${campoTexto('fale-titulo', 'Título da Página', faleConosco.titulo)}
+                        ${campoTexto('fale-texto', 'Texto Descritivo', faleConosco.texto)}
+                        ${campoTexto('fale-emailAtendimento', 'Email Atendimento', faleConosco.emailAtendimento)}
+                        ${campoTexto('fale-emailParcerias', 'Email Parcerias', faleConosco.emailParcerias)}
+                        ${campoTexto('fale-emailCarreiras', 'Email Carreiras', faleConosco.emailCarreiras)}
+                    </div>
+                </div>
+            `;
+
+            const rodape = config.rodape || {};
+            document.getElementById('formRodape').innerHTML = `
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    ${campoTexto('rp-slogan', 'Mensagem do Rodapé', rodape.slogan)}
+                    ${campoTexto('rp-direitos', 'Texto de Direitos', rodape.direitos)}
+                    ${campoTexto('rp-politicasTexto', 'Texto Link Políticas', rodape.politicasTexto)}
+                    ${campoTexto('rp-privacidadeTexto', 'Texto Link Privacidade', rodape.privacidadeTexto)}
+                </div>
+            `;
+        }
+
+        async function salvarConteudo() {
+            try {
+                const carrossel = (config.carrossel || []).map((s, i) => ({
+                    etiqueta: document.getElementById('cs-etiqueta-' + i).value,
+                    titulo: document.getElementById('cs-titulo-' + i).value,
+                    texto: document.getElementById('cs-texto-' + i).value,
+                    botao: document.getElementById('cs-botao-' + i).value,
+                    link: document.getElementById('cs-link-' + i).value,
+                    imagem: document.getElementById('cs-imagem-' + i).value
+                }));
+                const bannersGrelha = (config.bannersGrelha || []).map((b, i) => ({
+                    titulo: document.getElementById('bn-titulo-' + i).value,
+                    texto: document.getElementById('bn-texto-' + i).value,
+                    link: document.getElementById('bn-link-' + i).value,
+                    imagem: document.getElementById('bn-imagem-' + i).value
+                }));
+                config.bannerIntermediario = {
+                    titulo: document.getElementById('bi-titulo').value,
+                    texto: document.getElementById('bi-texto').value,
+                    botao: document.getElementById('bi-botao').value,
+                    link: document.getElementById('bi-link').value,
+                    imagem: document.getElementById('bi-imagem').value
+                };
+                config.paginas = {
+                    sobre: {
+                        titulo: document.getElementById('sobre-titulo').value,
+                        texto1: document.getElementById('sobre-texto1').value,
+                        texto2: document.getElementById('sobre-texto2').value,
+                        imagens: [
+                            document.getElementById('sobre-imagem-1').value,
+                            document.getElementById('sobre-imagem-2').value,
+                            document.getElementById('sobre-imagem-3').value
+                        ]
+                    },
+                    politicas: {
+                        titulo: document.getElementById('politicas-titulo').value,
+                        sec1Titulo: document.getElementById('politicas-sec1-titulo').value,
+                        sec1Texto: document.getElementById('politicas-sec1-texto').value,
+                        sec2Titulo: document.getElementById('politicas-sec2-titulo').value,
+                        sec2Texto: document.getElementById('politicas-sec2-texto').value,
+                        sec3Titulo: document.getElementById('politicas-sec3-titulo').value,
+                        sec3Texto: document.getElementById('politicas-sec3-texto').value
+                    },
+                    faleConosco: {
+                        titulo: document.getElementById('fale-titulo').value,
+                        texto: document.getElementById('fale-texto').value,
+                        emailAtendimento: document.getElementById('fale-emailAtendimento').value,
+                        emailParcerias: document.getElementById('fale-emailParcerias').value,
+                        emailCarreiras: document.getElementById('fale-emailCarreiras').value
+                    }
+                };
+                config.rodape = {
+                    slogan: document.getElementById('rp-slogan').value,
+                    direitos: document.getElementById('rp-direitos').value,
+                    politicasTexto: document.getElementById('rp-politicasTexto').value,
+                    privacidadeTexto: document.getElementById('rp-privacidadeTexto').value
+                };
+                config.carrossel = carrossel;
+                config.bannersGrelha = bannersGrelha;
+                await API('/api/config', { method: 'PUT', body: JSON.stringify(config) });
+                toast('Conteúdo salvo!');
+            } catch (err) { toast(err.message, 'erro'); }
+        }
+
+        // =============== CONFIGURAÇÕES ===============
+        function renderizarConfig() {
+            const contato = config.contato || {};
+            document.getElementById('formContato').innerHTML = [
+                campoTexto('ct-email', 'Email de Atendimento', contato.emailAtendimento),
+                campoTexto('ct-emailP', 'Email de Parcerias', contato.emailParcerias),
+                campoTexto('ct-emailC', 'Email de Carreiras', contato.emailCarreiras),
+                campoTexto('ct-whatsapp', 'WhatsApp (com DDI)', contato.whatsapp),
+                campoTexto('ct-telefone', 'Telefone Exibido', contato.telefone)
+            ].join('');
+
+const redes = config.redesSociais || {};
+            const logo = config.logo || {};
+            document.getElementById('formRedes').innerHTML = [
+                campoTexto('rs-instagram', 'Instagram', redes.instagram),
+                campoTexto('rs-tiktok', 'TikTok', redes.tiktok),
+campoTexto('lg-texto', 'Texto do Logo', logo.texto),
+                `<div>
+                    <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">URL do Logo</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="lg-url" value="${(logo.url || '').replace(/"/g, '"')}" placeholder="https://... ou /uploads/logo.png" class="flex-1 w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2.5 text-sm focus:outline-none focus:border-amber-400">
+                        <button type="button" onclick="document.getElementById('fileLogo').click()" class="shrink-0 bg-zinc-800 hover:bg-zinc-700 text-xs font-bold text-white px-3 py-2.5 rounded transition flex items-center gap-1"><i data-lucide="upload" class="w-4 h-4"></i> Enviar</button>
+<input type="file" id="fileLogo" accept="image/*" class="hidden" onchange="enviarImagem(this, 'lg-url')">
+                    </div>
+                    <img id="logoPreview" src="${(logo.url || '').replace(/"/g, '"')}" alt="Prévia da Logo" class="hidden mt-3 h-12 object-contain bg-zinc-950 border border-zinc-800 rounded p-1">
+                    <p class="text-[10px] text-zinc-600 mt-1">Envie a imagem da logo ou cole uma URL. A logo substitui o texto "MIO" em todo o site.</p>
+                </div>`
+            ].join('');
+
+            // Mostra/oculta a prévia da logo conforme o valor da URL
+            const lgUrlInput = document.getElementById('lg-url');
+            const logoPreview = document.getElementById('logoPreview');
+            if (lgUrlInput && logoPreview) {
+                lgUrlInput.addEventListener('input', function () {
+                    if (lgUrlInput.value.trim()) {
+                        logoPreview.src = lgUrlInput.value.trim();
+                        logoPreview.classList.remove('hidden');
+                    } else {
+                        logoPreview.classList.add('hidden');
+                    }
+                });
+            }
+
+            // Endereço da Loja (origem do frete) — salvo no perfil do admin
+            const end = adminPerfil.endereco || {};
+            document.getElementById('formEnderecoLoja').innerHTML = [
+                campoTexto('end-cep', 'CEP (origem)', end.cep, '00000-000'),
+                campoTexto('end-rua', 'Rua / Logradouro', end.rua),
+                campoTexto('end-numero', 'Número', end.numero),
+                campoTexto('end-complemento', 'Complemento', end.complemento),
+                campoTexto('end-bairro', 'Bairro', end.bairro),
+                campoTexto('end-cidade', 'Cidade', end.cidade),
+                campoTexto('end-estado', 'Estado (UF)', end.estado),
+                campoTexto('end-pais', 'País', end.pais)
+            ].join('');
+        }
+
+        async function salvarConfig() {
+            try {
+                config.contato = {
+                    emailAtendimento: document.getElementById('ct-email').value,
+                    emailParcerias: document.getElementById('ct-emailP').value,
+                    emailCarreiras: document.getElementById('ct-emailC').value,
+                    whatsapp: document.getElementById('ct-whatsapp').value,
+                    telefone: document.getElementById('ct-telefone').value
+                };
+                config.redesSociais = {
+                    instagram: document.getElementById('rs-instagram').value,
+                    tiktok: document.getElementById('rs-tiktok').value
+                };
+config.logo = {
+                    texto: document.getElementById('lg-texto').value,
+                    url: document.getElementById('lg-url').value
+                };
+                await API('/api/config', { method: 'PUT', body: JSON.stringify(config) });
+
+                // Salva o endereço da loja (origem do frete) no perfil do admin
+                const endereco = {
+                    cep: document.getElementById('end-cep').value,
+                    rua: document.getElementById('end-rua').value,
+                    numero: document.getElementById('end-numero').value,
+                    complemento: document.getElementById('end-complemento').value,
+                    bairro: document.getElementById('end-bairro').value,
+                    cidade: document.getElementById('end-cidade').value,
+                    estado: document.getElementById('end-estado').value,
+                    pais: document.getElementById('end-pais').value
+                };
+                await API('/api/admin/perfil', { method: 'PUT', body: JSON.stringify({ endereco }) });
+                adminPerfil = await API('/api/admin/perfil');
+                toast('Configurações salvas!');
+            } catch (err) { toast(err.message, 'erro'); }
+        }
+
+// =============== UPLOAD DE IMAGEM ===============
+        function enviarImagem(input, alvoId, acumular) {
+            const arquivo = input.files[0];
+            if (!arquivo) return;
+            const reader = new FileReader();
+            reader.onload = async () => {
+                try {
+                    const data = await API('/api/upload', { method: 'POST', body: JSON.stringify({ imagem: reader.result }) });
+                    const url = data.url;
+                    const alvo = document.getElementById(alvoId);
+                    if (acumular) {
+                        const atual = alvo.value.split(',').map(s => s.trim()).filter(Boolean);
+                        atual.push(url);
+                        alvo.value = atual.join(', ');
+} else {
+                        alvo.value = url;
+                    }
+                    // Atualiza a prévia da logo, se o upload foi para o campo da logo
+                    const preview = document.getElementById('logoPreview');
+                    if (alvoId === 'lg-url' && preview) {
+                        preview.src = url;
+                        preview.classList.remove('hidden');
+                    }
+                    toast('Imagem enviada!');
+                    if (window.lucide) lucide.createIcons();
+                } catch (err) { toast(err.message, 'erro'); }
+            };
+            reader.readAsDataURL(arquivo);
+        }
+
+// =============== INTEGRAÇÕES (PAGAMENTO / ENVIO) ===============
+        async function salvarIntegracoes() {
+            try {
+                const integracoes = {
+                    pagamento: {
+                        ativo: document.getElementById('pg-ativo').checked,
+                        modo: document.getElementById('pg-modo').value,
+                        email: document.getElementById('pg-email').value,
+                        token: document.getElementById('pg-token').value,
+                        appId: document.getElementById('pg-appId').value,
+                        appKey: document.getElementById('pg-appKey').value
+                    },
+                    envio: {
+                        ativo: document.getElementById('me-ativo').checked,
+                        modo: document.getElementById('me-modo').value,
+                        token: document.getElementById('me-token').value,
+                        cepOrigem: document.getElementById('me-cepOrigem').value
+                    },
+                    upseller: {
+                        ativo: document.getElementById('up-ativo').checked,
+                        token: document.getElementById('up-token').value,
+                        storeId: document.getElementById('up-storeId').value,
+                        url: document.getElementById('up-url').value
+                    }
+                };
+                await API('/api/integracoes', { method: 'PUT', body: JSON.stringify(integracoes) });
+                toast('Integrações salvas!');
+            } catch (err) { toast(err.message, 'erro'); }
+        }
+
+        async function testarIntegracao(tipo) {
+            try {
+                const body = { tipo };
+                const data = await API('/api/integracoes/testar', { method: 'POST', body: JSON.stringify(body) });
+                const msgAlvo = tipo === 'pagamento' ? 'msg-pg' : (tipo === 'envio' ? 'msg-me' : 'msg-up');
+                const el = document.getElementById(msgAlvo);
+                el.innerText = data.ok ? '✅ Conexão OK! ' + (data.mensagem || '') : '❌ ' + (data.mensagem || data.erro || 'Falha na conexão');
+                el.className = 'text-xs font-mono mt-3 ' + (data.ok ? 'text-emerald-400' : 'text-red-400');
+                el.classList.remove('hidden');
+            } catch (err) {
+                const msgAlvo = tipo === 'pagamento' ? 'msg-pg' : (tipo === 'envio' ? 'msg-me' : 'msg-up');
+                const el = document.getElementById(msgAlvo);
+                el.innerText = '❌ ' + err.message;
+                el.className = 'text-xs font-mono mt-3 text-red-400';
+                el.classList.remove('hidden');
+            }
+        }
+
+        async function renderizarIntegracoes() {
+            try {
+                const int = await API('/api/integracoes');
+                const pg = int.pagamento || {};
+                const me = int.envio || {};
+                const up = int.upseller || {};
+                document.getElementById('pg-ativo').checked = !!pg.ativo;
+                if (pg.modo) document.getElementById('pg-modo').value = pg.modo;
+                if (pg.email) document.getElementById('pg-email').value = pg.email;
+                if (pg.token) document.getElementById('pg-token').value = pg.token;
+                if (pg.appId) document.getElementById('pg-appId').value = pg.appId;
+                if (pg.appKey) document.getElementById('pg-appKey').value = pg.appKey;
+
+                document.getElementById('me-ativo').checked = !!me.ativo;
+                if (me.modo) document.getElementById('me-modo').value = me.modo;
+                if (me.token) document.getElementById('me-token').value = me.token;
+                if (me.cepOrigem) document.getElementById('me-cepOrigem').value = me.cepOrigem;
+
+                document.getElementById('up-ativo').checked = !!up.ativo;
+                if (up.token) document.getElementById('up-token').value = up.token;
+                if (up.storeId) document.getElementById('up-storeId').value = up.storeId;
+                if (up.url) document.getElementById('up-url').value = up.url;
+            } catch (err) {
+                // ignora se não carregou
+            }
+        }
+
+        // =============== TROCAR SENHA ===============
+        document.getElementById('formTrocarSenha').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const senhaAtual = document.getElementById('senhaAtual').value;
+            const novaSenha = document.getElementById('novaSenha').value;
+            const msg = document.getElementById('msgSenha');
+            try {
+                await API('/api/admin/senha', { method: 'PUT', body: JSON.stringify({ senhaAtual, novaSenha }) });
+                msg.innerText = 'Senha alterada com sucesso!';
+                msg.className = 'text-xs font-mono mt-3 text-emerald-400';
+                msg.classList.remove('hidden');
+                document.getElementById('formTrocarSenha').reset();
+            } catch (err) {
+                msg.innerText = err.message;
+                msg.className = 'text-xs font-mono mt-3 text-red-400';
+                msg.classList.remove('hidden');
+            }
+        });
+
+// =============== INICIALIZAÇÃO ===============
+        // Restaura a sessão do admin apenas se houver um token válido.
+        // O token é validado no servidor (GET /api/admin/verificar) antes de
+        // liberar o painel. Se o token for inválido/expirado, volta ao login.
+        async function inicializarSessao() {
+            const tokenSalvo = localStorage.getItem('mio_admin_token');
+            if (!tokenSalvo) return;
+
+            token = tokenSalvo;
+            try {
+                const res = await fetch('/api/admin/verificar', {
+                    headers: { 'x-admin-token': tokenSalvo }
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || !data.ok) {
+                    // Token inválido ou expirado: limpa e mantém na tela de login
+                    token = null;
+                    localStorage.removeItem('mio_admin_token');
+                    localStorage.removeItem('mio_admin_email');
+                    localStorage.removeItem('mio_admin_logado');
+                    return;
+                }
+                document.getElementById('adminEmailLabel').innerText = data.email || localStorage.getItem('mio_admin_email') || '';
+                document.getElementById('telaLogin').classList.add('hidden');
+                document.getElementById('painelAdmin').classList.remove('hidden');
+                document.getElementById('painelAdmin').classList.add('flex');
+                carregarTudo();
+            } catch (err) {
+                // Servidor indisponível: não abre o painel para evitar acesso inseguro
+                token = null;
+                localStorage.removeItem('mio_admin_token');
+                localStorage.removeItem('mio_admin_email');
+                localStorage.removeItem('mio_admin_logado');
+            }
+        }
+
+        lucide.createIcons();
+    </script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+# Dependências
+node_modules/
+
+# Banco de dados local
+database.db
+database.db-journal
+database.db-wal
+database.db-shm
+
+# Arquivos de teste/logs
+dump_out*.txt
+out.txt
+test-api.mjs
+check_dump2.js
+reset-dados.mjs
+
+# Sistema
+.DS_Store
+
+# Uploads locais (mantidos em produção via volume)
+public/uploads/*
+!public/uploads/.gitkeep
+
