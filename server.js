@@ -22,6 +22,15 @@ app.use(express.json({ limit: '25mb' })); // limite maior p/ fotos base64
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Rota explícita para favicon com cache headers
+app.get('/favicon.png', (req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.setHeader('Content-Type', 'image/png');
+  res.sendFile(path.join(__dirname, 'public', 'favicon.png'), (err) => {
+    if (err) res.status(404).send('Favicon não encontrado');
+  });
+});
+
 // --- REDIRECT HTTPS em produção ---
 if (IS_PROD) {
   app.use((req, res, next) => {
@@ -653,7 +662,7 @@ app.post('/api/pagamento/cartao', async (req, res) => {
     }
     // Formata validade (MM/AA -> MM/AAAA)
     const [mm, aa] = (String(cartao.validade).replace(/\s/g, '')).split('/');
-    const expMonth = mm || '';
+    const expMonth = mm ? mm.padStart(2, '0') : '';
     const expYear = aa ? (aa.length === 2 ? '20' + aa : aa) : '';
 
     const resApi = await fetch(base + '/charges', {
@@ -696,7 +705,7 @@ app.post('/api/pagamento/cartao', async (req, res) => {
       return res.status(502).json({ ok: false, error: msg });
     }
     const status = (data.status || '').toUpperCase();
-    const aprovado = status === 'PAID' || status === 'PAID' || status === '3' || data.status === 3;
+    const aprovado = status === 'PAID' ||  status === '3' || data.status === 3;
     return res.json({
       ok: true,
       aprovado,
