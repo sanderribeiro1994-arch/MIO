@@ -700,6 +700,20 @@
                 body: JSON.stringify({ numero: numeroPedido, status: 'Pago' })
               });
             } catch (e) {}
+
+            // Envia o pedido ao Upseller para expedição
+            try {
+              const resUpseller = await fetch('/api/upseller/pedido', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(pedidoMio)
+              });
+              const dataUpseller = await resUpseller.json();
+              console.log("Pedido enviado ao Upseller:", dataUpseller);
+            } catch (err) {
+              console.warn("Aviso: Pedido não foi enviado ao Upseller automaticamente. Verifique a configuração.", err);
+            }
+
             msgCartao.innerText = '✅ ' + (data.mensagem || 'Pagamento aprovado!');
             msgCartao.className = 'text-[11px] font-mono pt-1 text-emerald-400';
             msgCartao.classList.remove('hidden');

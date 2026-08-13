@@ -725,7 +725,36 @@ app.post('/api/pagamento/webhook', async (req, res) => {
     const referencia = body.reference_id || body.numero || '';
     const status = (body.status || '').toUpperCase();
     if (referencia && (status === 'PAID' || status.includes('PAID') || status === '3')) {
+      // Atualiza status do pedido para "Pago"
       await db.run("UPDATE pedidos SET status = 'Pago' WHERE numero = ?", [referencia]);
+
+      // Busca o pedido para enviar ao Upseller
+      const pedido = await db.get("SELECT * FROM pedidos WHERE numero = ?", [referencia]);
+      if (pedido) {
+        try {
+          const cfg = await getConfigChave('upseller_config', {});
+          if (cfg.token && cfg.storeId) {
+            const clienteJson = parseJsonArray(pedido.cliente, {});
+            const itensJson = parseJsonArray(pedido.itens, []);
+            const enderecoJson = parseJsonArray(pedido.endereco, {});
+            
+            const base = (cfg.url || 'https://api.upseller.com.br').replace(/\/$/, '');
+            await fetch(base + '/v1/orders', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.token },
+              body: JSON.stringify({
+                store_id: cfg.storeId,
+                order_number: pedido.numero,
+                customer: clienteJson,
+                products: itensJson.map(i => ({ sku: i.sku || i.nome, quantity: i.quantidade, price: i.preco })),
+                shipping_address: enderecoJson
+              })
+            }).catch(err => console.warn("Aviso: Não foi possível enviar ao Upseller via webhook", err));
+          }
+        } catch (err) {
+          console.warn("Erro ao tentar enviar ao Upseller no webhook", err);
+        }
+      }
     }
     res.json({ ok: true });
   } catch (err) {
@@ -806,6 +835,43 @@ app.post('/api/upseller/pedido', async (req, res) => {
     res.json({ ok: true, upseller: data });
   } catch (err) {
     res.status(500).json({ error: "Erro ao enviar ao Upseller: " + err.message });
+  }
+});
+
+// ---------- API: REENVIAR PEDIDO AO UPSELLER (para admin) ----------
+app.post('/api/upseller/reenviar/:numeroPedido', exigirAdmin, async (req, res) => {
+  const numeroPedido = req.params.numeroPedido;
+  try {
+    const pedido = await db.get("SELECT * FROM pedidos WHERE numero = ?", [numeroPedido]);
+    if (!pedido) return res.status(404).json({ error: "Pedido não encontrado." });
+
+    const cfg = await getConfigChave('upseller_config', {});
+    if (!cfg.token || !cfg.storeId) {
+      return res.json({ ok: false, message: "Upseller não configurado." });
+    }
+
+    const clienteJson = parseJsonArray(pedido.cliente, {});
+    const itensJson = parseJsonArray(pedido.itens, []);
+    const enderecoJson = parseJsonArray(pedido.endereco, {});
+
+    const base = (cfg.url || 'https://api.upseller.com.br').replace(/\/$/, '');
+    const resApi = await fetch(base + '/v1/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.token },
+      body: JSON.stringify({
+        store_id: cfg.storeId,
+        order_number: pedido.numero,
+        customer: clienteJson,
+        products: itensJson.map(i => ({ sku: i.sku || i.nome, quantity: i.quantidade, price: i.preco })),
+        shipping_address: enderecoJson
+      })
+    });
+
+    const data = await resApi.json().catch(() => ({}));
+    if (!resApi.ok) return res.status(502).json({ error: data.message || "Erro ao enviar ao Upseller." });
+    res.json({ ok: true, message: "Pedido reenviado ao Upseller com sucesso!", upseller: data });
+  } catch (err) {
+    res.status(500).json({ error: "Erro ao reenviar: " + err.message });
   }
 });
 

@@ -1053,7 +1053,7 @@ renderizarConteudo();
                     ${campoTexto('cs-texto-' + i, 'Texto', s.texto)}
                     ${campoTexto('cs-botao-' + i, 'Texto do Botão', s.botao)}
                     ${campoTexto('cs-link-' + i, 'Link do Botão', s.link)}
-                    ${campoTexto('cs-imagem-' + i, 'Imagem', s.imagem)}
+                    ${campoUpload('cs-imagem-' + i, 'Imagem', s.imagem, 'fileCarrossel' + i)}
                 </div>
             `).join('');
 
@@ -1065,7 +1065,7 @@ renderizarConteudo();
                     ${campoTexto('bn-titulo-' + i, 'Título', b.titulo)}
                     ${campoTexto('bn-texto-' + i, 'Texto', b.texto)}
                     ${campoTexto('bn-link-' + i, 'Link', b.link)}
-                    ${campoTexto('bn-imagem-' + i, 'Imagem', b.imagem)}
+                    ${campoUpload('bn-imagem-' + i, 'Imagem', b.imagem, 'fileBanner' + i)}
                 </div>
             `).join('');
 
@@ -1078,7 +1078,7 @@ renderizarConteudo();
                     ${campoTexto('bi-botao', 'Texto do Botão', bi.botao)}
                     ${campoTexto('bi-link', 'Link', bi.link)}
                 </div>
-                ${campoTexto('bi-imagem', 'Imagem de Fundo', bi.imagem)}
+                ${campoUpload('bi-imagem', 'Imagem de Fundo', bi.imagem, 'fileBannerIntermediario')}
             `;
 
             const paginas = config.paginas || {};

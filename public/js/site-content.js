@@ -45,6 +45,27 @@
         const politicas = paginas.politicas || {};
         const faleConosco = paginas.faleConosco || {};
         const rodape = config.rodape || {};
+        const carrossel = config.carrossel || [];
+        const bannersGrelha = config.bannersGrelha || [];
+        const bannerIntermediario = config.bannerIntermediario || {};
+
+        // Atualizar carrossel
+        carrossel.forEach((slide, i) => {
+          atualizarImagem('carrossel-img-' + i, slide.imagem);
+        });
+
+        // Atualizar banners da grelha
+        bannersGrelha.forEach((banner, i) => {
+          atualizarImagem('banner-grelha-img-' + i, banner.imagem);
+        });
+
+        // Atualizar banner intermediário
+        if (bannerIntermediario.imagem) {
+          const section = document.getElementById('banner-intermediario');
+          if (section) {
+            section.style.backgroundImage = 'linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.7)), url(' + bannerIntermediario.imagem + ')';
+          }
+        }
 
         atualizarTexto('sobreTitulo', sobre.titulo);
         atualizarTexto('sobreTexto1', sobre.texto1);

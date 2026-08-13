@@ -169,7 +169,7 @@
     <!-- Slide 1: Meias Custom Dyed -->
     <div class="carousel-slide absolute inset-0 w-full h-full transition-opacity duration-1000 ease-in-out opacity-100 z-10">
       <div class="absolute inset-0 bg-black/40 z-10"></div>
-      <img src="banner1.jpg" alt="MIO Meias Customizadas" class="w-full h-full object-cover">
+      <img id="carrossel-img-0" src="banner1.jpg" alt="MIO Meias Customizadas" class="w-full h-full object-cover">
       
       <div class="absolute inset-0 z-20 flex flex-col items-center justify-center text-center px-4">
         <span class="text-[9px] md:text-xs font-bold uppercase tracking-[0.3em] text-amber-400 mb-2 font-mono">NOVIDADES MIO</span>
@@ -182,7 +182,7 @@
     <!-- Slide 2: Organizadores MDF -->
     <div class="carousel-slide absolute inset-0 w-full h-full transition-opacity duration-1000 ease-in-out opacity-0 z-0">
       <div class="absolute inset-0 bg-black/50 z-10"></div>
-      <img src="banner2.jpg" alt="MIO Organizadores" class="w-full h-full object-cover">
+      <img id="carrossel-img-1" src="banner2.jpg" alt="MIO Organizadores" class="w-full h-full object-cover">
       
       <div class="absolute inset-0 z-20 flex flex-col items-center justify-center text-center px-4">
         <span class="text-[9px] md:text-xs font-bold uppercase tracking-[0.3em] text-amber-400 mb-2 font-mono">ORGANIZAÇÃO E ESTILO</span>
@@ -195,7 +195,7 @@
     <!-- Slide 3: Conceito Streetwear / Acessórios -->
     <div class="carousel-slide absolute inset-0 w-full h-full transition-opacity duration-1000 ease-in-out opacity-0 z-0">
       <div class="absolute inset-0 bg-black/50 z-10"></div>
-      <img src="banner3.jpg" alt="MIO Streetwear" class="w-full h-full object-cover">
+      <img id="carrossel-img-2" src="banner3.jpg" alt="MIO Streetwear" class="w-full h-full object-cover">
       
       <div class="absolute inset-0 z-20 flex flex-col items-center justify-center text-center px-4">
         <span class="text-[9px] md:text-xs font-bold uppercase tracking-[0.3em] text-amber-400 mb-2 font-mono">ESSENCIAL URBANO</span>
@@ -232,7 +232,7 @@
     
     <!-- Banner 1: Masculino -->
     <div onclick="filtrarPeloMenu('masculino')" class="relative h-80 bg-zinc-900 rounded-sm overflow-hidden group cursor-pointer border border-zinc-800 hover:border-zinc-700 transition">
-      <img src="https://images.unsplash.com/photo-1556821840-3a63f95609a7?q=80&w=500" class="w-full h-full object-cover opacity-50 group-hover:scale-105 transition-transform duration-500">
+      <img id="banner-grelha-img-0" src="https://images.unsplash.com/photo-1556821840-3a63f95609a7?q=80&w=500" class="w-full h-full object-cover opacity-50 group-hover:scale-105 transition-transform duration-500">
       <div class="absolute inset-0 flex flex-col justify-center items-center p-6 bg-black/30">
         <h3 class="text-2xl md:text-3xl font-black text-white uppercase italic tracking-wider text-center">Masculino</h3>
         <p class="text-sm text-zinc-300 mt-2 font-medium uppercase tracking-widest bg-black/40 px-3 py-1 rounded-sm">Ver Coleção</p>
@@ -241,7 +241,7 @@
 
     <!-- Banner 2 (CENTRAL): GANHE 10% OFF -> Leva para a página do cupom -->
     <a href="cupom.html" class="relative h-80 bg-zinc-900 rounded-sm overflow-hidden group cursor-pointer border border-amber-500/30 hover:border-amber-500 transition block" target="_self">
-      <img src="https://images.unsplash.com/photo-1582966772680-860e372bb558?q=80&w=500" class="w-full h-full object-cover opacity-40 group-hover:scale-105 transition-transform duration-500">
+      <img id="banner-grelha-img-1" src="https://images.unsplash.com/photo-1582966772680-860e372bb558?q=80&w=500" class="w-full h-full object-cover opacity-40 group-hover:scale-105 transition-transform duration-500">
       <div class="absolute inset-0 bg-gradient-to-b from-amber-500/10 via-transparent to-black/70 z-10"></div>
       <div class="absolute inset-0 flex flex-col justify-center items-center p-6 z-20 text-center">
         <span class="text-amber-400 text-xs font-black uppercase tracking-widest bg-amber-500/10 px-3 py-1 rounded-full mb-2 border border-amber-500/20">Presente de Boas-Vindas</span>
@@ -252,7 +252,7 @@
 
     <!-- Banner 3: Feminino -->
     <div onclick="filtrarPeloMenu('feminino')" class="relative h-80 bg-zinc-900 rounded-sm overflow-hidden group cursor-pointer border border-zinc-800 hover:border-zinc-700 transition">
-      <img src="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=500" class="w-full h-full object-cover opacity-50 group-hover:scale-105 transition-transform duration-500">
+      <img id="banner-grelha-img-2" src="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=500" class="w-full h-full object-cover opacity-50 group-hover:scale-105 transition-transform duration-500">
       <div class="absolute inset-0 flex flex-col justify-center items-center p-6 bg-black/30">
         <h3 class="text-2xl md:text-3xl font-black text-white uppercase italic tracking-wider text-center">Feminino</h3>
         <p class="text-sm text-zinc-300 mt-2 font-medium uppercase tracking-widest bg-black/40 px-3 py-1 rounded-sm">Ver Coleção</p>
@@ -355,7 +355,7 @@
 </section>
 
   <!-- ================= BANNER INTERMEDIÁRIO EXTRA ================= -->
-  <section class="w-full my-12 bg-cover bg-center py-24 px-4 relative flex items-center justify-center border-y border-zinc-900" style="background-image: linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.7)), url('https://images.unsplash.com/photo-1529139574466-a303027c1d8b?q=80&w=1200');">
+  <section id="banner-intermediario" class="w-full my-12 bg-cover bg-center py-24 px-4 relative flex items-center justify-center border-y border-zinc-900" style="background-image: linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.7)), url('https://images.unsplash.com/photo-1529139574466-a303027c1d8b?q=80&w=1200');">
     <div class="text-center max-w-xl">
       <span class="text-[9px] uppercase tracking-[0.3em] font-bold text-white bg-zinc-950 px-3 py-1.5 rounded-sm">Estética MIO</span>
       <h3 class="text-2xl md:text-4xl font-black uppercase tracking-tight mt-4 mb-3">COLEÇÃO EXCLUSIVA DE MEIAS CUSTOM DYED</h3>
