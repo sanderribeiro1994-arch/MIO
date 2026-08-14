@@ -393,6 +393,86 @@ async function setConfigChave(chave, valor) {
   }
 }
 
+function obterBaseUrl(req) {
+  const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+  const host = req.get('host') || 'localhost:3000';
+  return `${proto}://${host}`;
+}
+
+function normalizarCpf(valor) {
+  return String(valor || '').replace(/\D/g, '');
+}
+
+function getPagSeguroBase(cfg = {}) {
+  return (cfg.modo === 'produção' ? 'https://api.pagseguro.com' : 'https://sandbox.api.pagseguro.com');
+}
+
+function getPagSeguroHeaders(cfg = {}, extra = {}) {
+  const headers = {
+    'Content-Type': 'application/json',
+    ...extra
+  };
+  const token = cfg.token || '';
+  if (token) headers.Authorization = `Bearer ${token}`;
+  if (cfg.appKey) headers['x-api-key'] = cfg.appKey;
+  if (cfg.appId) headers['x-idempotency-key'] = String(cfg.appId);
+  return headers;
+}
+
+function getParcelamentoMaximo(valorTotal) {
+  const total = Number(valorTotal || 0);
+  if (total < 30) return 1;
+  if (total < 60) return 2;
+  if (total < 90) return 3;
+  return 4;
+}
+
+async function buscarConfigPagSeguro() {
+  return getConfigChave('pagseguro_config', {
+    ativo: false,
+    modo: 'sandbox',
+    email: '',
+    token: '',
+    appId: '',
+    appKey: ''
+  });
+}
+
+async function findPedidoByReference(reference) {
+  if (!reference) return null;
+  const byNumero = await db.get('SELECT * FROM pedidos WHERE numero = ?', [reference]);
+  if (byNumero) return byNumero;
+  return db.get('SELECT * FROM pedidos WHERE id = ?', [Number(reference)]).catch(() => null);
+}
+
+async function enviarPedidoParaUpseller(pedido) {
+  try {
+    const cfg = await getConfigChave('upseller_config', {});
+    if (!cfg || !cfg.ativo || !cfg.token || !cfg.storeId) return { ok: false, motivo: 'Upseller não configurado' };
+    const clienteJson = parseJsonArray(pedido.cliente, {});
+    const itensJson = parseJsonArray(pedido.itens, []);
+    const enderecoJson = parseJsonArray(pedido.endereco, {});
+    const base = (cfg.url || 'https://api.upseller.com.br').replace(/\/$/, '');
+    const resApi = await fetch(base + '/v1/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.token },
+      body: JSON.stringify({
+        store_id: cfg.storeId,
+        order_number: pedido.numero,
+        customer: clienteJson,
+        products: itensJson.map(i => ({ sku: i.sku || i.nome, quantity: i.quantidade, price: i.preco })),
+        shipping_address: enderecoJson
+      })
+    });
+    const data = await resApi.json().catch(() => ({}));
+    if (!resApi.ok) throw new Error(data.message || 'Falha ao enviar pedido ao Upseller');
+    return { ok: true, data };
+  } catch (error) {
+    console.warn('Aviso: não foi possível enviar ao Upseller', error);
+    return { ok: false, motivo: error.message };
+  }
+}
+
 // ---------- API: UPLOAD DE IMAGENS ----------
 app.post('/api/upload', exigirAdmin, async (req, res) => {
   try {
@@ -600,169 +680,472 @@ app.post('/api/integracoes/testar', exigirAdmin, async (req, res) => {
   }
 });
 
-// ---------- API: PAGAMENTO (PagSeguro) ----------
-// Gera um PIX. Em sandbox sem tokens reais, retorna um QR de demonstração.
-app.post('/api/pagamento/pix', async (req, res) => {
-  const { valor, cliente, numeroPedido } = req.body || {};
-  if (!valor || !cliente) return res.status(400).json({ error: "Valor e cliente obrigatórios." });
+app.get('/api/pagseguro/public-config', async (req, res) => {
   try {
-    const cfg = await getConfigChave('pagseguro_config', {});
-    const base = cfg.modo === 'produção' ? 'https://api.pagseguro.com' : 'https://sandbox.api.pagseguro.com';
-    const token = cfg.token || cfg.appKey || '';
-    if (!token) {
-      // Sem token: retorna um PIX de exemplo (demonstração)
-      return res.json({
-        ok: true, demo: true,
-        qrCodeText: 'MIO_PIX_' + numeroPedido,
-        copiaECola: '00020126360014BR.GOV.BCB.PIX0114mio@exemplo.com52040000530398654' + String(valor).replace('.', '') + '5802BR5903MIO6009SAO PAULO62070503***6304944A',
-        message: "Integração PagSeguro não configurada. Usando PIX de demonstração."
-      });
-    }
-    // Chamada real ao PagSeguro (APIs Parceladas/Checkout Transparente)
-    const resApi = await fetch(base + '/charges', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + token,
-        ...(cfg.appKey ? { 'x-api-key': cfg.appKey } : {})
-      },
-      body: JSON.stringify({
-        reference_id: numeroPedido,
-        customer: { name: cliente.nome, email: cliente.email, tax_id: cliente.cpf || '' },
-        items: [],
-        amount: { value: Math.round(valor * 100), currency: 'BRL' },
-        payment_method: { type: 'PIX' }
-      })
+    const cfg = await buscarConfigPagSeguro();
+    res.json({
+      ok: true,
+      ativo: !!cfg.ativo,
+      modo: cfg.modo || 'sandbox',
+      appId: cfg.appId || '',
+      appKey: cfg.appKey || '',
+      email: cfg.email || '',
+      token: cfg.token || ''
     });
-    const data = await resApi.json().catch(() => ({}));
-    if (!resApi.ok) return res.status(502).json({ error: data.message || "Erro ao criar PIX no PagSeguro." });
-    const qr = data.payment_response?.qr_codes?.[0] || {};
-    res.json({ ok: true, qrCodeText: qr.text || '', copiaECola: qr.arrangement_information || (qr.text || '') });
-  } catch (err) {
-    res.status(500).json({ error: "Erro interno ao gerar PIX: " + err.message });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: 'Erro ao carregar configurações públicas do PagSeguro.' });
   }
 });
 
-// ---------- API: PAGAMENTO (PagSeguro) — CARTÃO DE CRÉDITO ----------
-// Cria uma cobrança real de cartão de crédito. Sem token configurado, retorna erro (não simula).
-app.post('/api/pagamento/cartao', async (req, res) => {
-  const { valor, cliente, numeroPedido, cartao, itens, parcelas } = req.body || {};
-  // Validações básicas
-  if (!valor || !cliente || !cartao) return res.status(400).json({ error: "Valor, cliente e dados do cartão obrigatórios." });
-  if (!cartao.numero || !cartao.validade || !cartao.cvv || !cartao.nome) {
-    return res.status(400).json({ error: "Preencha todos os dados do cartão." });
+// ---------- API: PAGAMENTO (PagSeguro) ----------
+async function criarCargaPagSeguro(req, payload) {
+  const cfg = await buscarConfigPagSeguro();
+  const ativo = !!cfg.ativo;
+  if (!ativo) {
+    return { error: 'Pagamento via PagSeguro está desativado no painel administrativo. Ative a integração para concluir o checkout.' };
   }
-  const numParcelas = Math.max(1, Math.min(12, parseInt(parcelas) || 1));
-  try {
-    const cfg = await getConfigChave('pagseguro_config', {});
-    const base = cfg.modo === 'produção' ? 'https://api.pagseguro.com' : 'https://sandbox.api.pagseguro.com';
-    const token = cfg.token || cfg.appKey || '';
-    if (!token) {
-      return res.status(400).json({ ok: false, error: "Pagamento por cartão não configurado. Defina o token do PagSeguro no painel administrativo." });
-    }
-    // Formata validade (MM/AA -> MM/AAAA)
-    const [mm, aa] = (String(cartao.validade).replace(/\s/g, '')).split('/');
-    const expMonth = mm ? mm.padStart(2, '0') : '';
-    const expYear = aa ? (aa.length === 2 ? '20' + aa : aa) : '';
 
-    const resApi = await fetch(base + '/charges', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + token,
-        ...(cfg.appKey ? { 'x-api-key': cfg.appKey } : {})
-      },
-      body: JSON.stringify({
-        reference_id: numeroPedido,
-        customer: {
-          name: cliente.nome,
-          email: cliente.email,
-          tax_id: (cliente.cpf || '').replace(/\D/g, '')
-        },
-        items: (itens || []).map(i => ({
-          name: i.nome,
-          quantity: i.quantidade || 1,
-          unit_amount: Math.round((i.preco || 0) * 100)
-        })),
-        amount: { value: Math.round(valor * 100), currency: 'BRL' },
-        payment_method: {
-          type: 'CREDIT_CARD',
-          installments: numParcelas,
-          capture: true,
-          card: {
-            number: String(cartao.numero).replace(/\D/g, ''),
-            exp_month: expMonth,
-            exp_year: expYear,
-            security_code: String(cartao.cvv),
-            holder: { name: cartao.nome }
+  const valor = Number(payload.valor || 0);
+  const numeroPedido = payload.numeroPedido || `MIO-${Date.now()}`;
+  const cliente = payload.cliente || {};
+  const itens = payload.itens || [];
+  const configUrl = obterBaseUrl(req);
+  const notificationUrls = [
+    `${configUrl}/api/webhooks/pagseguro`,
+    `${configUrl}/api/pagamento/webhook`
+  ];
+
+  const base = getPagSeguroBase(cfg);
+  const authHeaders = getPagSeguroHeaders(cfg, {
+    ...(cfg.appId ? { 'x-api-id': cfg.appId } : {})
+  });
+
+  const body = {
+    reference_id: numeroPedido,
+    customer: {
+      name: cliente.nome || 'Cliente MIO',
+      email: cliente.email || 'cliente@miostreetwear.com.br',
+      tax_id: normalizarCpf(cliente.cpf || '')
+    },
+    items: itens.map(i => ({
+      name: i.nome,
+      quantity: Number(i.quantidade || 1),
+      unit_amount: Math.round(Number(i.preco || 0) * 100)
+    })),
+    amount: { value: Math.round(valor * 100), currency: 'BRL' },
+    notification_urls: notificationUrls,
+    charges: payload.charges || []
+  };
+
+  if (payload.metodo === 'pix') {
+    body.charges = [{
+      reference_id: numeroPedido,
+      description: 'Pagamento PIX MIO',
+      amount: { value: Math.round(valor * 100), currency: 'BRL' },
+      payment_method: {
+        type: 'PIX',
+        capture: true
+      }
+    }];
+  }
+
+  if (payload.metodo === 'cartao') {
+    const parcelas = Math.max(1, Math.min(getParcelamentoMaximo(valor), Number(payload.parcelas || 1)))
+    body.charges = [{
+      reference_id: numeroPedido,
+      description: 'Pagamento com cartão MIO',
+      amount: { value: Math.round(valor * 100), currency: 'BRL' },
+      payment_method: {
+        type: 'CREDIT_CARD',
+        installments: parcelas,
+        capture: true,
+        card: {
+          encrypted: payload.encryptedCard,
+          holder: {
+            name: payload.cartaoNome || cliente.nome || 'Cliente MIO'
           }
         }
-      })
-    });
-    const data = await resApi.json().catch(() => ({}));
-    if (!resApi.ok) {
-      const msg = data.message || data.error_messages?.map(m => m.description).join(', ') || "Erro ao processar cartão no PagSeguro.";
-      return res.status(502).json({ ok: false, error: msg });
+      }
+    }];
+  }
+
+  const resApi = await fetch(base + '/charges', {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify(body)
+  });
+
+  const data = await resApi.json().catch(() => ({}));
+  if (!resApi.ok) {
+    const mensagem = data.message || data.error_messages?.map(m => m.description).join(', ') || 'Erro ao processar o pagamento no PagSeguro.';
+    return { error: mensagem, statusCode: resApi.status };
+  }
+
+  return { ok: true, data };
+}
+
+app.get('/api/pagseguro/session', async (req, res) => {
+  try {
+    const cfg = await buscarConfigPagSeguro();
+    if (!cfg.ativo || (!cfg.appId || !cfg.appKey)) {
+      return res.status(403).json({ ok: false, error: 'PagSeguro desativado ou credenciais incompletas no painel administrativo.' });
     }
-    const status = (data.status || '').toUpperCase();
-    const aprovado = status === 'PAID' ||  status === '3' || data.status === 3;
-    return res.json({
-      ok: true,
-      aprovado,
-      status: data.status,
-      chargeId: data.id || data.charge_id || '',
-      mensagem: aprovado ? "Pagamento aprovado!" : "Pagamento pendente / aguardando confirmação."
+    const base = getPagSeguroBase(cfg);
+    const fetchRes = await fetch(base + '/sessions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${cfg.token || ''}`,
+        'x-api-key': cfg.appKey,
+        'x-api-version': '2024-01-01'
+      }
     });
-  } catch (err) {
-    res.status(500).json({ ok: false, error: "Erro interno ao processar cartão: " + err.message });
+    const data = await fetchRes.json().catch(() => ({}));
+    if (!fetchRes.ok) {
+      return res.status(502).json({ ok: false, error: data.message || 'Erro ao obter sessão do PagSeguro.' });
+    }
+    return res.json({ ok: true, sessionId: data.id || data.session_id || data.sessionId });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: 'Erro interno ao gerar sessão do PagSeguro: ' + error.message });
   }
 });
 
-// Webhook de confirmação de pagamento PagSeguro
+app.post('/api/checkout', async (req, res) => {
+  try {
+    const payload = req.body || {};
+    const metodo = (payload.metodoPagamento || payload.metodo || 'pix').toLowerCase();
+    const valorTotal = Number(payload.total || payload.valor || 0);
+    if (!payload.cliente || !payload.endereco || !Array.isArray(payload.itens) || payload.itens.length === 0) {
+      return res.status(400).json({ ok: false, error: 'Dados do cliente, endereço e itens são obrigatórios.' });
+    }
+    if (!valorTotal || valorTotal <= 0) {
+      return res.status(400).json({ ok: false, error: 'Valor do pedido inválido.' });
+    }
+
+    const cfg = await buscarConfigPagSeguro();
+    if (!cfg.ativo) {
+      return res.status(403).json({ ok: false, error: 'Pagamento via PagSeguro está desativado no painel administrativo.' });
+    }
+
+    const numeroPedido = payload.numeroPedido || `MIO-${Date.now()}`;
+    const pedidoMio = {
+      numero: numeroPedido,
+      data: payload.data || new Date().toISOString(),
+      cliente: payload.cliente,
+      endereco: payload.endereco,
+      itens: payload.itens,
+      cupom: payload.cupom || null,
+      metodo: metodo,
+      status: 'Aguardando Pagamento',
+      frete: Number(payload.frete || 0),
+      desconto: Number(payload.desconto || 0),
+      total: Number(valorTotal)
+    };
+
+    await db.run(`INSERT INTO pedidos (numero, data, cliente, endereco, itens, cupom, metodo, status, total) VALUES (?,?,?,?,?,?,?,?,?)`, [
+      pedidoMio.numero,
+      pedidoMio.data,
+      JSON.stringify(pedidoMio.cliente),
+      JSON.stringify(pedidoMio.endereco),
+      JSON.stringify(pedidoMio.itens),
+      JSON.stringify(pedidoMio.cupom || null),
+      pedidoMio.metodo,
+      pedidoMio.status,
+      pedidoMio.total
+    ]);
+
+    if (pedidoMio.cupom && pedidoMio.cupom.codigo) {
+      await db.run('UPDATE cupons SET usos = usos + 1 WHERE codigo = ?', [pedidoMio.cupom.codigo]);
+    }
+
+    if (metodo === 'pix') {
+      const result = await criarCargaPagSeguro(req, {
+        valor: valorTotal,
+        numeroPedido,
+        cliente: payload.cliente,
+        itens: payload.itens,
+        metodo: 'pix'
+      });
+
+      if (result.error) {
+        await db.run('UPDATE pedidos SET status = ? WHERE numero = ?', ['Falhou', numeroPedido]);
+        return res.status(result.statusCode || 502).json({ ok: false, error: result.error });
+      }
+
+      const data = result.data || {};
+      const qrCodes = data.qr_codes || data.payment_response?.qr_codes || [];
+      const qr = qrCodes[0] || {};
+      const copiaCola = qr.text || qr.arrangement_information || data.copy_and_paste || '';
+      const qrCodeImage = qr.image || `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(copiaCola || `MIO_PIX_${numeroPedido}`)}`;
+
+      await db.run('UPDATE pedidos SET status = ? WHERE numero = ?', ['Aguardando Pagamento', numeroPedido]);
+      return res.json({
+        ok: true,
+        numeroPedido,
+        status: 'Aguardando Pagamento',
+        metodo: 'pix',
+        qrCodeImage,
+        qrCodeText: qr.text || copiaCola,
+        copiaECola: copiaCola,
+        mensagem: 'Pagamento PIX gerado com sucesso.'
+      });
+    }
+
+    if (metodo === 'cartao') {
+      const { encryptedCard, parcelas, cartaoNome } = payload.pagamento || {};
+      const parcelasPermitidas = getParcelamentoMaximo(valorTotal);
+      const parcelasFinal = Math.max(1, Math.min(parcelasPermitidas, Number(parcelas || 1)));
+      if (!encryptedCard) {
+        await db.run('UPDATE pedidos SET status = ? WHERE numero = ?', ['Falhou', numeroPedido]);
+        return res.status(400).json({ ok: false, error: 'Cartão criptografado não informado. Use a SDK do PagSeguro no frontend.' });
+      }
+
+      const result = await criarCargaPagSeguro(req, {
+        valor: valorTotal,
+        numeroPedido,
+        cliente: payload.cliente,
+        itens: payload.itens,
+        metodo: 'cartao',
+        parcelas: parcelasFinal,
+        encryptedCard,
+        cartaoNome
+      });
+
+      if (result.error) {
+        await db.run('UPDATE pedidos SET status = ? WHERE numero = ?', ['Falhou', numeroPedido]);
+        return res.status(result.statusCode || 502).json({ ok: false, error: result.error });
+      }
+
+      const data = result.data || {};
+      const statusFinal = String(data.status || '').toUpperCase();
+      const aprovado = statusFinal === 'PAID' || statusFinal === '3' || data.status === 3;
+      const pedidoStatus = aprovado ? 'PAGO' : 'Aguardando Pagamento';
+
+      await db.run('UPDATE pedidos SET status = ? WHERE numero = ?', [pedidoStatus, numeroPedido]);
+      return res.json({
+        ok: true,
+        numeroPedido,
+        status: pedidoStatus,
+        metodo: 'cartao',
+        aprovado,
+        mensagem: aprovado ? 'Pagamento aprovado com cartão!' : 'Pagamento em análise.'
+      });
+    }
+
+    return res.status(400).json({ ok: false, error: 'Método de pagamento inválido.' });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: 'Erro ao processar checkout: ' + error.message });
+  }
+});
+
+app.post('/api/pagamento/pix', async (req, res) => {
+  const { valor, cliente, numeroPedido } = req.body || {};
+  if (!valor || !cliente) return res.status(400).json({ error: 'Valor e cliente obrigatórios.' });
+  try {
+    const cfg = await buscarConfigPagSeguro();
+    if (!cfg.ativo) {
+      return res.status(403).json({ ok: false, error: 'Pagamento via PagSeguro está desativado no painel administrativo.' });
+    }
+    const result = await criarCargaPagSeguro({ get: () => 'http://localhost' }, {
+      valor,
+      numeroPedido: numeroPedido || `MIO-${Date.now()}`,
+      cliente,
+      itens: [],
+      metodo: 'pix'
+    });
+
+    if (result.error) return res.status(502).json({ ok: false, error: result.error });
+
+    const data = result.data || {};
+    const qrCodes = data.qr_codes || data.payment_response?.qr_codes || [];
+    const qr = qrCodes[0] || {};
+    const copiaECola = qr.text || qr.arrangement_information || data.copy_and_paste || '';
+    return res.json({
+      ok: true,
+      qrCodeText: qr.text || copiaECola,
+      copiaECola,
+      qrCodeImage: qr.image || `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(copiaECola || 'MIO_PIX')}`
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Erro interno ao gerar PIX: ' + error.message });
+  }
+});
+
+app.post('/api/pagamento/cartao', async (req, res) => {
+  const { valor, cliente, numeroPedido, cartao, itens, parcelas, encryptedCard } = req.body || {};
+  if (!valor || !cliente || !cartao) return res.status(400).json({ error: 'Valor, cliente e dados do cartão obrigatórios.' });
+
+  try {
+    const cfg = await buscarConfigPagSeguro();
+    if (!cfg.ativo) {
+      return res.status(403).json({ ok: false, error: 'Pagamento via PagSeguro está desativado no painel administrativo.' });
+    }
+    const validado = encryptedCard || cartao.encryptedCard || cartao.encrypted_card || cartao.encrypted;
+    if (!validado) {
+      return res.status(400).json({ ok: false, error: 'Cartão criptografado não informado. Use a SDK do PagSeguro no frontend.' });
+    }
+    const result = await criarCargaPagSeguro({ get: () => 'http://localhost' }, {
+      valor,
+      numeroPedido: numeroPedido || `MIO-${Date.now()}`,
+      cliente,
+      itens: itens || [],
+      metodo: 'cartao',
+      parcelas: parcelas || 1,
+      encryptedCard: validado,
+      cartaoNome: cartao.nome || cliente.nome
+    });
+
+    if (result.error) return res.status(502).json({ ok: false, error: result.error });
+
+    const data = result.data || {};
+    const statusFinal = String(data.status || '').toUpperCase();
+    const aprovado = statusFinal === 'PAID' || statusFinal === '3' || data.status === 3;
+    return res.json({ ok: true, aprovado, status: data.status, message: aprovado ? 'Pagamento aprovado!' : 'Pagamento pendente.' });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: 'Erro interno ao processar cartão: ' + error.message });
+  }
+});
+
 app.post('/api/pagamento/webhook', async (req, res) => {
   try {
     const body = req.body || {};
-    const referencia = body.reference_id || body.numero || '';
-    const status = (body.status || '').toUpperCase();
-    if (referencia && (status === 'PAID' || status.includes('PAID') || status === '3')) {
-      // Atualiza status do pedido para "Pago"
-      await db.run("UPDATE pedidos SET status = 'Pago' WHERE numero = ?", [referencia]);
+    const referencia = body.reference_id || body.numero || body.referenceId || body.order?.reference_id || '';
+    const status = (body.status || body.data?.status || '').toUpperCase();
+    const orderId = body.order_id || body.orderId || body.data?.id || '';
+    const pedido = referencia ? await findPedidoByReference(referencia) : null;
 
-      // Busca o pedido para enviar ao Upseller
-      const pedido = await db.get("SELECT * FROM pedidos WHERE numero = ?", [referencia]);
-      if (pedido) {
-        try {
-          const cfg = await getConfigChave('upseller_config', {});
-          if (cfg.token && cfg.storeId) {
-            const clienteJson = parseJsonArray(pedido.cliente, {});
-            const itensJson = parseJsonArray(pedido.itens, []);
-            const enderecoJson = parseJsonArray(pedido.endereco, {});
-            
-            const base = (cfg.url || 'https://api.upseller.com.br').replace(/\/$/, '');
-            await fetch(base + '/v1/orders', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.token },
-              body: JSON.stringify({
-                store_id: cfg.storeId,
-                order_number: pedido.numero,
-                customer: clienteJson,
-                products: itensJson.map(i => ({ sku: i.sku || i.nome, quantity: i.quantidade, price: i.preco })),
-                shipping_address: enderecoJson
-              })
-            }).catch(err => console.warn("Aviso: Não foi possível enviar ao Upseller via webhook", err));
+    if (pedido && (status === 'PAID' || status === '3')) {
+      await db.run("UPDATE pedidos SET status = 'PAGO' WHERE numero = ?", [pedido.numero]);
+      const envio = await enviarPedidoParaUpseller(pedido);
+      return res.json({ ok: true, pago: true, upseller: envio });
+    }
+
+    if (orderId) {
+      const cfg = await buscarConfigPagSeguro();
+      const base = getPagSeguroBase(cfg);
+      const orderRes = await fetch(base + '/orders/' + orderId, {
+        method: 'GET',
+        headers: getPagSeguroHeaders(cfg)
+      });
+      const data = await orderRes.json().catch(() => ({}));
+      if (orderRes.ok) {
+        const orderStatus = String(data.status || '').toUpperCase();
+        const reference = data.reference_id || data.referenceId || '';
+        const isPaid = orderStatus === 'PAID' || orderStatus === '3';
+        if (isPaid && reference) {
+          await db.run("UPDATE pedidos SET status = 'PAGO' WHERE numero = ?", [reference]);
+          const pedidoPago = await findPedidoByReference(reference);
+          if (pedidoPago) {
+            await enviarPedidoParaUpseller(pedidoPago);
           }
-        } catch (err) {
-          console.warn("Erro ao tentar enviar ao Upseller no webhook", err);
+          return res.json({ ok: true, pago: true, reference });
         }
       }
     }
-    res.json({ ok: true });
+
+    res.json({ ok: true, pago: false });
   } catch (err) {
-    res.status(500).json({ error: "Erro no webhook." });
+    res.status(500).json({ error: 'Erro no webhook.' });
+  }
+});
+
+app.post('/api/webhooks/pagseguro', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const orderId = body.order_id || body.orderId || body.data?.id || body.id || '';
+    if (!orderId) {
+      return res.status(400).json({ ok: false, error: 'order_id obrigatório para validação do webhook.' });
+    }
+
+    const cfg = await buscarConfigPagSeguro();
+    if (!cfg.ativo) {
+      return res.status(403).json({ ok: false, error: 'PagSeguro desativado no painel administrativo.' });
+    }
+
+    const base = getPagSeguroBase(cfg);
+    const orderRes = await fetch(base + '/orders/' + orderId, {
+      method: 'GET',
+      headers: getPagSeguroHeaders(cfg)
+    });
+    const data = await orderRes.json().catch(() => ({}));
+    if (!orderRes.ok) {
+      return res.status(502).json({ ok: false, error: data.message || 'Erro ao consultar PagSeguro.' });
+    }
+
+    const orderStatus = String(data.status || '').toUpperCase();
+    const reference = data.reference_id || data.referenceId || '';
+    const chargeStatus = String(data.charges?.[0]?.status || '').toUpperCase();
+    const pago = orderStatus === 'PAID' || chargeStatus === 'PAID' || orderStatus === '3';
+
+    if (pago && reference) {
+      await db.run("UPDATE pedidos SET status = 'PAGO' WHERE numero = ?", [reference]);
+      const pedidoPago = await findPedidoByReference(reference);
+      if (pedidoPago) await enviarPedidoParaUpseller(pedidoPago);
+      return res.json({ ok: true, pago: true, reference, status: 'PAGO' });
+    }
+
+    return res.json({ ok: true, pago: false, reference, status: orderStatus || chargeStatus || 'PENDING' });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: 'Erro no webhook PagSeguro: ' + error.message });
   }
 });
 
 // ---------- API: ENVIO (Melhor Envio) ----------
+app.post('/api/frete/calcular', async (req, res) => {
+  const { cepDestino, itens } = req.body || {};
+  if (!cepDestino) return res.status(400).json({ error: 'CEP de destino obrigatório.' });
+
+  try {
+    const cfg = await getConfigChave('melhorenvio_config', {});
+    const adminPerfil = await db.get('SELECT endereco FROM admin_conta WHERE id = 1').catch(() => null);
+    let cepOrigem = (cfg.cepOrigem || '').replace(/\D/g, '');
+    if (adminPerfil && adminPerfil.endereco) {
+      const end = parseJsonArray(adminPerfil.endereco, {});
+      const cepLoja = (end.cep || '').replace(/\D/g, '');
+      if (cepLoja.length === 8) cepOrigem = cepLoja;
+    }
+
+    if (!cfg.token || !cepOrigem) {
+      return res.json({
+        ok: true,
+        demo: true,
+        opcoes: [{ nome: 'PAC', preco: 14.90, prazo: '5 dias úteis' }, { nome: 'SEDEX', preco: 24.90, prazo: '2 dias úteis' }],
+        message: 'Melhor Envio não configurado. Usando valores de demonstração.'
+      });
+    }
+
+    const base = cfg.modo === 'produção' ? 'https://api.melhorenvio.com.br' : 'https://sandbox.melhorenvio.com.br';
+    const resApi = await fetch(base + '/api/v2/me/shipment/calculate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.token },
+      body: JSON.stringify({
+        from: { postal_code: cepOrigem },
+        to: { postal_code: String(cepDestino).replace(/\D/g, '') },
+        products: (itens || []).map(i => ({
+          id: i.id || '',
+          width: Number(i.width || 16),
+          height: Number(i.height || 4),
+          length: Number(i.length || 25),
+          weight: Number(i.weight || 0.3),
+          insurance_value: Number(i.preco || 0),
+          quantity: Number(i.quantidade || 1)
+        })),
+        options: { receipt: false, own_hand: false }
+      })
+    });
+    const data = await resApi.json().catch(() => ({}));
+    if (!resApi.ok) return res.status(502).json({ error: data.message || 'Erro ao calcular frete.' });
+    const opcoes = Array.isArray(data) ? data.map(o => ({
+      nome: o.name || o.company || 'Entrega',
+      preco: Number(o.price || 0),
+      prazo: `${o.delivery_time || 0} dia(s) útil(is)`
+    })) : [];
+    return res.json({ ok: true, opcoes, demo: false });
+  } catch (error) {
+    return res.status(500).json({ error: 'Erro ao calcular frete: ' + error.message });
+  }
+});
+
 app.post('/api/envio/calcular', async (req, res) => {
   const { cepDestino, itens } = req.body || {};
   if (!cepDestino) return res.status(400).json({ error: "CEP de destino obrigatório." });
@@ -1049,6 +1432,16 @@ app.post('/api/pedidos', async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: "Erro ao salvar pedido." });
+  }
+});
+
+app.get('/api/pedidos/:id/status', async (req, res) => {
+  try {
+    const pedido = await db.get('SELECT * FROM pedidos WHERE numero = ? OR id = ?', [req.params.id, Number(req.params.id)]);
+    if (!pedido) return res.status(404).json({ ok: false, error: 'Pedido não encontrado.' });
+    res.json({ ok: true, status: pedido.status || 'Aguardando Pagamento', numero: pedido.numero, total: pedido.total });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: 'Erro ao consultar status do pedido.' });
   }
 });
 

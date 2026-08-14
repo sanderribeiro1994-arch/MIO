@@ -243,12 +243,126 @@
     let metodoPagamento = 'pix';
     const FRETE_FIXO = 14.90;
     const META_FRETE_GRATIS = 249.00;
+    let pagSeguroConfig = { ativo: false, appKey: '', appId: '', modo: 'sandbox' };
+    let pagSeguroSessionId = '';
+    let pollingPix = null;
     // Frete cotado via Melhor Envio (ou fallback pela UF). Padrão: R$ 14,90
     let freteCotado = { valor: FRETE_FIXO, prazo: '5 dias úteis', origem: 'padrão' };
     let opcoesFrete = [];
     let pedidoCriado = null;
 
-    document.addEventListener('DOMContentLoaded', () => {
+    async function carregarConfiguracaoPagSeguro() {
+      try {
+        const res = await fetch('/api/pagseguro/public-config');
+        const data = await res.json();
+        if (data.ok) pagSeguroConfig = data;
+      } catch (err) {
+        console.warn('PagSeguro não carregado:', err);
+      }
+    }
+
+    function adicionarScriptPagSeguro() {
+      return new Promise((resolve, reject) => {
+        if (window.PagSeguro) return resolve(true);
+        const existing = document.querySelector('script[data-pagseguro-sdk="true"]');
+        if (existing) {
+          existing.addEventListener('load', () => resolve(true), { once: true });
+          existing.addEventListener('error', () => reject(new Error('Erro ao carregar SDK do PagSeguro.')), { once: true });
+          return;
+        }
+        const script = document.createElement('script');
+        script.src = 'https://assets.pagseguro.com.br/checkout-sdk-js/rc/dist/pagseguro.min.js';
+        script.async = true;
+        script.setAttribute('data-pagseguro-sdk', 'true');
+        script.onload = () => resolve(true);
+        script.onerror = () => reject(new Error('Erro ao carregar SDK do PagSeguro.'));
+        document.head.appendChild(script);
+      });
+    }
+
+    async function prepararPagSeguro() {
+      if (!pagSeguroConfig.ativo || !pagSeguroConfig.appKey) {
+        throw new Error('O PagSeguro está desativado no painel administrativo. Ative a integração para aceitar pagamentos.');
+      }
+      await adicionarScriptPagSeguro();
+      if (!pagSeguroSessionId) {
+        const res = await fetch('/api/pagseguro/session');
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || 'Não foi possível iniciar a sessão do PagSeguro.');
+        }
+        pagSeguroSessionId = data.sessionId;
+      }
+      if (window.PagSeguro && typeof window.PagSeguro.setSessionId === 'function') {
+        window.PagSeguro.setSessionId(pagSeguroSessionId);
+      }
+      if (window.PagSeguroDirectPayment && typeof window.PagSeguroDirectPayment.setSessionId === 'function') {
+        window.PagSeguroDirectPayment.setSessionId(pagSeguroSessionId);
+      }
+      return pagSeguroSessionId;
+    }
+
+    async function gerarEncryptedCard() {
+      const numero = document.getElementById('cartaoNumero').value.replace(/\D/g, '');
+      const cvv = document.getElementById('cartaoCvv').value.trim();
+      const validade = document.getElementById('cartaoValidade').value.trim();
+      const nome = document.getElementById('cartaoNome').value.trim();
+      if (!numero || !cvv || !validade || !nome) {
+        throw new Error('Preencha todos os dados do cartão para continuar.');
+      }
+      await prepararPagSeguro();
+      const match = validade.match(/(\d{2})\/(\d{2,4})/);
+      if (!match) throw new Error('Validade do cartão inválida.');
+      const month = match[1];
+      const year = match[2].length === 2 ? '20' + match[2] : match[2];
+      const brand = await new Promise((resolve, reject) => {
+        if (window.PagSeguroDirectPayment && typeof window.PagSeguroDirectPayment.getBrand === 'function') {
+          window.PagSeguroDirectPayment.getBrand({
+            cardBin: numero.substring(0, 6),
+            success: (res) => resolve((res.brand && res.brand.name) || ''),
+            error: () => reject(new Error('Não foi possível identificar a bandeira do cartão.'))
+          });
+          return;
+        }
+        resolve('');
+      });
+      if (window.PagSeguro && typeof window.PagSeguro.encryptCard === 'function') {
+        return new Promise((resolve, reject) => {
+          window.PagSeguro.encryptCard({
+            cardNumber: numero,
+            brand,
+            cvv,
+            expirationMonth: month,
+            expirationYear: year,
+            success: (res) => resolve(res.encryptedCard || res.encrypted || res.cardToken || res.token),
+            error: (err) => reject(new Error((err && err.message) || 'Erro ao criptografar os dados do cartão.'))
+          });
+        });
+      }
+      throw new Error('A SDK do PagSeguro não está disponível para criptografar o cartão.');
+    }
+
+    function iniciarPollingPedido(numeroPedido) {
+      if (pollingPix) clearInterval(pollingPix);
+      pollingPix = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/pedidos/${encodeURIComponent(numeroPedido)}/status`);
+          const data = await res.json().catch(() => ({}));
+          const status = String(data.status || '').toUpperCase();
+          if (status === 'PAGO' || status === 'PAID') {
+            clearInterval(pollingPix);
+            pollingPix = null;
+            window.location.href = `perfil.html?tab=acompanhar&pedido=${encodeURIComponent(numeroPedido)}`;
+          }
+        } catch (err) {
+          console.warn('Polling do PIX falhou:', err);
+        }
+      }, 3000);
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      await carregarConfiguracaoPagSeguro();
+      selecionarMetodo('pix');
       carregarItensCheckout();
       preencherDadosUsuarioLogado();
     });
@@ -371,14 +485,14 @@
       CE: { valor: 29.90, prazo: '7 a 11 dias úteis' }, PE: { valor: 27.50, prazo: '6 a 10 dias úteis' }
     };
 
-    // Cotação de frete via Melhor Envio (POST /api/envio/calcular) com fallback por UF
+    // Cotação de frete via Melhor Envio (POST /api/frete/calcular) com fallback por UF
     async function cotarFrete(cepDestino) {
       const itens = JSON.parse(localStorage.getItem('mio_sacola_itens') || '[]');
       const cepLimpo = (cepDestino || '').replace(/\D/g, '');
       if (cepLimpo.length !== 8) return;
 
       try {
-        const res = await fetch('/api/envio/calcular', {
+        const res = await fetch('/api/frete/calcular', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ cepDestino: cepLimpo, itens })
@@ -442,7 +556,7 @@
       const cepLimpo = cepInput.replace(/\D/g, '');
       const itens = JSON.parse(localStorage.getItem('mio_sacola_itens') || '[]');
       try {
-        const res = await fetch('/api/envio/calcular', {
+        const res = await fetch('/api/frete/calcular', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ cepDestino: cepLimpo, itens })
@@ -571,13 +685,19 @@
 
       const sacola = JSON.parse(localStorage.getItem('mio_sacola_itens') || '[]');
       if (sacola.length === 0) {
-        alert("Sua sacola está vazia!");
+        alert('Sua sacola está vazia!');
+        return;
+      }
+
+      await carregarConfiguracaoPagSeguro();
+      if (!pagSeguroConfig.ativo) {
+        alert('O PagSeguro está desativado no painel administrativo. Ative a integração para concluir o checkout.');
         return;
       }
 
       const numeroPedido = `MIO-${Math.floor(100000 + Math.random() * 900000)}`;
       const totais = calcularTotaisCheckout();
-
+      const cupom = JSON.parse(localStorage.getItem('mio_cupom_ativo') || 'null');
       const pedidoMio = {
         numero: numeroPedido,
         data: new Date().toISOString(),
@@ -597,147 +717,143 @@
           uf: document.getElementById('endUf').value
         },
         itens: sacola,
-        cupom: JSON.parse(localStorage.getItem('mio_cupom_ativo') || 'null'),
+        cupom,
         metodo: metodoPagamento,
-        status: "Aguardando Pagamento",
+        status: 'Aguardando Pagamento',
         frete: totais.frete,
         desconto: totais.desconto,
-        total: totais.total
+        total: totais.total,
+        numeroPedido
       };
 
-      // Salva o pedido no backend (POST /api/pedidos)
-      try {
-        const resPedido = await fetch('/api/pedidos', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(pedidoMio)
-        });
-        if (!resPedido.ok) console.warn("Falha ao salvar pedido no servidor.");
-      } catch (err) {
-        console.error("Erro ao salvar pedido", err);
-      }
-
-      // Persiste o pedido localmente para a tela de acompanhamento
-      pedidoMio.numeroPedido = numeroPedido;
-      pedidoMio.enderecoEntrega = pedidoMio.endereco;
       localStorage.setItem('mio_ultimo_pedido', JSON.stringify(pedidoMio));
 
       if (metodoPagamento === 'pix') {
-        // Gera PIX real via backend PagSeguro (POST /api/pagamento/pix)
         try {
-          const resPix = await fetch('/api/pagamento/pix', {
+          const res = await fetch('/api/checkout', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              valor: totais.total,
+              metodoPagamento: 'pix',
+              numeroPedido,
+              total: totais.total,
               cliente: pedidoMio.cliente,
-              numeroPedido
+              endereco: pedidoMio.endereco,
+              itens: sacola,
+              cupom,
+              frete: totais.frete,
+              desconto: totais.desconto,
+              data: pedidoMio.data
             })
           });
-          const data = await resPix.json();
+          const data = await res.json();
+          if (!res.ok || !data.ok) {
+            alert(data.error || 'Não foi possível gerar o PIX no PagSeguro.');
+            return;
+          }
 
-          const codigoPix = data.copiaECola || data.qrCodeText || codigoPixAtual;
-          codigoPixAtual = codigoPix;
+          codigoPixAtual = data.copiaECola || data.qrCodeText || `MIO_PIX_${numeroPedido}`;
+          document.getElementById('boxResultadoPix').classList.remove('hidden');
+          document.getElementById('qrCodePixImg').src = data.qrCodeImage || `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(codigoPixAtual)}`;
 
-          document.getElementById('boxResultadoPix').classList.remove('hidden');
-          document.getElementById('qrCodePixImg').src =
-            `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(codigoPix)}`;
-        } catch (pixErr) {
-          console.error("Erro ao gerar PIX", pixErr);
-          codigoPixAtual = `MIO_PIX_${numeroPedido}`;
-          document.getElementById('boxResultadoPix').classList.remove('hidden');
-          document.getElementById('qrCodePixImg').src =
-            `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(codigoPixAtual)}`;
+          iniciarPollingPedido(numeroPedido);
+          alert(`🔥 Pedido ${numeroPedido} gerado! Faça o pagamento no QR Code.`);
+        } catch (err) {
+          console.error('Erro ao gerar PIX', err);
+          alert('Não foi possível gerar o QR Code PIX no momento. Tente novamente.');
         }
-        alert(`🔥 Pedido ${numeroPedido} gerado! Faça o pagamento no QR Code.`);
-} else {
-        // Cartão: cobrança REAL via PagSeguro (POST /api/pagamento/cartao)
-        const msgCartao = document.getElementById('msgCartao');
-        const numero = document.getElementById('cartaoNumero').value.trim();
-        const nome = document.getElementById('cartaoNome').value.trim();
-        const validade = document.getElementById('cartaoValidade').value.trim();
-        const cvv = document.getElementById('cartaoCvv').value.trim();
-        const parcelas = document.getElementById('cartaoParcelas').value;
+        return;
+      }
 
-        if (!numero || !nome || !validade || !cvv) {
-          msgCartao.innerText = 'Preencha todos os dados do cartão.';
+      const msgCartao = document.getElementById('msgCartao');
+      const parcelas = document.getElementById('cartaoParcelas').value;
+      const total = Number(totais.total);
+      if (total < 30 && Number(parcelas) > 1) {
+        msgCartao.innerText = 'Para valores abaixo de R$ 30,00, o máximo permitido é 1x.';
+        msgCartao.className = 'text-[11px] font-mono pt-1 text-red-400';
+        msgCartao.classList.remove('hidden');
+        return;
+      }
+      if (total >= 30 && total < 60 && Number(parcelas) > 2) {
+        msgCartao.innerText = 'Para valores entre R$ 30,00 e R$ 59,99, o máximo permitido é 2x.';
+        msgCartao.className = 'text-[11px] font-mono pt-1 text-red-400';
+        msgCartao.classList.remove('hidden');
+        return;
+      }
+      if (total >= 60 && total < 90 && Number(parcelas) > 3) {
+        msgCartao.innerText = 'Para valores entre R$ 60,00 e R$ 89,99, o máximo permitido é 3x.';
+        msgCartao.className = 'text-[11px] font-mono pt-1 text-red-400';
+        msgCartao.classList.remove('hidden');
+        return;
+      }
+      if (total >= 90 && Number(parcelas) > 4) {
+        msgCartao.innerText = 'Para valores a partir de R$ 90,00, o máximo permitido é 4x.';
+        msgCartao.className = 'text-[11px] font-mono pt-1 text-red-400';
+        msgCartao.classList.remove('hidden');
+        return;
+      }
+
+      msgCartao.innerText = 'Criptografando cartão e processando pagamento...';
+      msgCartao.className = 'text-[11px] font-mono pt-1 text-amber-400';
+      msgCartao.classList.remove('hidden');
+
+      try {
+        const encryptedCard = await gerarEncryptedCard();
+        const res = await fetch('/api/checkout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            metodoPagamento: 'cartao',
+            numeroPedido,
+            total: totais.total,
+            cliente: pedidoMio.cliente,
+            endereco: pedidoMio.endereco,
+            itens: sacola,
+            cupom,
+            frete: totais.frete,
+            desconto: totais.desconto,
+            data: pedidoMio.data,
+            pagamento: {
+              encryptedCard,
+              parcelas: Number(parcelas),
+              cartaoNome: document.getElementById('cartaoNome').value.trim()
+            }
+          })
+        });
+        const data = await res.json();
+
+        if (!res.ok || !data.ok) {
+          msgCartao.innerText = '❌ ' + (data.error || data.mensagem || 'Pagamento recusado. Verifique os dados do cartão.');
           msgCartao.className = 'text-[11px] font-mono pt-1 text-red-400';
           msgCartao.classList.remove('hidden');
           return;
         }
-        msgCartao.innerText = 'Processando pagamento...';
+
+        if (data.aprovado || data.status === 'PAGO') {
+          msgCartao.innerText = '✅ ' + (data.mensagem || 'Pagamento aprovado!');
+          msgCartao.className = 'text-[11px] font-mono pt-1 text-emerald-400';
+          msgCartao.classList.remove('hidden');
+          localStorage.removeItem('mio_sacola_itens');
+          localStorage.removeItem('mio_cupom_ativo');
+          alert(`✅ Pedido ${numeroPedido} aprovado! Enviaremos a confirmação por e-mail.`);
+          window.location.href = `perfil.html?tab=acompanhar&pedido=${encodeURIComponent(numeroPedido)}`;
+          return;
+        }
+
+        msgCartao.innerText = '⚠️ ' + (data.mensagem || 'Pagamento pendente. Tente novamente.');
         msgCartao.className = 'text-[11px] font-mono pt-1 text-amber-400';
         msgCartao.classList.remove('hidden');
-
-        try {
-          const resCartao = await fetch('/api/pagamento/cartao', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              valor: totais.total,
-              cliente: pedidoMio.cliente,
-              numeroPedido,
-              parcelas,
-              itens: sacola,
-              cartao: { numero, nome, validade, cvv }
-            })
-          });
-          const data = await resCartao.json();
-
-          if (!resCartao.ok || !data.ok) {
-            msgCartao.innerText = '❌ ' + (data.error || data.mensagem || 'Pagamento recusado. Verifique os dados do cartão.');
-            msgCartao.className = 'text-[11px] font-mono pt-1 text-red-400';
-            msgCartao.classList.remove('hidden');
-            return;
-          }
-
-          if (data.aprovado) {
-            // Atualiza o status do pedido para "Pago"
-            try {
-              await fetch('/api/pedidos/atualizar-status', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ numero: numeroPedido, status: 'Pago' })
-              });
-            } catch (e) {}
-
-            // Envia o pedido ao Upseller para expedição
-            try {
-              const resUpseller = await fetch('/api/upseller/pedido', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(pedidoMio)
-              });
-              const dataUpseller = await resUpseller.json();
-              console.log("Pedido enviado ao Upseller:", dataUpseller);
-            } catch (err) {
-              console.warn("Aviso: Pedido não foi enviado ao Upseller automaticamente. Verifique a configuração.", err);
-            }
-
-            msgCartao.innerText = '✅ ' + (data.mensagem || 'Pagamento aprovado!');
-            msgCartao.className = 'text-[11px] font-mono pt-1 text-emerald-400';
-            msgCartao.classList.remove('hidden');
-            alert(`✅ Pedido ${numeroPedido} aprovado! Enviaremos a confirmação por e-mail.`);
-            localStorage.removeItem('mio_sacola_itens');
-            localStorage.removeItem('mio_cupom_ativo');
-            window.location.href = 'index.html';
-          } else {
-            msgCartao.innerText = '⚠️ ' + (data.mensagem || 'Pagamento pendente. Tente novamente.');
-            msgCartao.className = 'text-[11px] font-mono pt-1 text-amber-400';
-            msgCartao.classList.remove('hidden');
-          }
-        } catch (err) {
-          console.error('Erro ao processar cartão', err);
-          msgCartao.innerText = '❌ Não foi possível processar o pagamento. Tente novamente.';
-          msgCartao.className = 'text-[11px] font-mono pt-1 text-red-400';
-          msgCartao.classList.remove('hidden');
-        }
+      } catch (err) {
+        console.error('Erro ao processar cartão', err);
+        msgCartao.innerText = '❌ ' + (err.message || 'Não foi possível processar o pagamento. Tente novamente.');
+        msgCartao.className = 'text-[11px] font-mono pt-1 text-red-400';
+        msgCartao.classList.remove('hidden');
       }
     }
 
     function copiarPix() {
-      navigator.clipboard.writeText(codigoPixAtual || "00020126360014BR.GOV.BCB.PIX0114mio@exemplo.com520400005303986540574.705802BR5903MIO6009SAO PAULO62070503***6304E2CA");
-      alert("Código Copia e Cola do PIX copiado!");
+      navigator.clipboard.writeText(codigoPixAtual || '00020126360014BR.GOV.BCB.PIX0114mio@exemplo.com520400005303986540574.705802BR5903MIO6009SAO PAULO62070503***6304E2CA');
+      alert('Código Copia e Cola do PIX copiado!');
     }
   </script>
 </body>
