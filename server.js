@@ -1105,42 +1105,57 @@ app.post('/api/webhooks/pagseguro', async (req, res) => {
 });
 
 // Helper: Formata e filtra opções de frete
+function extrairListaDeOpcoesFrete(data) {
+  if (!data) return [];
+  if (Array.isArray(data)) return data;
+
+  const chavesPossiveis = ['data', 'result', 'options', 'shipments', 'quotes', 'services', 'items', 'fretes'];
+  for (const chave of chavesPossiveis) {
+    if (Array.isArray(data[chave])) return data[chave];
+  }
+
+  if (data && typeof data === 'object') {
+    const valores = Object.values(data);
+    const arrayEncontrado = valores.find(v => Array.isArray(v));
+    if (arrayEncontrado) return arrayEncontrado;
+  }
+
+  return [];
+}
+
 function formatarOpcoesFrete(data) {
-  if (!Array.isArray(data)) return [];
-  
-  return data
+  const lista = extrairListaDeOpcoesFrete(data);
+
+  return lista
     .filter(o => {
-      // Remove opções com erro
-      if (o.error) return false;
-      // Remove Mini Envios
-      if ((o.name || '').toLowerCase().includes('mini envio')) return false;
-      // Remove opções com preço zerado ou inválido
-      if (!o.price || Number(o.price) <= 0) return false;
+      if (!o || o.error) return false;
+      const nome = String(o.name || o.nome || o.service || o.title || o.company || '').toLowerCase();
+      if (nome.includes('mini envio')) return false;
+
+      const preco = Number(o.price ?? o.preco ?? o.amount ?? o.value ?? o.total ?? 0);
+      if (!Number.isFinite(preco) || preco <= 0) return false;
       return true;
     })
     .map(o => {
-      // Combina nome da empresa + serviço para exibição melhor
-      const nomeEmpresa = (o.company || '').trim();
-      const nomeServico = (o.name || '').trim();
-      let nomeFinal = nomeEmpresa;
-      
-      // Se houver nome de serviço diferente da empresa, combina
-      if (nomeServico && !nomeServico.toLowerCase().startsWith(nomeEmpresa.toLowerCase())) {
-        nomeFinal = `${nomeEmpresa} ${nomeServico}`.trim();
-      } else if (!nomeEmpresa && nomeServico) {
-        nomeFinal = nomeServico;
-      }
-      
-      // Formata prazo: converte "8" em "8 dias úteis" (singular/plural)
-      const tempoEntrega = Number(o.delivery_time || 0);
-      let prazoFinal = '5 dias úteis'; // padrão
-      if (tempoEntrega > 0) {
+      const nomeEmpresa = String(o.company || o.transportadora || o.courier || '').trim();
+      const nomeServico = String(o.name || o.nome || o.service || o.title || '').trim();
+      const nomeFinal = nomeServico
+        ? (nomeEmpresa && !nomeServico.toLowerCase().startsWith(nomeEmpresa.toLowerCase()) ? `${nomeEmpresa} ${nomeServico}` : nomeServico)
+        : nomeEmpresa || 'Entrega Padrão';
+
+      const tempoEntrega = Number(o.delivery_time ?? o.prazo ?? o.deliveryTime ?? o.days ?? 0);
+      let prazoFinal = '5 dias úteis';
+      if (Number.isFinite(tempoEntrega) && tempoEntrega > 0) {
         prazoFinal = tempoEntrega === 1 ? '1 dia útil' : `${tempoEntrega} dias úteis`;
+      } else if (typeof o.prazo === 'string' && o.prazo.trim()) {
+        prazoFinal = o.prazo.trim();
       }
-      
+
+      const precoFinal = Number(o.price ?? o.preco ?? o.amount ?? o.value ?? o.total ?? 0);
+
       return {
         nome: nomeFinal || 'Entrega Padrão',
-        preco: Number(o.price || 0),
+        preco: Number(precoFinal || 0),
         prazo: prazoFinal
       };
     });
