@@ -258,7 +258,11 @@ CREATE TABLE IF NOT EXISTS admin_conta (
     ['codigo_rastreamento', 'TEXT'],
     ['url_rastreamento', 'TEXT'],
     ['data_envio', 'TEXT'],
-    ['data_entrega', 'TEXT']
+    ['data_entrega', 'TEXT'],
+    ['upseller_id', 'TEXT'],
+    ['upseller_tracking', 'TEXT'],
+    ['upseller_status', 'TEXT'],
+    ['data_upseller_sync', 'TEXT']
   ];
   for (const [nome, tipo] of camposPedido) {
     if (!nomesPedidos.has(nome)) {
@@ -492,6 +496,14 @@ async function enviarPedidoParaUpseller(pedido) {
     });
     const data = await resApi.json().catch(() => ({}));
     if (!resApi.ok) throw new Error(data.message || 'Falha ao enviar pedido ao Upseller');
+    
+    // Salvar upseller_id no banco para sincronização futura
+    const upId = data.id || data.order_id || data.numero_pedido;
+    if (upId) {
+      await db.run('UPDATE pedidos SET upseller_id = ?, data_upseller_sync = ? WHERE numero = ?', 
+        [upId, new Date().toISOString(), pedido.numero]).catch(() => {});
+    }
+    
     return { ok: true, data };
   } catch (error) {
     console.warn('Aviso: não foi possível enviar ao Upseller', error);
@@ -1418,6 +1430,85 @@ app.post('/api/upseller/reenviar/:numeroPedido', exigirAdmin, async (req, res) =
   }
 });
 
+// ---------- WEBHOOK: RECEBER ATUALIZAÇÕES DO UPSELLER ----------
+app.post('/api/webhooks/upseller', async (req, res) => {
+  try {
+    const { order_number, tracking_number, status, shipped_date } = req.body || {};
+    
+    if (!order_number) {
+      return res.status(400).json({ ok: false, error: "order_number obrigatório" });
+    }
+
+    const pedido = await db.get('SELECT * FROM pedidos WHERE numero = ?', [order_number]);
+    if (!pedido) {
+      return res.status(404).json({ ok: false, error: "Pedido não encontrado" });
+    }
+
+    // Mapear status do Upseller para status MIO
+    const statusMap = {
+      'pending': 'Em Preparação',
+      'processing': 'Em Preparação',
+      'shipped': 'Enviado',
+      'delivered': 'Entregue',
+      'cancelled': 'Cancelado'
+    };
+
+    const statusMio = statusMap[status?.toLowerCase()] || status || 'Enviado';
+    
+    // Atualizar pedido com informações do Upseller
+    const dataAtualizacao = new Date().toISOString();
+    await db.run(
+      `UPDATE pedidos SET 
+        upseller_tracking = ?, 
+        upseller_status = ?, 
+        data_upseller_sync = ?, 
+        status = ?,
+        data_envio = ?
+      WHERE numero = ?`,
+      [tracking_number || null, status, dataAtualizacao, statusMio, shipped_date || null, order_number]
+    );
+
+    // Se tem código de rastreamento e não tem código salvo, salvar
+    if (tracking_number && !pedido.codigo_rastreamento) {
+      await db.run('UPDATE pedidos SET codigo_rastreamento = ? WHERE numero = ?', [tracking_number, order_number]);
+    }
+
+    res.json({ ok: true, message: "Webhook recebido e processado" });
+  } catch (err) {
+    console.error('Erro ao processar webhook Upseller:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ---------- API: LISTAR EXPEDIÇÕES NO UPSELLER ----------
+app.get('/api/upseller/expeditions', exigirAdmin, async (req, res) => {
+  try {
+    const pedidos = await db.all(
+      'SELECT numero, cliente, itens, status, total, codigo_rastreamento, upseller_tracking, upseller_status, data_envio FROM pedidos WHERE status IN (?, ?) ORDER BY data DESC',
+      ['Em Preparação', 'Enviado']
+    );
+
+    const expeditions = pedidos.map(p => {
+      const cli = parseJsonArray(p.cliente, {});
+      return {
+        numero: p.numero,
+        cliente_nome: cli.nome || 'N/A',
+        cliente_email: cli.email || 'N/A',
+        status_mio: p.status,
+        status_upseller: p.upseller_status,
+        tracking_mio: p.codigo_rastreamento,
+        tracking_upseller: p.upseller_tracking,
+        data_envio: p.data_envio,
+        total: p.total
+      };
+    });
+
+    res.json({ ok: true, expeditions });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ---------- API: AUTENTICAÇÃO ADMIN ----------
 app.post('/api/admin/login', loginLimiter, async (req, res) => {
   const { email, senha } = req.body || {};
@@ -1620,6 +1711,9 @@ app.post('/api/pedidos/atualizar-status', async (req, res) => {
 app.put('/api/pedidos/:id', exigirAdmin, async (req, res) => {
   const { status, codigo_rastreamento, url_rastreamento, data_envio, data_entrega } = req.body;
   try {
+    const pedido = await db.get('SELECT * FROM pedidos WHERE id = ?', [req.params.id]);
+    if (!pedido) return res.status(404).json({ error: "Pedido não encontrado." });
+
     let campos = [];
     let valores = [];
     if (status !== undefined) { campos.push('status = ?'); valores.push(status); }
@@ -1634,7 +1728,19 @@ app.put('/api/pedidos/:id', exigirAdmin, async (req, res) => {
     
     valores.push(req.params.id);
     await db.run(`UPDATE pedidos SET ${campos.join(', ')} WHERE id = ?`, valores);
-    res.json({ ok: true });
+    
+    // Se mudou para "Em Preparação" e ainda não foi enviado ao Upseller, enviar
+    if (status === 'Em Preparação' && !pedido.upseller_id) {
+      const pedidoAtualizado = await db.get('SELECT * FROM pedidos WHERE id = ?', [req.params.id]);
+      const result = await enviarPedidoParaUpseller(pedidoAtualizado);
+      if (result.ok) {
+        res.json({ ok: true, upseller: "Pedido enviado para expedição" });
+      } else {
+        res.json({ ok: true, aviso: "Pedido atualizado, mas não foi enviado ao Upseller: " + result.motivo });
+      }
+    } else {
+      res.json({ ok: true });
+    }
   } catch (err) {
     res.status(500).json({ error: "Erro ao atualizar pedido." });
   }
