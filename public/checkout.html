@@ -397,7 +397,10 @@
 // Ao ir para a etapa 3 (pagamento), dispara a cotação de frete em segundo plano
       if (proximaEtapa === 3 && (etapaAtual === 2 || etapaAtual === 1)) {
         const cep = document.getElementById('endCep').value;
-        cotarFrete(cep).then(() => carregarItensCheckout());
+        cotarFrete(cep).then(() => {
+          renderizarOpcoesFrete();
+          carregarItensCheckout();
+        });
       }
 
       // Oculta todas
@@ -495,6 +498,28 @@
       CE: { valor: 29.90, prazo: '7 a 11 dias úteis' }, PE: { valor: 27.50, prazo: '6 a 10 dias úteis' }
     };
 
+    function normalizarOpcoesFrete(opcoes) {
+      if (!Array.isArray(opcoes)) return [];
+
+      return opcoes
+        .map((op) => {
+          const nome = String(op?.nome || op?.name || op?.company || 'Entrega Padrão').trim();
+          const preco = Number(op?.preco ?? op?.price ?? 0);
+          const prazoValor = op?.prazo || op?.delivery_time;
+          let prazo = '5 dias úteis';
+
+          if (typeof prazoValor === 'number') {
+            prazo = prazoValor === 1 ? '1 dia útil' : `${prazoValor} dias úteis`;
+          } else if (typeof prazoValor === 'string' && prazoValor.trim()) {
+            prazo = prazoValor.trim();
+          }
+
+          if (!Number.isFinite(preco) || preco <= 0) return null;
+          return { nome, preco, prazo };
+        })
+        .filter(Boolean);
+    }
+
     // Cotação de frete via Melhor Envio (POST /api/frete/calcular) com fallback por UF
     async function cotarFrete(cepDestino) {
       const itens = JSON.parse(localStorage.getItem('mio_sacola_itens') || '[]');
@@ -508,12 +533,13 @@
           body: JSON.stringify({ cepDestino: cepLimpo, itens })
         });
         const data = await res.json();
+        const opcoesNormalizadas = normalizarOpcoesFrete(data?.opcoes);
 
-        if (data.ok && data.opcoes && data.opcoes.length > 0) {
-          opcoesFrete = data.opcoes;
-          // Seleciona a opção mais barata por padrão
-          const maisBarato = data.opcoes.reduce((a, b) => (a.preco < b.preco ? a : b));
+        if (data?.ok && opcoesNormalizadas.length > 0) {
+          opcoesFrete = opcoesNormalizadas;
+          const maisBarato = opcoesNormalizadas.reduce((a, b) => (a.preco < b.preco ? a : b));
           freteCotado = { valor: maisBarato.preco, prazo: maisBarato.prazo, origem: data.demo ? 'demo' : 'melhorenvio' };
+          renderizarOpcoesFrete();
           return freteCotado;
         }
 
@@ -522,10 +548,14 @@
         const uf = (viaCep.uf || '').toUpperCase();
         const regiao = TABELA_FRETE_UF[uf] || { valor: FRETE_FIXO, prazo: '5 a 10 dias úteis' };
         freteCotado = { valor: regiao.valor, prazo: regiao.prazo, origem: 'fallback' };
+        opcoesFrete = [{ nome: 'Entrega Padrão', preco: regiao.valor, prazo: regiao.prazo }];
+        renderizarOpcoesFrete();
         return freteCotado;
       } catch (err) {
         console.error('Erro ao cotar frete', err);
         freteCotado = { valor: FRETE_FIXO, prazo: '5 dias úteis', origem: 'padrão' };
+        opcoesFrete = [{ nome: 'Entrega Padrão', preco: FRETE_FIXO, prazo: '5 dias úteis' }];
+        renderizarOpcoesFrete();
         return freteCotado;
       }
     }
@@ -587,10 +617,11 @@
           body: JSON.stringify({ cepDestino: cepLimpo, itens })
         });
         const data = await res.json();
+        const opcoesNormalizadas = normalizarOpcoesFrete(data?.opcoes);
 
-        if (data.ok && data.opcoes && data.opcoes.length > 0) {
-          opcoesFrete = data.opcoes;
-          const maisBarato = data.opcoes.reduce((a, b) => (a.preco < b.preco ? a : b));
+        if (data?.ok && opcoesNormalizadas.length > 0) {
+          opcoesFrete = opcoesNormalizadas;
+          const maisBarato = opcoesNormalizadas.reduce((a, b) => (a.preco < b.preco ? a : b));
           freteCotado = { valor: maisBarato.preco, prazo: maisBarato.prazo, origem: data.demo ? 'demo' : 'melhorenvio' };
           msg.innerText = data.message || 'Selecione uma opção de entrega:';
           msg.className = 'text-[11px] font-mono mt-2 text-emerald-400';
