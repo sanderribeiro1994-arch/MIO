@@ -905,11 +905,35 @@
       const status = ultimoPedido.status || 'Aguardando Pagamento';
       const passos = ['Aguardando Pagamento', 'Pago', 'Em Separação', 'Enviado', 'Entregue'];
       const idxAtual = Math.max(0, passos.indexOf(status));
+      
+      const freteSelecionado = ultimoPedido.freteSelecionado || {};
+      const temRastreamento = ultimoPedido.codigo_rastreamento ? true : false;
+
+      let rastreamentoHTML = '';
+      if (temRastreamento) {
+        rastreamentoHTML = `
+          <div class="bg-emerald-950/30 border border-emerald-900/50 rounded-lg p-3 mt-3">
+            <p class="text-[9px] font-mono uppercase text-emerald-500 mb-2">✅ Código de Rastreamento</p>
+            <p class="text-sm font-bold text-emerald-400 font-mono mb-2">${ultimoPedido.codigo_rastreamento}</p>
+            ${ultimoPedido.url_rastreamento ? `<a href="${ultimoPedido.url_rastreamento}" target="_blank" class="text-xs text-emerald-400 hover:text-emerald-300 underline">📍 Rastrear Agora →</a>` : ''}
+          </div>
+        `;
+      } else if (status === 'Enviado' || status === 'Entregue') {
+        rastreamentoHTML = `
+          <div class="bg-amber-950/30 border border-amber-900/50 rounded-lg p-3 mt-3">
+            <p class="text-[9px] font-mono uppercase text-amber-500 mb-1">⏳ Rastreamento Pendente</p>
+            <p class="text-xs text-amber-400">Código será atualizado em breve pela loja.</p>
+          </div>
+        `;
+      }
 
       container.innerHTML = `
-        <div class="bg-zinc-950 border border-zinc-800 rounded-lg p-4">
-          <p class="text-xs font-black text-white font-mono mb-1">Pedido ${ultimoPedido.numeroPedido || ultimoPedido.numero}</p>
-          <p class="text-[11px] text-zinc-500 font-mono mb-3">Status: <span class="text-amber-400 font-bold">${status}</span></p>
+        <div class="bg-zinc-950 border border-zinc-800 rounded-lg p-4 space-y-3">
+          <div>
+            <p class="text-xs font-black text-white font-mono mb-1">Pedido ${ultimoPedido.numeroPedido || ultimoPedido.numero}</p>
+            <p class="text-[11px] text-zinc-500 font-mono">Status: <span class="text-amber-400 font-bold">${status}</span></p>
+          </div>
+
           <div class="flex items-center gap-1">
             ${passos.map((p, i) => `
               <div class="flex-1 flex flex-col items-center gap-1">
@@ -917,6 +941,14 @@
                 <span class="text-[9px] font-mono ${i <= idxAtual ? 'text-amber-400' : 'text-zinc-600'} text-center">${p}</span>
               </div>
             `).join('')}
+          </div>
+
+          ${rastreamentoHTML}
+
+          <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-3 mt-3">
+            <p class="text-[9px] font-mono uppercase text-zinc-500 mb-2">📦 Modalidade de Entrega</p>
+            <p class="text-sm font-bold text-amber-400">${freteSelecionado.modalidade || 'Padrão'}</p>
+            <p class="text-[10px] text-zinc-400">Prazo: ${freteSelecionado.prazo || '5 a 10 dias úteis'}</p>
           </div>
         </div>
       `;

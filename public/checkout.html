@@ -248,6 +248,7 @@
     let pollingPix = null;
     // Frete cotado via Melhor Envio (ou fallback pela UF). Padrão: R$ 14,90
     let freteCotado = { valor: FRETE_FIXO, prazo: '5 dias úteis', origem: 'padrão' };
+    let freteSelecionado = { modalidade: 'Entrega Padrão', codigo: 'padrao', nome: 'Entrega Padrão', valor: FRETE_FIXO, prazo: '5 dias úteis', origem: 'padrão' };
     let opcoesFrete = [];
     let pedidoCriado = null;
 
@@ -658,6 +659,14 @@
     function selecionarFrete(idx) {
       const opcao = opcoesFrete[idx];
       if (!opcao) return;
+      freteSelecionado = {
+        modalidade: opcao.nome || 'Entrega Padrão',
+        codigo: (opcao.nome || 'Entrega Padrão').toLowerCase().replace(/\s+/g, '-'),
+        nome: opcao.nome || 'Entrega Padrão',
+        valor: Number(opcao.preco),
+        prazo: opcao.prazo || '5 dias úteis',
+        origem: 'selecionado'
+      };
       freteCotado = { valor: Number(opcao.preco), prazo: opcao.prazo, origem: 'selecionado' };
       carregarItensCheckout();
     }
@@ -789,6 +798,11 @@
         frete: totais.frete,
         desconto: totais.desconto,
         total: totais.total,
+        freteSelecionado: {
+          ...freteSelecionado,
+          valor: Number(freteSelecionado.valor || 0),
+          modalidade: freteSelecionado.modalidade || freteSelecionado.nome || 'Entrega Padrão'
+        },
         numeroPedido
       };
 
@@ -809,6 +823,7 @@
               cupom,
               frete: totais.frete,
               desconto: totais.desconto,
+              freteSelecionado: pedidoMio.freteSelecionado,
               data: pedidoMio.data
             })
           });
@@ -878,6 +893,7 @@
             cupom,
             frete: totais.frete,
             desconto: totais.desconto,
+            freteSelecionado: pedidoMio.freteSelecionado,
             data: pedidoMio.data,
             pagamento: {
               encryptedCard,

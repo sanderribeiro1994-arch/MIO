@@ -155,7 +155,13 @@ let db;
       cupom TEXT,
       metodo TEXT,
       status TEXT,
-      total REAL
+      total REAL,
+      frete_modalidade TEXT,
+      frete_codigo TEXT,
+      frete_valor REAL,
+      frete_prazo TEXT,
+      frete_origem TEXT,
+      frete_detalhes TEXT
     );
 
 CREATE TABLE IF NOT EXISTS clientes (
@@ -238,6 +244,26 @@ CREATE TABLE IF NOT EXISTS admin_conta (
   }
   if (!nomesCols.includes('aceitou_termos')) {
     await db.exec(`ALTER TABLE clientes ADD COLUMN aceitou_termos BOOLEAN DEFAULT 0`);
+  }
+
+  const colunasPedidos = await db.all(`PRAGMA table_info(pedidos)`);
+  const nomesPedidos = new Set(colunasPedidos.map(c => c.name));
+  const camposPedido = [
+    ['frete_modalidade', 'TEXT'],
+    ['frete_codigo', 'TEXT'],
+    ['frete_valor', 'REAL'],
+    ['frete_prazo', 'TEXT'],
+    ['frete_origem', 'TEXT'],
+    ['frete_detalhes', 'TEXT'],
+    ['codigo_rastreamento', 'TEXT'],
+    ['url_rastreamento', 'TEXT'],
+    ['data_envio', 'TEXT'],
+    ['data_entrega', 'TEXT']
+  ];
+  for (const [nome, tipo] of camposPedido) {
+    if (!nomesPedidos.has(nome)) {
+      await db.exec(`ALTER TABLE pedidos ADD COLUMN ${nome} ${tipo}`);
+    }
   }
 
 // Garantir admin padrão (com hash bcrypt seguro)
@@ -842,6 +868,14 @@ app.post('/api/checkout', async (req, res) => {
     }
 
     const numeroPedido = payload.numeroPedido || `MIO-${Date.now()}`;
+    const freteSelecionado = payload.freteSelecionado || {
+      modalidade: 'Entrega Padrão',
+      codigo: 'padrao',
+      nome: 'Entrega Padrão',
+      valor: Number(payload.frete || 0),
+      prazo: '5 dias úteis',
+      origem: 'checkout'
+    };
     const pedidoMio = {
       numero: numeroPedido,
       data: payload.data || new Date().toISOString(),
@@ -853,10 +887,11 @@ app.post('/api/checkout', async (req, res) => {
       status: 'Aguardando Pagamento',
       frete: Number(payload.frete || 0),
       desconto: Number(payload.desconto || 0),
-      total: Number(valorTotal)
+      total: Number(valorTotal),
+      freteSelecionado
     };
 
-    await db.run(`INSERT INTO pedidos (numero, data, cliente, endereco, itens, cupom, metodo, status, total) VALUES (?,?,?,?,?,?,?,?,?)`, [
+    await db.run(`INSERT INTO pedidos (numero, data, cliente, endereco, itens, cupom, metodo, status, total, frete_modalidade, frete_codigo, frete_valor, frete_prazo, frete_origem, frete_detalhes, codigo_rastreamento, url_rastreamento, data_envio, data_entrega) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
       pedidoMio.numero,
       pedidoMio.data,
       JSON.stringify(pedidoMio.cliente),
@@ -865,7 +900,17 @@ app.post('/api/checkout', async (req, res) => {
       JSON.stringify(pedidoMio.cupom || null),
       pedidoMio.metodo,
       pedidoMio.status,
-      pedidoMio.total
+      pedidoMio.total,
+      freteSelecionado.modalidade || freteSelecionado.nome || 'Entrega Padrão',
+      freteSelecionado.codigo || freteSelecionado.nome || 'padrao',
+      Number(freteSelecionado.valor || pedidoMio.frete || 0),
+      freteSelecionado.prazo || '5 dias úteis',
+      freteSelecionado.origem || 'checkout',
+      JSON.stringify(freteSelecionado),
+      null,
+      null,
+      null,
+      null
     ]);
 
     if (pedidoMio.cupom && pedidoMio.cupom.codigo) {
@@ -1573,9 +1618,22 @@ app.post('/api/pedidos/atualizar-status', async (req, res) => {
 });
 
 app.put('/api/pedidos/:id', exigirAdmin, async (req, res) => {
-  const { status } = req.body;
+  const { status, codigo_rastreamento, url_rastreamento, data_envio, data_entrega } = req.body;
   try {
-    await db.run('UPDATE pedidos SET status = ? WHERE id = ?', [status, req.params.id]);
+    let campos = [];
+    let valores = [];
+    if (status !== undefined) { campos.push('status = ?'); valores.push(status); }
+    if (codigo_rastreamento !== undefined) { campos.push('codigo_rastreamento = ?'); valores.push(codigo_rastreamento); }
+    if (url_rastreamento !== undefined) { campos.push('url_rastreamento = ?'); valores.push(url_rastreamento); }
+    if (data_envio !== undefined) { campos.push('data_envio = ?'); valores.push(data_envio); }
+    if (data_entrega !== undefined) { campos.push('data_entrega = ?'); valores.push(data_entrega); }
+    
+    if (campos.length === 0) {
+      return res.status(400).json({ error: "Nenhum campo para atualizar." });
+    }
+    
+    valores.push(req.params.id);
+    await db.run(`UPDATE pedidos SET ${campos.join(', ')} WHERE id = ?`, valores);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: "Erro ao atualizar pedido." });

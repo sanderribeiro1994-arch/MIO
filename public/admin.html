@@ -539,6 +539,45 @@
         </div>
     </div>
 
+    <!-- MODAL RASTREAMENTO -->
+    <div id="modalRastreamento" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-zinc-900 border border-zinc-800 rounded-xl max-w-md w-full p-6">
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="text-lg font-black uppercase">Código de Rastreamento</h3>
+                <button onclick="fecharModalRastreamento()" class="text-zinc-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <form id="formRastreamento" onsubmit="salvarRastreamento(event)" class="grid grid-cols-1 gap-4">
+                <input type="hidden" id="rastreamento-pedido-id">
+                <div>
+                    <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Número do Pedido</label>
+                    <input type="text" id="rastreamento-numero" readonly class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm text-zinc-500 font-mono">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Código de Rastreamento *</label>
+                    <input type="text" id="rastreamento-codigo" required placeholder="Ex: AA123456789BR" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm uppercase font-mono focus:outline-none focus:border-amber-400">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">URL de Rastreamento (Opcional)</label>
+                    <input type="url" id="rastreamento-url" placeholder="https://www.correios.com.br/rastreamento" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Data de Envio</label>
+                        <input type="date" id="rastreamento-envio" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Data de Entrega</label>
+                        <input type="date" id="rastreamento-entrega" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400">
+                    </div>
+                </div>
+                <div class="flex gap-3 justify-end pt-2">
+                    <button type="button" onclick="fecharModalRastreamento()" class="px-5 py-2.5 text-xs font-bold uppercase rounded bg-zinc-800 hover:bg-zinc-700">Cancelar</button>
+                    <button type="submit" class="px-6 py-2.5 text-xs font-black uppercase rounded bg-amber-500 hover:bg-amber-400 text-black">Salvar Rastreamento</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- TOAST -->
     <div id="toastContainer" class="fixed bottom-6 right-6 z-[100] flex flex-col gap-2"></div>
 
@@ -853,6 +892,12 @@ renderizarConteudo();
             cont.innerHTML = pedidos.map(p => {
                 const itens = p.itens || [];
                 const totalItens = itens.reduce((a, i) => a + i.quantidade, 0);
+                const frete = {
+                    modalidade: p.frete_modalidade || 'Padrão',
+                    valor: p.frete_valor || 0,
+                    prazo: p.frete_prazo || '—',
+                    codigo: p.codigo_rastreamento || ''
+                };
                 return `
                 <div class="bg-zinc-900/40 border border-zinc-900 rounded-xl p-4">
                     <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
@@ -867,7 +912,7 @@ renderizarConteudo();
                             </select>
                         </div>
                     </div>
-                    <div class="text-xs text-zinc-400 mb-2">
+                    <div class="text-xs text-zinc-400 mb-3">
                         <span class="font-bold text-white">${p.cliente?.nome || 'Cliente'}</span> · ${p.cliente?.email || ''} · ${p.metodo} · ${totalItens} itens
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
@@ -878,6 +923,16 @@ renderizarConteudo();
                         <div class="bg-zinc-950 border border-zinc-800 rounded-lg p-3">
                             <p class="text-[9px] font-mono uppercase text-zinc-500 mb-1">Endereço de Entrega</p>
                             <p class="text-[11px] leading-relaxed">${Object.values(p.endereco || {}).filter(Boolean).join(', ') || '—'}</p>
+                        </div>
+                        <div class="bg-zinc-950 border border-zinc-800 rounded-lg p-3">
+                            <p class="text-[9px] font-mono uppercase text-zinc-500 mb-1">📦 Frete</p>
+                            <p class="text-[11px] text-amber-400 font-bold">${frete.modalidade}</p>
+                            <p class="text-[10px] text-zinc-400">R$ ${frete.valor.toFixed(2).replace('.', ',')} · ${frete.prazo}</p>
+                        </div>
+                        <div class="bg-zinc-950 border border-zinc-800 rounded-lg p-3">
+                            <p class="text-[9px] font-mono uppercase text-zinc-500 mb-1">🚚 Rastreamento</p>
+                            <p class="text-[11px] ${frete.codigo ? 'text-emerald-400 font-bold' : 'text-zinc-600'}">${frete.codigo || 'Pendente'}</p>
+                            <button onclick="abrirModalRastreamento(${p.id}, '${p.numero}', '${frete.codigo}')" class="text-[10px] text-amber-400 hover:text-amber-300 mt-1 font-bold">+ Adicionar</button>
                         </div>
                     </div>
                 </div>`;
@@ -890,6 +945,54 @@ renderizarConteudo();
                 await API('/api/pedidos/' + id, { method: 'PUT', body: JSON.stringify({ status }) });
                 toast('Status atualizado');
             } catch (err) { toast(err.message, 'erro'); }
+        }
+
+        // =============== RASTREAMENTO ===============
+        function abrirModalRastreamento(id, numero, codigoAtual) {
+            document.getElementById('rastreamento-pedido-id').value = id;
+            document.getElementById('rastreamento-numero').value = numero;
+            document.getElementById('rastreamento-codigo').value = codigoAtual || '';
+            document.getElementById('rastreamento-url').value = '';
+            document.getElementById('rastreamento-envio').value = '';
+            document.getElementById('rastreamento-entrega').value = '';
+            document.getElementById('modalRastreamento').classList.remove('hidden');
+            document.getElementById('modalRastreamento').classList.add('flex');
+        }
+
+        function fecharModalRastreamento() {
+            document.getElementById('modalRastreamento').classList.add('hidden');
+            document.getElementById('modalRastreamento').classList.remove('flex');
+        }
+
+        async function salvarRastreamento(e) {
+            e.preventDefault();
+            const id = document.getElementById('rastreamento-pedido-id').value;
+            const codigo = document.getElementById('rastreamento-codigo').value.trim();
+            const url = document.getElementById('rastreamento-url').value.trim();
+            const dataEnvio = document.getElementById('rastreamento-envio').value;
+            const dataEntrega = document.getElementById('rastreamento-entrega').value;
+
+            if (!codigo) {
+                alert('Informe o código de rastreamento.');
+                return;
+            }
+
+            try {
+                const payload = { 
+                    codigo_rastreamento: codigo,
+                    status: 'Enviado'
+                };
+                if (url) payload.url_rastreamento = url;
+                if (dataEnvio) payload.data_envio = dataEnvio;
+                if (dataEntrega) payload.data_entrega = dataEntrega;
+
+                await API('/api/pedidos/' + id, { method: 'PUT', body: JSON.stringify(payload) });
+                toast('Rastreamento atualizado com sucesso!');
+                fecharModalRastreamento();
+                carregarDados();
+            } catch (err) { 
+                toast(err.message, 'erro'); 
+            }
         }
 
 // =============== CLIENTES ===============
