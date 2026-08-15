@@ -1167,11 +1167,17 @@ app.post('/api/frete/calcular', async (req, res) => {
     }
 
     if (!token || !cepOrigem) {
+      const faltantes = [];
+      if (!token) faltantes.push('MELHOR_ENVIO_TOKEN');
+      if (!cepOrigem) faltantes.push('MELHOR_ENVIO_CEP');
+      if (!modo) faltantes.push('MELHOR_ENVIO_MODO');
+
+      console.warn(`[Melhor Envio] Demo mode ativado. Variáveis ausentes: ${faltantes.join(', ')}`);
       return res.json({
         ok: true,
         demo: true,
         opcoes: [{ nome: 'PAC', preco: 14.90, prazo: '5 dias úteis' }, { nome: 'SEDEX', preco: 24.90, prazo: '2 dias úteis' }],
-        message: 'Melhor Envio não configurado. Usando valores de demonstração.'
+        message: `Melhor Envio não configurado. Faltam: ${faltantes.join(', ')}. Usando valores de demonstração.`
       });
     }
 
@@ -1226,10 +1232,16 @@ app.post('/api/envio/calcular', async (req, res) => {
     }
 
     if (!token || !cepOrigem) {
+      const faltantes = [];
+      if (!token) faltantes.push('MELHOR_ENVIO_TOKEN');
+      if (!cepOrigem) faltantes.push('MELHOR_ENVIO_CEP');
+      if (!modo) faltantes.push('MELHOR_ENVIO_MODO');
+
+      console.warn(`[Melhor Envio] Demo mode ativado. Variáveis ausentes: ${faltantes.join(', ')}`);
       return res.json({
         ok: true, demo: true,
         opcoes: [{ nome: 'PAC', preco: 14.90, prazo: '5 dias úteis' }, { nome: 'SEDEX', preco: 24.90, prazo: '2 dias úteis' }],
-        message: "Melhor Envio não configurado. Usando valores de demonstração."
+        message: `Melhor Envio não configurado. Faltam: ${faltantes.join(', ')}. Usando valores de demonstração.`
       });
     }
     const base = modo === 'produção' ? 'https://api.melhorenvio.com.br' : 'https://sandbox.melhorenvio.com.br';
