@@ -631,6 +631,15 @@ app.get('/api/integracoes', exigirAdmin, async (req, res) => {
         token: '', storeId: '', url: 'https://api.upseller.com.br', ativo: false
       })
     ]);
+    
+    // Se não houver token salvo no banco mas existir variável de ambiente, use-a
+    if (!envio.token && process.env.MELHOR_ENVIO_TOKEN) {
+      envio.token = process.env.MELHOR_ENVIO_TOKEN;
+    }
+    if (!envio.cepOrigem && process.env.MELHOR_ENVIO_CEP) {
+      envio.cepOrigem = process.env.MELHOR_ENVIO_CEP;
+    }
+    
     res.json({ pagamento, envio, upseller });
   } catch (err) {
     res.status(500).json({ error: "Erro ao buscar integrações." });
@@ -661,11 +670,16 @@ app.post('/api/integracoes/testar', exigirAdmin, async (req, res) => {
       return res.json({ ok: true, mensagem: "Credenciais PagSeguro configuradas. Conecte ao PagSeguro para validar o token." });
     }
     if (tipo === 'envio') {
-      const cfg = await getConfigChave('melhorenvio_config', {});
-      if (!cfg.token || !cfg.cepOrigem) {
+      let cfg = await getConfigChave('melhorenvio_config', {});
+      
+      // Se não houver token salvo, tenta usar a variável de ambiente
+      let token = cfg.token || process.env.MELHOR_ENVIO_TOKEN || '';
+      let cepOrigem = cfg.cepOrigem || process.env.MELHOR_ENVIO_CEP || '';
+      
+      if (!token || !cepOrigem) {
         return res.json({ ok: false, mensagem: "Token e CEP de origem do Melhor Envio não preenchidos." });
       }
-      return res.json({ ok: true, mensagem: "Credenciais Melhor Envio configuradas." });
+      return res.json({ ok: true, mensagem: "✅ Credenciais Melhor Envio configuradas!" + (process.env.MELHOR_ENVIO_TOKEN ? " (Via variável de ambiente)" : "") });
     }
     if (tipo === 'upseller') {
       const cfg = await getConfigChave('upseller_config', {});
@@ -1090,22 +1104,69 @@ app.post('/api/webhooks/pagseguro', async (req, res) => {
   }
 });
 
+// Helper: Formata e filtra opções de frete
+function formatarOpcoesFrete(data) {
+  if (!Array.isArray(data)) return [];
+  
+  return data
+    .filter(o => {
+      // Remove opções com erro
+      if (o.error) return false;
+      // Remove Mini Envios
+      if ((o.name || '').toLowerCase().includes('mini envio')) return false;
+      // Remove opções com preço zerado ou inválido
+      if (!o.price || Number(o.price) <= 0) return false;
+      return true;
+    })
+    .map(o => {
+      // Combina nome da empresa + serviço para exibição melhor
+      const nomeEmpresa = (o.company || '').trim();
+      const nomeServico = (o.name || '').trim();
+      let nomeFinal = nomeEmpresa;
+      
+      // Se houver nome de serviço diferente da empresa, combina
+      if (nomeServico && !nomeServico.toLowerCase().startsWith(nomeEmpresa.toLowerCase())) {
+        nomeFinal = `${nomeEmpresa} ${nomeServico}`.trim();
+      } else if (!nomeEmpresa && nomeServico) {
+        nomeFinal = nomeServico;
+      }
+      
+      // Formata prazo: converte "8" em "8 dias úteis" (singular/plural)
+      const tempoEntrega = Number(o.delivery_time || 0);
+      let prazoFinal = '5 dias úteis'; // padrão
+      if (tempoEntrega > 0) {
+        prazoFinal = tempoEntrega === 1 ? '1 dia útil' : `${tempoEntrega} dias úteis`;
+      }
+      
+      return {
+        nome: nomeFinal || 'Entrega Padrão',
+        preco: Number(o.price || 0),
+        prazo: prazoFinal
+      };
+    });
+}
+
 // ---------- API: ENVIO (Melhor Envio) ----------
 app.post('/api/frete/calcular', async (req, res) => {
   const { cepDestino, itens } = req.body || {};
   if (!cepDestino) return res.status(400).json({ error: 'CEP de destino obrigatório.' });
 
   try {
-    const cfg = await getConfigChave('melhorenvio_config', {});
+    let cfg = await getConfigChave('melhorenvio_config', {});
+    
+    // Usa variáveis de ambiente se não houver configuração no banco
+    let token = cfg.token || process.env.MELHOR_ENVIO_TOKEN || '';
+    let modo = cfg.modo || process.env.MELHOR_ENVIO_MODO || 'sandbox';
+    
     const adminPerfil = await db.get('SELECT endereco FROM admin_conta WHERE id = 1').catch(() => null);
-    let cepOrigem = (cfg.cepOrigem || '').replace(/\D/g, '');
+    let cepOrigem = (cfg.cepOrigem || process.env.MELHOR_ENVIO_CEP || '').replace(/\D/g, '');
     if (adminPerfil && adminPerfil.endereco) {
       const end = parseJsonArray(adminPerfil.endereco, {});
       const cepLoja = (end.cep || '').replace(/\D/g, '');
       if (cepLoja.length === 8) cepOrigem = cepLoja;
     }
 
-    if (!cfg.token || !cepOrigem) {
+    if (!token || !cepOrigem) {
       return res.json({
         ok: true,
         demo: true,
@@ -1114,10 +1175,10 @@ app.post('/api/frete/calcular', async (req, res) => {
       });
     }
 
-    const base = cfg.modo === 'produção' ? 'https://api.melhorenvio.com.br' : 'https://sandbox.melhorenvio.com.br';
+    const base = modo === 'produção' ? 'https://api.melhorenvio.com.br' : 'https://sandbox.melhorenvio.com.br';
     const resApi = await fetch(base + '/api/v2/me/shipment/calculate', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.token },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
       body: JSON.stringify({
         from: { postal_code: cepOrigem },
         to: { postal_code: String(cepDestino).replace(/\D/g, '') },
@@ -1135,12 +1196,10 @@ app.post('/api/frete/calcular', async (req, res) => {
     });
     const data = await resApi.json().catch(() => ({}));
     if (!resApi.ok) return res.status(502).json({ error: data.message || 'Erro ao calcular frete.' });
-    const opcoes = Array.isArray(data) ? data.map(o => ({
-      nome: o.name || o.company || 'Entrega',
-      preco: Number(o.price || 0),
-      prazo: `${o.delivery_time || 0} dia(s) útil(is)`
-    })) : [];
-    return res.json({ ok: true, opcoes, demo: false });
+    
+    // Formata e filtra as opções
+    const opcoes = formatarOpcoesFrete(data);
+    return res.json({ ok: true, opcoes: opcoes.length > 0 ? opcoes : [], demo: false });
   } catch (error) {
     return res.status(500).json({ error: 'Erro ao calcular frete: ' + error.message });
   }
@@ -1150,30 +1209,34 @@ app.post('/api/envio/calcular', async (req, res) => {
   const { cepDestino, itens } = req.body || {};
   if (!cepDestino) return res.status(400).json({ error: "CEP de destino obrigatório." });
   try {
-    const cfg = await getConfigChave('melhorenvio_config', {});
+    let cfg = await getConfigChave('melhorenvio_config', {});
+
+    // Usa variáveis de ambiente se não houver configuração no banco
+    let token = cfg.token || process.env.MELHOR_ENVIO_TOKEN || '';
+    let modo = cfg.modo || process.env.MELHOR_ENVIO_MODO || 'sandbox';
 
     // Fonte de origem do frete: prioriza o endereço da loja (perfil do admin).
     // Se o admin preencheu o endereço da loja, o CEP dele é usado como origem.
     const adminPerfil = await db.get('SELECT endereco FROM admin_conta WHERE id = 1').catch(() => null);
-    let cepOrigem = cfg.cepOrigem || '';
+    let cepOrigem = cfg.cepOrigem || process.env.MELHOR_ENVIO_CEP || '';
     if (adminPerfil && adminPerfil.endereco) {
       const end = parseJsonArray(adminPerfil.endereco, {});
       const cepLoja = (end.cep || '').replace(/\D/g, '');
       if (cepLoja.length === 8) cepOrigem = cepLoja;
     }
 
-    if (!cfg.token || !cepOrigem) {
+    if (!token || !cepOrigem) {
       return res.json({
         ok: true, demo: true,
         opcoes: [{ nome: 'PAC', preco: 14.90, prazo: '5 dias úteis' }, { nome: 'SEDEX', preco: 24.90, prazo: '2 dias úteis' }],
         message: "Melhor Envio não configurado. Usando valores de demonstração."
       });
     }
-    const base = cfg.modo === 'produção' ? 'https://api.melhorenvio.com.br' : 'https://sandbox.melhorenvio.com.br';
+    const base = modo === 'produção' ? 'https://api.melhorenvio.com.br' : 'https://sandbox.melhorenvio.com.br';
     const resApi = await fetch(base + '/api/v2/me/shipment/calculate', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.token },
-body: JSON.stringify({
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({
         from: { postal_code: cepOrigem },
         to: { postal_code: cepDestino },
         products: (itens || []).map(i => ({ id: i.id || '', width: i.width || 16, height: i.height || 4, length: i.length || 25, weight: i.weight || 0.3, insurance_value: i.preco || 0, quantity: i.quantidade || 1 })),
@@ -1182,11 +1245,10 @@ body: JSON.stringify({
     });
     const data = await resApi.json().catch(() => ({}));
     if (!resApi.ok) return res.status(502).json({ error: data.message || "Erro ao calcular frete." });
-    if (Array.isArray(data)) {
-      const opcoes = data.map(o => ({ nome: o.name, preco: o.price, prazo: o.delivery_time + ' dia(s) útil(is)' }));
-      return res.json({ ok: true, opcoes });
-    }
-    res.json({ ok: true, opcoes: [] });
+    
+    // Formata e filtra as opções
+    const opcoes = formatarOpcoesFrete(data);
+    return res.json({ ok: true, opcoes: opcoes.length > 0 ? opcoes : [] });
   } catch (err) {
     res.status(500).json({ error: "Erro ao calcular frete: " + err.message });
   }

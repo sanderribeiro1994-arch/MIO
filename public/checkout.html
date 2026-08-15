@@ -466,12 +466,22 @@
         document.getElementById('descontoCupom').innerText = `- R$ ${valorDesconto.toFixed(2).replace('.', ',')}`;
       }
 
-// Frete: usa o valor cotado (Melhor Envio ou fallback), respeitando a meta de frete grátis
-      const valorFrete = subtotal >= META_FRETE_GRATIS ? 0 : freteCotado.valor;
+      // FRETE: Regra de frete grátis
+      // - Se subtotal >= R$ 249,00 → frete GRÁTIS
+      // - Se subtotal < R$ 249,00 → cobra o frete da opção selecionada
+      const temDireitoAFreteGratis = subtotal >= META_FRETE_GRATIS;
+      const valorFrete = temDireitoAFreteGratis ? 0 : freteCotado.valor;
       const totalFinal = Math.max(0, subtotal - valorDesconto) + valorFrete;
 
       document.getElementById('subtotalCheckout').innerText = `R$ ${subtotal.toFixed(2).replace('.', ',')}`;
-      document.getElementById('freteCheckout').innerText = valorFrete === 0 ? 'GRÁTIS' : `R$ ${valorFrete.toFixed(2).replace('.', ',')}`;
+      
+      // Exibe "GRÁTIS" apenas se subtotal >= 249
+      if (valorFrete === 0 && temDireitoAFreteGratis) {
+        document.getElementById('freteCheckout').innerText = 'GRÁTIS';
+      } else {
+        document.getElementById('freteCheckout').innerText = `R$ ${valorFrete.toFixed(2).replace('.', ',')}`;
+      }
+      
       document.getElementById('totalFinalCheckout').innerText = `R$ ${totalFinal.toFixed(2).replace('.', ',')}`;
     }
 
@@ -527,7 +537,22 @@
         container.innerHTML = `<p class="text-xs text-zinc-500 font-mono py-2">Nenhuma opção de frete disponível. Usando o valor padrão.</p>`;
         return;
       }
-      container.innerHTML = opcoesFrete.map((o, idx) => `
+      
+      // Filtra novamente no frontend como camada adicional de segurança
+      const opcoesFiltradas = opcoesFrete.filter(o => {
+        // Remove opções com preço 0 ou inválido
+        if (!o.preco || Number(o.preco) <= 0) return false;
+        // Remove opções com nome "Mini Envios"
+        if ((o.nome || '').toLowerCase().includes('mini envio')) return false;
+        return true;
+      });
+      
+      if (opcoesFiltradas.length === 0) {
+        container.innerHTML = `<p class="text-xs text-zinc-500 font-mono py-2">Nenhuma opção de frete disponível. Usando o valor padrão.</p>`;
+        return;
+      }
+      
+      container.innerHTML = opcoesFiltradas.map((o, idx) => `
         <label class="flex items-center gap-3 bg-zinc-900 border ${o.preco === freteCotado.valor ? 'border-amber-400' : 'border-zinc-800'} rounded-lg px-3 py-2.5 cursor-pointer hover:border-amber-400 transition">
           <input type="radio" name="opcaoFrete" value="${idx}" ${o.preco === freteCotado.valor ? 'checked' : ''} onchange="selecionarFrete(${idx})" class="accent-amber-400">
           <div class="flex-1">
@@ -671,7 +696,13 @@
           ? subtotal * (cupomAtivo.valor / 100)
           : cupomAtivo.valor;
       }
-      const valorFrete = subtotal >= META_FRETE_GRATIS ? 0 : freteCotado.valor;
+      
+      // FRETE: Regra de frete grátis
+      // - Se subtotal >= R$ 249,00 → frete GRÁTIS
+      // - Se subtotal < R$ 249,00 → cobra o frete da opção selecionada
+      const temDireitoAFreteGratis = subtotal >= META_FRETE_GRATIS;
+      const valorFrete = temDireitoAFreteGratis ? 0 : freteCotado.valor;
+      
       return {
         subtotal,
         desconto: valorDesconto,
