@@ -1105,6 +1105,28 @@ app.post('/api/webhooks/pagseguro', async (req, res) => {
 });
 
 // Helper: Formata e filtra opções de frete
+function extrairTextoSeguro(valor) {
+  if (valor === null || valor === undefined) return '';
+  if (typeof valor === 'string') return valor.trim();
+  if (typeof valor === 'number' || typeof valor === 'boolean') return String(valor);
+  if (Array.isArray(valor)) {
+    return valor.map(v => extrairTextoSeguro(v)).filter(Boolean).join(' ');
+  }
+  if (typeof valor === 'object') {
+    const candidatos = [
+      valor.name, valor.nome, valor.title, valor.label, valor.code, valor.codigo,
+      valor.company, valor.courier, valor.transportadora, valor.service,
+      valor.value, valor.description, valor.text
+    ];
+    for (const item of candidatos) {
+      const texto = extrairTextoSeguro(item);
+      if (texto && !texto.toLowerCase().includes('[object object]')) return texto;
+    }
+    return '';
+  }
+  return '';
+}
+
 function extrairListaDeOpcoesFrete(data) {
   if (!data) return [];
   if (Array.isArray(data)) return data;
@@ -1129,7 +1151,7 @@ function formatarOpcoesFrete(data) {
   return lista
     .filter(o => {
       if (!o || o.error) return false;
-      const nome = String(o.name || o.nome || o.service || o.title || o.company || '').toLowerCase();
+      const nome = extrairTextoSeguro(o.name || o.nome || o.service || o.title || o.company || o.courier || o.transportadora || '').toLowerCase();
       if (nome.includes('mini envio')) return false;
 
       const preco = Number(o.price ?? o.preco ?? o.amount ?? o.value ?? o.total ?? 0);
@@ -1137,11 +1159,15 @@ function formatarOpcoesFrete(data) {
       return true;
     })
     .map(o => {
-      const nomeEmpresa = String(o.company || o.transportadora || o.courier || '').trim();
-      const nomeServico = String(o.name || o.nome || o.service || o.title || '').trim();
-      const nomeFinal = nomeServico
-        ? (nomeEmpresa && !nomeServico.toLowerCase().startsWith(nomeEmpresa.toLowerCase()) ? `${nomeEmpresa} ${nomeServico}` : nomeServico)
-        : nomeEmpresa || 'Entrega Padrão';
+      const nomeEmpresa = extrairTextoSeguro(o.company || o.transportadora || o.courier || o.provider || o.company_name || o.companyName);
+      const nomeServico = extrairTextoSeguro(o.name || o.nome || o.service || o.title || o.label || o.code || o.codigo || o.delivery_type || o.type);
+      let nomeFinal = nomeServico || nomeEmpresa || 'Entrega Padrão';
+      if (nomeEmpresa && nomeServico && nomeServico.toLowerCase() !== nomeEmpresa.toLowerCase()) {
+        nomeFinal = `${nomeEmpresa} ${nomeServico}`.trim();
+      }
+      if (nomeFinal.toLowerCase().includes('[object object]')) {
+        nomeFinal = 'Entrega Padrão';
+      }
 
       const tempoEntrega = Number(o.delivery_time ?? o.prazo ?? o.deliveryTime ?? o.days ?? 0);
       let prazoFinal = '5 dias úteis';

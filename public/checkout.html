@@ -569,13 +569,17 @@
       }
       
       // Filtra novamente no frontend como camada adicional de segurança
-      const opcoesFiltradas = opcoesFrete.filter(o => {
-        // Remove opções com preço 0 ou inválido
-        if (!o.preco || Number(o.preco) <= 0) return false;
-        // Remove opções com nome "Mini Envios"
-        if ((o.nome || '').toLowerCase().includes('mini envio')) return false;
-        return true;
-      });
+      const opcoesFiltradas = opcoesFrete
+        .map((o) => ({
+          ...o,
+          nome: String(o.nome || '').replace(/\[object Object\]/gi, '').replace(/\s+/g, ' ').trim() || 'Entrega Padrão'
+        }))
+        .filter(o => {
+          if (!o.preco || Number(o.preco) <= 0) return false;
+          if ((o.nome || '').toLowerCase().includes('mini envio')) return false;
+          if ((o.nome || '').toLowerCase().includes('[object object]')) return false;
+          return true;
+        });
       
       if (opcoesFiltradas.length === 0) {
         container.innerHTML = `<p class="text-xs text-zinc-500 font-mono py-2">Nenhuma opção de frete disponível. Usando o valor padrão.</p>`;
