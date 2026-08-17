@@ -929,6 +929,32 @@ app.get('/api/bling/callback', async (req, res) => {
   return res.redirect(302, '/auth/callback?' + new URLSearchParams(req.query).toString());
 });
 
+app.get('/api/bling/debug', exigirAdmin, async (req, res) => {
+  try {
+    const oauth = await getBlingOauthConfig();
+    res.json({
+      ok: true,
+      env: {
+        BLING_CLIENT_ID: BLING_CLIENT_ID ? `${BLING_CLIENT_ID.substring(0, 8)}...` : 'NÃO CONFIGURADO',
+        BLING_CLIENT_SECRET: BLING_CLIENT_SECRET ? `${BLING_CLIENT_SECRET.substring(0, 8)}...` : 'NÃO CONFIGURADO',
+        BLING_CALLBACK_URL: BLING_CALLBACK_URL,
+        BLING_AUTH_URL: BLING_AUTH_URL,
+        BLING_TOKEN_URL: BLING_TOKEN_URL,
+        BLING_API_BASE: BLING_API_BASE
+      },
+      database: {
+        accessToken: oauth.accessToken ? `${oauth.accessToken.substring(0, 10)}...` : 'vazio',
+        refreshToken: oauth.refreshToken ? `${oauth.refreshToken.substring(0, 10)}...` : 'vazio',
+        connected: oauth.connected,
+        expiresAt: oauth.expiresAt ? new Date(oauth.expiresAt).toISOString() : 'N/A',
+        clientId: oauth.clientId ? `${oauth.clientId.substring(0, 8)}...` : 'vazio'
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 app.post('/api/bling/auth/refresh', exigirAdmin, async (req, res) => {
   try {
     const oauth = await getBlingOauthConfig();
