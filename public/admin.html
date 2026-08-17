@@ -608,7 +608,7 @@ let config = {};
         const API = (path, options = {}) => {
             const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
             if (token) headers['x-admin-token'] = token;
-            return fetch(path, { ...options, headers }).then(async (res) => {
+            return fetch(path, { ...options, headers, credentials: 'include' }).then(async (res) => {
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok) throw new Error(data.error || 'Erro na requisição');
                 return data;

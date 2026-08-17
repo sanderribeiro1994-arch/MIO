@@ -385,8 +385,20 @@ bannerIntermediario: {
 })();
 
 // ---------- MIDDLEWARE DE AUTENTICAÇÃO ADMIN ----------
+function getAdminTokenFromRequest(req) {
+  const headerToken = req.headers['x-admin-token'];
+  if (headerToken) return String(headerToken);
+
+  const cookieHeader = req.headers.cookie || '';
+  const match = cookieHeader.split(';').map(v => v.trim()).find(v => v.startsWith('admin_token='));
+  if (!match) return null;
+
+  const value = decodeURIComponent(match.split('=').slice(1).join('='));
+  return value || null;
+}
+
 function exigirAdmin(req, res, next) {
-  const token = req.headers['x-admin-token'];
+  const token = getAdminTokenFromRequest(req);
   if (!token || !sessaoAdmin.has(token)) {
     return res.status(401).json({ error: "Não autenticado. Faça login no painel." });
   }
@@ -1846,6 +1858,14 @@ app.post('/api/admin/login', loginLimiter, async (req, res) => {
     }
     const token = crypto.randomBytes(32).toString('hex');
     sessaoAdmin.set(token, { email: admin.email, expiraEm: Date.now() + 15 * 60 * 1000 });
+
+    res.cookie('admin_token', token, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: IS_PROD,
+      maxAge: 15 * 60 * 1000
+    });
+
     res.json({ token, email: admin.email });
   } catch (err) {
     res.status(500).json({ error: "Erro no login." });
@@ -1853,14 +1873,15 @@ app.post('/api/admin/login', loginLimiter, async (req, res) => {
 });
 
 app.post('/api/admin/logout', (req, res) => {
-  const token = req.headers['x-admin-token'];
+  const token = getAdminTokenFromRequest(req);
   if (token) sessaoAdmin.delete(token);
+  res.clearCookie('admin_token');
   res.json({ ok: true });
 });
 
 // Verifica se um token de admin é válido (usado ao restaurar sessão no painel)
 app.get('/api/admin/verificar', (req, res) => {
-  const token = req.headers['x-admin-token'];
+  const token = getAdminTokenFromRequest(req);
   if (!token || !sessaoAdmin.has(token)) {
     return res.status(401).json({ valid: false });
   }
