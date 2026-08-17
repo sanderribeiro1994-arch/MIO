@@ -1604,20 +1604,30 @@ config.logo = {
         // liberar o painel. Se o token for inválido/expirado, volta ao login.
         async function inicializarSessao() {
             const tokenSalvo = localStorage.getItem('mio_admin_token');
-            if (!tokenSalvo) return;
+            if (!tokenSalvo) {
+                const cookieToken = document.cookie.split('; ').find(row => row.startsWith('admin_token='));
+                if (cookieToken) {
+                    token = decodeURIComponent(cookieToken.split('=')[1]);
+                }
+            } else {
+                token = tokenSalvo;
+            }
 
-            token = tokenSalvo;
+            if (!token) return;
+
             try {
                 const res = await fetch('/api/admin/verificar', {
-                    headers: { 'x-admin-token': tokenSalvo }
+                    headers: { 'x-admin-token': token },
+                    credentials: 'include'
                 });
                 const data = await res.json().catch(() => ({}));
-                if (!res.ok || !data.ok) {
+                if (!res.ok || !data.valid) {
                     // Token inválido ou expirado: limpa e mantém na tela de login
                     token = null;
                     localStorage.removeItem('mio_admin_token');
                     localStorage.removeItem('mio_admin_email');
                     localStorage.removeItem('mio_admin_logado');
+                    document.cookie = 'admin_token=; Max-Age=0; path=/; SameSite=Lax';
                     return;
                 }
                 document.getElementById('adminEmailLabel').innerText = data.email || localStorage.getItem('mio_admin_email') || '';
@@ -1631,6 +1641,7 @@ config.logo = {
                 localStorage.removeItem('mio_admin_token');
                 localStorage.removeItem('mio_admin_email');
                 localStorage.removeItem('mio_admin_logado');
+                document.cookie = 'admin_token=; Max-Age=0; path=/; SameSite=Lax';
             }
         }
 
