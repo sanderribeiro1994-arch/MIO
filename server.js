@@ -204,6 +204,13 @@ CREATE TABLE IF NOT EXISTS admin_conta (
       cnpj TEXT
     );
 
+    -- Persistência de sessões admin (para manter login entre reinícios)
+    CREATE TABLE IF NOT EXISTS admin_sessions (
+      token TEXT PRIMARY KEY,
+      email TEXT,
+      expiraEm INTEGER
+    );
+
     CREATE TABLE IF NOT EXISTS avaliacoes (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       produto_id INTEGER,
@@ -279,6 +286,22 @@ CREATE TABLE IF NOT EXISTS admin_conta (
     // Migra o hash legado SHA-256 para bcrypt automaticamente
     const senhaHash = await hashSenha('admin123');
     await db.run('UPDATE admin_conta SET senha_hash = ? WHERE id = 1', [senhaHash]);
+  }
+
+  // Carregar sessões admin persistidas (se houver) para manter login entre reinícios
+  try {
+    const storedSessions = await db.all('SELECT token, email, expiraEm FROM admin_sessions');
+    for (const s of storedSessions) {
+      const exp = Number(s.expiraEm || 0);
+      if (exp > Date.now()) {
+        sessaoAdmin.set(s.token, { email: s.email, expiraEm: exp });
+      } else {
+        // Remove expiradas
+        await db.run('DELETE FROM admin_sessions WHERE token = ?', s.token);
+      }
+    }
+  } catch (e) {
+    console.error('Erro ao carregar sessões admin persistidas:', e && e.message ? e.message : e);
   }
 
   // Garante o cupom de boas-vindas ativo no banco (para a página cupom.html funcionar)
@@ -406,10 +429,14 @@ function exigirAdmin(req, res, next) {
   const sessao = sessaoAdmin.get(token);
   if (sessao.expiraEm < Date.now()) {
     sessaoAdmin.delete(token);
+    // remove também do armazenamento persistido, se disponível (fire-and-forget)
+    if (db) db.run('DELETE FROM admin_sessions WHERE token = ?', token).catch(() => {});
     return res.status(401).json({ error: "Sessão expirada. Faça login novamente." });
   }
   // Renova a sessão (deslizante)
   sessao.expiraEm = Date.now() + 15 * 60 * 1000;
+  // persiste nova expiração (não bloquear a requisição)
+  if (db) db.run('INSERT OR REPLACE INTO admin_sessions (token, email, expiraEm) VALUES (?,?,?)', [token, sessao.email, sessao.expiraEm]).catch(() => {});
   next();
 }
 
@@ -1857,7 +1884,11 @@ app.post('/api/admin/login', loginLimiter, async (req, res) => {
       return res.status(401).json({ error: "Credenciais inválidas." });
     }
     const token = crypto.randomBytes(32).toString('hex');
-    sessaoAdmin.set(token, { email: admin.email, expiraEm: Date.now() + 15 * 60 * 1000 });
+    const expiraEm = Date.now() + 15 * 60 * 1000;
+    sessaoAdmin.set(token, { email: admin.email, expiraEm });
+
+    // Persiste sessão no banco para sobreviver reinícios
+    if (db) await db.run('INSERT OR REPLACE INTO admin_sessions (token, email, expiraEm) VALUES (?,?,?)', [token, admin.email, expiraEm]);
 
     res.cookie('admin_token', token, {
       httpOnly: true,
@@ -1868,13 +1899,17 @@ app.post('/api/admin/login', loginLimiter, async (req, res) => {
 
     res.json({ token, email: admin.email });
   } catch (err) {
+    console.error('Erro no login admin:', err && err.message ? err.message : err);
     res.status(500).json({ error: "Erro no login." });
   }
 });
 
-app.post('/api/admin/logout', (req, res) => {
+app.post('/api/admin/logout', async (req, res) => {
   const token = getAdminTokenFromRequest(req);
-  if (token) sessaoAdmin.delete(token);
+  if (token) {
+    sessaoAdmin.delete(token);
+    if (db) await db.run('DELETE FROM admin_sessions WHERE token = ?', token);
+  }
   res.clearCookie('admin_token');
   res.json({ ok: true });
 });
@@ -1888,9 +1923,11 @@ app.get('/api/admin/verificar', (req, res) => {
   const sessao = sessaoAdmin.get(token);
   if (sessao.expiraEm < Date.now()) {
     sessaoAdmin.delete(token);
+    if (db) db.run('DELETE FROM admin_sessions WHERE token = ?', token).catch(() => {});
     return res.status(401).json({ valid: false });
   }
   sessao.expiraEm = Date.now() + 15 * 60 * 1000; // renova (deslizante)
+  if (db) db.run('INSERT OR REPLACE INTO admin_sessions (token, email, expiraEm) VALUES (?,?,?)', [token, sessao.email, sessao.expiraEm]).catch(() => {});
   res.json({ valid: true, email: sessao.email });
 });
 
