@@ -1599,49 +1599,73 @@ config.logo = {
         });
 
 // =============== INICIALIZAÇÃO ===============
-        // Restaura a sessão do admin apenas se houver um token válido.
-        // O token é validado no servidor (GET /api/admin/verificar) antes de
-        // liberar o painel. Se o token for inválido/expirado, volta ao login.
+        // Restaura a sessão do admin. Se houver token em localStorage, usa-o
+        // (x-admin-token). Caso contrário, tenta validar apenas pelo cookie
+        // httpOnly enviando uma requisição com credentials: 'include' (sem header).
+        // Em caso de sessão inválida o logout é solicitado ao servidor para
+        // garantir remoção do cookie httpOnly.
         async function inicializarSessao() {
             const tokenSalvo = localStorage.getItem('mio_admin_token');
-            if (!tokenSalvo) {
-                const cookieToken = document.cookie.split('; ').find(row => row.startsWith('admin_token='));
-                if (cookieToken) {
-                    token = decodeURIComponent(cookieToken.split('=')[1]);
-                }
-            } else {
+
+            // Se houver token em localStorage, tente validar via header
+            if (tokenSalvo) {
                 token = tokenSalvo;
-            }
-
-            if (!token) return;
-
-            try {
-                const res = await fetch('/api/admin/verificar', {
-                    headers: { 'x-admin-token': token },
-                    credentials: 'include'
-                });
-                const data = await res.json().catch(() => ({}));
-                if (!res.ok || !data.valid) {
-                    // Token inválido ou expirado: limpa e mantém na tela de login
+                try {
+                    const res = await fetch('/api/admin/verificar', {
+                        headers: { 'x-admin-token': token },
+                        credentials: 'include'
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok || !data.valid) {
+                        // Token inválido/expirado: limpa armazenamento e solicita logout no servidor
+                        token = null;
+                        localStorage.removeItem('mio_admin_token');
+                        localStorage.removeItem('mio_admin_email');
+                        localStorage.removeItem('mio_admin_logado');
+                        await fetch('/api/admin/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
+                        return;
+                    }
+                    // Sessão válida
+                    document.getElementById('adminEmailLabel').innerText = data.email || localStorage.getItem('mio_admin_email') || '';
+                    document.getElementById('telaLogin').classList.add('hidden');
+                    document.getElementById('painelAdmin').classList.remove('hidden');
+                    document.getElementById('painelAdmin').classList.add('flex');
+                    carregarTudo();
+                    return;
+                } catch (err) {
+                    // Servidor indisponível: não abre o painel
                     token = null;
                     localStorage.removeItem('mio_admin_token');
                     localStorage.removeItem('mio_admin_email');
                     localStorage.removeItem('mio_admin_logado');
-                    document.cookie = 'admin_token=; Max-Age=0; path=/; SameSite=Lax';
                     return;
                 }
-                document.getElementById('adminEmailLabel').innerText = data.email || localStorage.getItem('mio_admin_email') || '';
+            }
+
+            // Sem token em localStorage: tenta validar apenas pelo cookie httpOnly
+            try {
+                const res = await fetch('/api/admin/verificar', { credentials: 'include' });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || !data.valid) {
+                    // Sessão inválida: garante logout no servidor para limpar cookie
+                    await fetch('/api/admin/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
+                    localStorage.removeItem('mio_admin_token');
+                    localStorage.removeItem('mio_admin_email');
+                    localStorage.removeItem('mio_admin_logado');
+                    return;
+                }
+                // Sessão válida via cookie
+                document.getElementById('adminEmailLabel').innerText = data.email || '';
                 document.getElementById('telaLogin').classList.add('hidden');
                 document.getElementById('painelAdmin').classList.remove('hidden');
                 document.getElementById('painelAdmin').classList.add('flex');
                 carregarTudo();
             } catch (err) {
-                // Servidor indisponível: não abre o painel para evitar acesso inseguro
-                token = null;
+                // Servidor indisponível: não abre o painel
                 localStorage.removeItem('mio_admin_token');
                 localStorage.removeItem('mio_admin_email');
                 localStorage.removeItem('mio_admin_logado');
-                document.cookie = 'admin_token=; Max-Age=0; path=/; SameSite=Lax';
+                return;
             }
         }
 
