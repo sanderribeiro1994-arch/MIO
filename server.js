@@ -429,6 +429,139 @@ function obterBaseUrl(req) {
   return `${proto}://${host}`;
 }
 
+const BLING_CLIENT_ID = process.env.BLING_CLIENT_ID || '';
+const BLING_CLIENT_SECRET = process.env.BLING_CLIENT_SECRET || '';
+const BLING_CALLBACK_URL = process.env.BLING_CALLBACK_URL || 'https://usemio.com.br/auth/callback';
+const BLING_AUTH_URL = process.env.BLING_AUTH_URL || 'https://www.bling.com.br/Api/v3/oauth/authorize';
+const BLING_TOKEN_URL = process.env.BLING_TOKEN_URL || 'https://www.bling.com.br/Api/v3/oauth/token';
+const BLING_API_BASE = process.env.BLING_API_BASE || 'https://www.bling.com.br/Api/v3';
+
+async function getBlingOauthConfig() {
+  return getConfigChave('bling_oauth', {
+    clientId: BLING_CLIENT_ID,
+    clientSecret: BLING_CLIENT_SECRET,
+    redirectUri: BLING_CALLBACK_URL,
+    accessToken: '',
+    refreshToken: '',
+    tokenType: 'Bearer',
+    expiresAt: 0,
+    connected: false,
+    scope: 'pedido:read pedido:write produto:read produto:write estoque:read estoque:write'
+  });
+}
+
+async function salvarBlingOauthConfig(data = {}) {
+  const cfg = await getBlingOauthConfig();
+  const payload = {
+    ...cfg,
+    ...data,
+    clientId: data.clientId || cfg.clientId || BLING_CLIENT_ID,
+    clientSecret: data.clientSecret || cfg.clientSecret || BLING_CLIENT_SECRET,
+    redirectUri: data.redirectUri || cfg.redirectUri || BLING_CALLBACK_URL,
+    connected: true,
+    updatedAt: new Date().toISOString()
+  };
+  await setConfigChave('bling_oauth', payload);
+  return payload;
+}
+
+async function getBlingAccessToken() {
+  const oauth = await getBlingOauthConfig();
+  const now = Date.now();
+  if (oauth.accessToken && Number(oauth.expiresAt || 0) > now + 60000) {
+    return oauth.accessToken;
+  }
+
+  if (oauth.refreshToken) {
+    const body = new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: oauth.refreshToken,
+      client_id: oauth.clientId || BLING_CLIENT_ID,
+      client_secret: oauth.clientSecret || BLING_CLIENT_SECRET
+    });
+
+    const res = await fetch(BLING_TOKEN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString()
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.access_token) {
+      throw new Error(data.error_description || data.error || 'Falha ao renovar token do Bling.');
+    }
+
+    await salvarBlingOauthConfig({
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token || oauth.refreshToken,
+      tokenType: data.token_type || 'Bearer',
+      expiresAt: Date.now() + ((Number(data.expires_in) || 3600) * 1000),
+      connected: true
+    });
+
+    return data.access_token;
+  }
+
+  throw new Error('Token do Bling não encontrado. Faça a autenticação do OAuth primeiro.');
+}
+
+async function consultarBlingApi(tipo, extraUrl = '') {
+  const oauth = await getBlingOauthConfig();
+  if (!oauth.accessToken) {
+    return { ok: false, error: 'Token do Bling ausente. Faça login via OAuth.' };
+  }
+
+  const endpoints = {
+    pedidos: [
+      `${BLING_API_BASE}/pedidos`,
+      `${BLING_API_BASE}/pedido`,
+      `${BLING_API_BASE}/pedidos?pagina=1&limite=100`,
+      `${BLING_API_BASE}/pedido?pagina=1&limite=100`
+    ],
+    estoque: [
+      `${BLING_API_BASE}/produtos`,
+      `${BLING_API_BASE}/produto`,
+      `${BLING_API_BASE}/produtos?pagina=1&limite=100`,
+      `${BLING_API_BASE}/produto?pagina=1&limite=100`,
+      `${BLING_API_BASE}/estoque`
+    ]
+  };
+
+  const candidates = extraUrl ? [extraUrl] : endpoints[tipo] || [];
+  let lastError = null;
+
+  for (const endpoint of candidates) {
+    try {
+      const res = await fetch(endpoint, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${oauth.accessToken}`,
+          Accept: 'application/json',
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        lastError = data.error || data.message || `Erro em ${endpoint}`;
+        continue;
+      }
+
+      if (data && (Array.isArray(data) || data.data || data.result || data.pedidos || data.produtos || data.itens || data.estoque)) {
+        return { ok: true, data };
+      }
+
+      if (data && typeof data === 'object' && Object.keys(data).length > 0) {
+        return { ok: true, data };
+      }
+    } catch (err) {
+      lastError = err.message;
+    }
+  }
+
+  return { ok: false, error: lastError || `Nenhum fluxo de ${tipo} retornou dados válidos.` };
+}
+
 function normalizarCpf(valor) {
   return String(valor || '').replace(/\D/g, '');
 }
@@ -475,40 +608,63 @@ async function findPedidoByReference(reference) {
   return db.get('SELECT * FROM pedidos WHERE id = ?', [Number(reference)]).catch(() => null);
 }
 
-async function enviarPedidoParaUpseller(pedido) {
+async function enviarPedidoParaBling(pedido) {
   try {
-    const cfg = await getConfigChave('upseller_config', {});
-    if (!cfg || !cfg.ativo || !cfg.token || !cfg.storeId) return { ok: false, motivo: 'Upseller não configurado' };
+    const cfg = await getConfigChave('bling_config', {});
+    if (!cfg || !cfg.ativo || !cfg.apiKey || !cfg.apiToken) {
+      return { ok: false, motivo: 'Bling não configurado' };
+    }
+
     const clienteJson = parseJsonArray(pedido.cliente, {});
     const itensJson = parseJsonArray(pedido.itens, []);
     const enderecoJson = parseJsonArray(pedido.endereco, {});
-    const base = (cfg.url || 'https://api.upseller.com.br').replace(/\/$/, '');
-    const resApi = await fetch(base + '/v1/orders', {
+    const base = (cfg.url || 'https://bling.com.br/Api/v3').replace(/\/$/, '');
+
+    const payload = {
+      data: new Date().toISOString().slice(0, 10),
+      numero: pedido.numero,
+      cliente: {
+        nome: clienteJson.nome || 'Cliente',
+        email: clienteJson.email || '',
+        telefone: clienteJson.telefone || clienteJson.whatsapp || ''
+      },
+      endereco: enderecoJson,
+      itens: itensJson.map(i => ({
+        codigo: i.sku || i.nome,
+        descricao: i.nome,
+        quantidade: Number(i.quantidade || 1),
+        valor: Number(i.preco || 0)
+      })),
+      total: Number(pedido.total || 0),
+      observacoes: 'Pedido gerado pelo site MIO'
+    };
+
+    const resApi = await fetch(base + '/pedido', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.token },
-      body: JSON.stringify({
-        store_id: cfg.storeId,
-        order_number: pedido.numero,
-        customer: clienteJson,
-        products: itensJson.map(i => ({ sku: i.sku || i.nome, quantity: i.quantidade, price: i.preco })),
-        shipping_address: enderecoJson
-      })
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Basic ' + Buffer.from(cfg.apiKey + ':' + cfg.apiToken).toString('base64')
+      },
+      body: JSON.stringify(payload)
     });
+
     const data = await resApi.json().catch(() => ({}));
-    if (!resApi.ok) throw new Error(data.message || 'Falha ao enviar pedido ao Upseller');
-    
-    // Salvar upseller_id no banco para sincronização futura
-    const upId = data.id || data.order_id || data.numero_pedido;
-    if (upId) {
-      await db.run('UPDATE pedidos SET upseller_id = ?, data_upseller_sync = ? WHERE numero = ?', 
-        [upId, new Date().toISOString(), pedido.numero]).catch(() => {});
+    if (!resApi.ok) throw new Error(data.message || data.error || 'Falha ao enviar pedido ao Bling');
+
+    const blingId = data.id || data.pedidoId || data.data?.id || data.numero;
+    if (blingId) {
+      await db.run('UPDATE pedidos SET bling_id = ?, bling_order_id = ?, data_bling_sync = ? WHERE numero = ?', [String(blingId), String(blingId), new Date().toISOString(), pedido.numero]).catch(() => {});
     }
-    
+
     return { ok: true, data };
   } catch (error) {
-    console.warn('Aviso: não foi possível enviar ao Upseller', error);
+    console.warn('Aviso: não foi possível enviar ao Bling', error);
     return { ok: false, motivo: error.message };
   }
+}
+
+async function enviarPedidoParaUpseller(pedido) {
+  return enviarPedidoParaBling(pedido);
 }
 
 // ---------- API: UPLOAD DE IMAGENS ----------
@@ -658,45 +814,218 @@ app.post('/api/admin/clientes/:id/reset-senha', exigirAdmin, async (req, res) =>
 // ---------- API: CONFIGURAÇÕES DE INTEGRAÇÕES ----------
 app.get('/api/integracoes', exigirAdmin, async (req, res) => {
   try {
-    const [pagamento, envio, upseller] = await Promise.all([
+    const [pagamento, envio, bling, oauth] = await Promise.all([
       getConfigChave('pagseguro_config', {
         modo: 'sandbox', email: '', token: '', appId: '', appKey: '', ativo: false
       }),
       getConfigChave('melhorenvio_config', {
         token: '', cepOrigem: '', modo: 'sandbox', ativo: false
       }),
-      getConfigChave('upseller_config', {
-        token: '', storeId: '', url: 'https://api.upseller.com.br', ativo: false
-      })
+      getConfigChave('bling_config', {
+        apiKey: '', apiToken: '', url: 'https://www.bling.com.br/Api/v3', empresaId: '', ativo: false
+      }),
+      getBlingOauthConfig()
     ]);
-    
-    // Se não houver token salvo no banco mas existir variável de ambiente, use-a
+
     if (!envio.token && process.env.MELHOR_ENVIO_TOKEN) {
       envio.token = process.env.MELHOR_ENVIO_TOKEN;
     }
     if (!envio.cepOrigem && process.env.MELHOR_ENVIO_CEP) {
       envio.cepOrigem = process.env.MELHOR_ENVIO_CEP;
     }
-    
-    res.json({ pagamento, envio, upseller });
+
+    res.json({ pagamento, envio, bling, upseller: bling, blingOauth: oauth });
   } catch (err) {
     res.status(500).json({ error: "Erro ao buscar integrações." });
   }
 });
 
 app.put('/api/integracoes', exigirAdmin, async (req, res) => {
-  const { pagamento, envio, upseller } = req.body || {};
+  const { pagamento, envio, bling, upseller, blingOauth } = req.body || {};
   try {
     if (pagamento) await setConfigChave('pagseguro_config', pagamento);
     if (envio) await setConfigChave('melhorenvio_config', envio);
-    if (upseller) await setConfigChave('upseller_config', upseller);
+    if (bling) await setConfigChave('bling_config', bling);
+    if (upseller) await setConfigChave('bling_config', upseller);
+    if (blingOauth) await setConfigChave('bling_oauth', blingOauth);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: "Erro ao salvar integrações." });
   }
 });
 
-// Teste de conexão (valida apenas se as credenciais estão preenchidas)
+app.get('/api/bling/auth', async (req, res) => {
+  try {
+    const cfg = await getBlingOauthConfig();
+    const params = new URLSearchParams({
+      response_type: 'code',
+      client_id: cfg.clientId || BLING_CLIENT_ID,
+      redirect_uri: cfg.redirectUri || BLING_CALLBACK_URL,
+      scope: cfg.scope || 'pedido:read pedido:write produto:read produto:write estoque:read estoque:write',
+      state: crypto.randomBytes(16).toString('hex')
+    });
+
+    const authUrl = `${BLING_AUTH_URL}?${params.toString()}`;
+    res.redirect(authUrl);
+  } catch (err) {
+    res.status(500).json({ ok: false, error: 'Erro ao montar URL de autenticação do Bling.' });
+  }
+});
+
+app.get('/auth/callback', async (req, res) => {
+  try {
+    const { code, state, error, error_description } = req.query || {};
+    if (error) {
+      return res.status(400).json({ ok: false, error: error_description || error || 'Autorização cancelada pelo Bling.' });
+    }
+    if (!code) {
+      return res.status(400).json({ ok: false, error: 'Código de autorização não recebido pelo Bling.' });
+    }
+
+    const cfg = await getBlingOauthConfig();
+    const body = new URLSearchParams({
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: cfg.redirectUri || BLING_CALLBACK_URL,
+      client_id: cfg.clientId || BLING_CLIENT_ID,
+      client_secret: cfg.clientSecret || BLING_CLIENT_SECRET
+    });
+
+    const tokenRes = await fetch(BLING_TOKEN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString()
+    });
+
+    const tokenData = await tokenRes.json().catch(() => ({}));
+    if (!tokenRes.ok || !tokenData.access_token) {
+      return res.status(502).json({ ok: false, error: tokenData.error_description || tokenData.error || 'Erro ao trocar código do Bling por token.' });
+    }
+
+    await salvarBlingOauthConfig({
+      accessToken: tokenData.access_token,
+      refreshToken: tokenData.refresh_token || '',
+      tokenType: tokenData.token_type || 'Bearer',
+      expiresAt: Date.now() + ((Number(tokenData.expires_in) || 3600) * 1000),
+      connected: true,
+      state: state || '',
+      authCode: code
+    });
+
+    return res.json({
+      ok: true,
+      connected: true,
+      accessToken: tokenData.access_token,
+      refreshToken: tokenData.refresh_token || '',
+      expiresIn: Number(tokenData.expires_in) || 3600,
+      callbackUrl: cfg.redirectUri || BLING_CALLBACK_URL
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: 'Erro ao processar callback do Bling: ' + err.message });
+  }
+});
+
+app.get('/api/bling/callback', async (req, res) => {
+  return res.redirect(302, '/auth/callback?' + new URLSearchParams(req.query).toString());
+});
+
+app.post('/api/bling/auth/refresh', exigirAdmin, async (req, res) => {
+  try {
+    const oauth = await getBlingOauthConfig();
+    if (!oauth.refreshToken) {
+      return res.status(400).json({ ok: false, error: 'Refresh token do Bling não encontrado.' });
+    }
+
+    const body = new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: oauth.refreshToken,
+      client_id: oauth.clientId || BLING_CLIENT_ID,
+      client_secret: oauth.clientSecret || BLING_CLIENT_SECRET
+    });
+
+    const tokenRes = await fetch(BLING_TOKEN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString()
+    });
+
+    const tokenData = await tokenRes.json().catch(() => ({}));
+    if (!tokenRes.ok || !tokenData.access_token) {
+      return res.status(502).json({ ok: false, error: tokenData.error_description || tokenData.error || 'Erro ao atualizar token do Bling.' });
+    }
+
+    const saved = await salvarBlingOauthConfig({
+      accessToken: tokenData.access_token,
+      refreshToken: tokenData.refresh_token || oauth.refreshToken,
+      tokenType: tokenData.token_type || 'Bearer',
+      expiresAt: Date.now() + ((Number(tokenData.expires_in) || 3600) * 1000),
+      connected: true
+    });
+
+    res.json({ ok: true, token: saved });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: 'Erro ao renovar token do Bling: ' + err.message });
+  }
+});
+
+app.get('/api/bling/status', exigirAdmin, async (req, res) => {
+  try {
+    const oauth = await getBlingOauthConfig();
+    res.json({ ok: true, connected: !!oauth.connected && !!oauth.accessToken, oauth });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/bling/sync', exigirAdmin, async (req, res) => {
+  try {
+    const cfg = await getConfigChave('bling_config', {});
+    const oauth = await getBlingOauthConfig();
+    if (!oauth.accessToken) {
+      return res.status(400).json({ ok: false, error: 'Bling não autenticado. Faça login OAuth primeiro.' });
+    }
+
+    const [pedidos, estoque] = await Promise.all([
+      consultarBlingApi('pedidos'),
+      consultarBlingApi('estoque')
+    ]);
+
+    const payload = {
+      conectado: true,
+      pedidos: pedidos.ok ? pedidos.data : null,
+      estoque: estoque.ok ? estoque.data : null,
+      sincronizadoEm: new Date().toISOString()
+    };
+
+    await setConfigChave('bling_sync_last', payload);
+    res.json({ ok: true, data: payload, mensagem: 'Sincronização Bling processada com sucesso.' });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: 'Erro ao preparar sincronização do Bling: ' + err.message });
+  }
+});
+
+app.get('/api/bling/sync/pedidos', exigirAdmin, async (req, res) => {
+  try {
+    const data = await consultarBlingApi('pedidos');
+    if (!data.ok) return res.status(502).json({ ok: false, error: data.error || 'Erro ao buscar pedidos do Bling.' });
+    await setConfigChave('bling_sync_pedidos_last', { data: data.data, sincronizadoEm: new Date().toISOString() });
+    res.json({ ok: true, pedidos: data.data });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: 'Erro ao sincronizar pedidos com Bling: ' + err.message });
+  }
+});
+
+app.get('/api/bling/sync/estoque', exigirAdmin, async (req, res) => {
+  try {
+    const data = await consultarBlingApi('estoque');
+    if (!data.ok) return res.status(502).json({ ok: false, error: data.error || 'Erro ao buscar estoque do Bling.' });
+    await setConfigChave('bling_sync_estoque_last', { data: data.data, sincronizadoEm: new Date().toISOString() });
+    res.json({ ok: true, estoque: data.data });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: 'Erro ao sincronizar estoque com Bling: ' + err.message });
+  }
+});
+
 app.post('/api/integracoes/testar', exigirAdmin, async (req, res) => {
   const { tipo } = req.body || {};
   try {
@@ -709,22 +1038,19 @@ app.post('/api/integracoes/testar', exigirAdmin, async (req, res) => {
     }
     if (tipo === 'envio') {
       let cfg = await getConfigChave('melhorenvio_config', {});
-      
-      // Se não houver token salvo, tenta usar a variável de ambiente
       let token = cfg.token || process.env.MELHOR_ENVIO_TOKEN || '';
       let cepOrigem = cfg.cepOrigem || process.env.MELHOR_ENVIO_CEP || '';
-      
       if (!token || !cepOrigem) {
         return res.json({ ok: false, mensagem: "Token e CEP de origem do Melhor Envio não preenchidos." });
       }
       return res.json({ ok: true, mensagem: "✅ Credenciais Melhor Envio configuradas!" + (process.env.MELHOR_ENVIO_TOKEN ? " (Via variável de ambiente)" : "") });
     }
-    if (tipo === 'upseller') {
-      const cfg = await getConfigChave('upseller_config', {});
-      if (!cfg.token || !cfg.storeId) {
-        return res.json({ ok: false, mensagem: "Token e Store ID do Upseller não preenchidos." });
+    if (tipo === 'upseller' || tipo === 'bling') {
+      const cfg = await getConfigChave('bling_config', {});
+      if (!cfg.apiKey || !cfg.apiToken) {
+        return res.json({ ok: false, mensagem: "API Key e API Token do Bling não preenchidos." });
       }
-      return res.json({ ok: true, mensagem: "Credenciais Upseller configuradas." });
+      return res.json({ ok: true, mensagem: "Credenciais Bling configuradas." });
     }
     res.json({ ok: false, mensagem: "Tipo desconhecido." });
   } catch (err) {
@@ -1364,127 +1690,74 @@ app.post('/api/envio/calcular', async (req, res) => {
   }
 });
 
-// ---------- API: EXPEDIÇÃO (Upseller) ----------
-app.post('/api/upseller/pedido', async (req, res) => {
+// ---------- API: EXPEDIÇÃO (Bling) ----------
+app.post('/api/bling/pedido', async (req, res) => {
   const pedido = req.body;
   if (!pedido || !pedido.numero || !pedido.cliente) return res.status(400).json({ error: "Dados do pedido incompletos." });
   try {
-    const cfg = await getConfigChave('upseller_config', {});
-    if (!cfg.token || !cfg.storeId) {
-      return res.json({ ok: false, demo: true, message: "Upseller não configurado. Pedido não enviado para expedição." });
+    const cfg = await getConfigChave('bling_config', {});
+    if (!cfg.apiKey || !cfg.apiToken) {
+      return res.json({ ok: false, demo: true, message: "Bling não configurado. Pedido não enviado para ERP/expedição." });
     }
-    const base = (cfg.url || 'https://api.upseller.com.br').replace(/\/$/, '');
-    const resApi = await fetch(base + '/v1/orders', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.token },
-      body: JSON.stringify({
-        store_id: cfg.storeId,
-        order_number: pedido.numero,
-        customer: pedido.cliente,
-        products: (pedido.itens || []).map(i => ({ sku: i.sku || i.nome, quantity: i.quantidade, price: i.preco })),
-        shipping_address: pedido.endereco || {}
-      })
-    });
-    const data = await resApi.json().catch(() => ({}));
-    if (!resApi.ok) return res.status(502).json({ error: data.message || "Erro ao criar pedido no Upseller." });
-    res.json({ ok: true, upseller: data });
+
+    const resultado = await enviarPedidoParaBling(pedido);
+    if (!resultado.ok) return res.status(502).json({ ok: false, error: resultado.motivo || 'Erro ao criar pedido no Bling.' });
+    res.json({ ok: true, bling: resultado.data });
   } catch (err) {
-    res.status(500).json({ error: "Erro ao enviar ao Upseller: " + err.message });
+    res.status(500).json({ error: "Erro ao enviar ao Bling: " + err.message });
   }
 });
 
-// ---------- API: REENVIAR PEDIDO AO UPSELLER (para admin) ----------
-app.post('/api/upseller/reenviar/:numeroPedido', exigirAdmin, async (req, res) => {
+app.post('/api/upseller/pedido', async (req, res) => {
+  return app._router.handle ? res.json({ ok: true, notice: 'Compatibilidade: o sistema agora usa Bling.', bling: await enviarPedidoParaBling(req.body || {}) }) : res.json({ ok: true, notice: 'Compatibilidade: o sistema agora usa Bling.' });
+});
+
+app.post('/api/bling/reenviar/:numeroPedido', exigirAdmin, async (req, res) => {
   const numeroPedido = req.params.numeroPedido;
   try {
-    const pedido = await db.get("SELECT * FROM pedidos WHERE numero = ?", [numeroPedido]);
-    if (!pedido) return res.status(404).json({ error: "Pedido não encontrado." });
-
-    const cfg = await getConfigChave('upseller_config', {});
-    if (!cfg.token || !cfg.storeId) {
-      return res.json({ ok: false, message: "Upseller não configurado." });
-    }
-
-    const clienteJson = parseJsonArray(pedido.cliente, {});
-    const itensJson = parseJsonArray(pedido.itens, []);
-    const enderecoJson = parseJsonArray(pedido.endereco, {});
-
-    const base = (cfg.url || 'https://api.upseller.com.br').replace(/\/$/, '');
-    const resApi = await fetch(base + '/v1/orders', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.token },
-      body: JSON.stringify({
-        store_id: cfg.storeId,
-        order_number: pedido.numero,
-        customer: clienteJson,
-        products: itensJson.map(i => ({ sku: i.sku || i.nome, quantity: i.quantidade, price: i.preco })),
-        shipping_address: enderecoJson
-      })
-    });
-
-    const data = await resApi.json().catch(() => ({}));
-    if (!resApi.ok) return res.status(502).json({ error: data.message || "Erro ao enviar ao Upseller." });
-    res.json({ ok: true, message: "Pedido reenviado ao Upseller com sucesso!", upseller: data });
+    const pedido = await db.get('SELECT * FROM pedidos WHERE numero = ?', [numeroPedido]);
+    if (!pedido) return res.status(404).json({ error: 'Pedido não encontrado.' });
+    const resultado = await enviarPedidoParaBling(pedido);
+    if (!resultado.ok) return res.status(502).json({ error: resultado.motivo || 'Erro ao enviar ao Bling.' });
+    return res.json({ ok: true, message: 'Pedido reenviado ao Bling com sucesso!', bling: resultado.data });
   } catch (err) {
-    res.status(500).json({ error: "Erro ao reenviar: " + err.message });
+    res.status(500).json({ error: 'Erro ao reenviar: ' + err.message });
   }
 });
 
-// ---------- WEBHOOK: RECEBER ATUALIZAÇÕES DO UPSELLER ----------
-app.post('/api/webhooks/upseller', async (req, res) => {
+app.post('/api/webhooks/bling', async (req, res) => {
   try {
-    const { order_number, tracking_number, status, shipped_date } = req.body || {};
-    
-    if (!order_number) {
-      return res.status(400).json({ ok: false, error: "order_number obrigatório" });
-    }
+    const body = req.body || {};
+    const order_number = body.order_number || body.numero || body.numeroPedido || body.orderNumber;
+    const tracking_number = body.tracking_number || body.codigoRastreio || body.trackingNumber || body.rastreio;
+    const status = body.status || body.estado || 'Enviado';
+    if (!order_number) return res.status(400).json({ ok: false, error: 'order_number obrigatório' });
 
     const pedido = await db.get('SELECT * FROM pedidos WHERE numero = ?', [order_number]);
-    if (!pedido) {
-      return res.status(404).json({ ok: false, error: "Pedido não encontrado" });
-    }
+    if (!pedido) return res.status(404).json({ ok: false, error: 'Pedido não encontrado' });
 
-    // Mapear status do Upseller para status MIO
-    const statusMap = {
-      'pending': 'Em Preparação',
-      'processing': 'Em Preparação',
-      'shipped': 'Enviado',
-      'delivered': 'Entregue',
-      'cancelled': 'Cancelado'
-    };
-
-    const statusMio = statusMap[status?.toLowerCase()] || status || 'Enviado';
-    
-    // Atualizar pedido com informações do Upseller
-    const dataAtualizacao = new Date().toISOString();
+    const statusMap = { pending: 'Em Preparação', processing: 'Em Preparação', shipped: 'Enviado', delivered: 'Entregue', cancelled: 'Cancelado', sent: 'Enviado' };
+    const statusMio = statusMap[String(status).toLowerCase()] || String(status || 'Enviado');
     await db.run(
-      `UPDATE pedidos SET 
-        upseller_tracking = ?, 
-        upseller_status = ?, 
-        data_upseller_sync = ?, 
-        status = ?,
-        data_envio = ?
-      WHERE numero = ?`,
-      [tracking_number || null, status, dataAtualizacao, statusMio, shipped_date || null, order_number]
+      `UPDATE pedidos SET bling_status = ?, bling_tracking = ?, data_bling_sync = ?, status = ?, data_envio = ? WHERE numero = ?`,
+      [String(status), tracking_number || null, new Date().toISOString(), statusMio, body.data_envio || null, order_number]
     );
 
-    // Se tem código de rastreamento e não tem código salvo, salvar
     if (tracking_number && !pedido.codigo_rastreamento) {
       await db.run('UPDATE pedidos SET codigo_rastreamento = ? WHERE numero = ?', [tracking_number, order_number]);
     }
 
-    res.json({ ok: true, message: "Webhook recebido e processado" });
+    res.json({ ok: true, message: 'Webhook Bling recebido e processado' });
   } catch (err) {
-    console.error('Erro ao processar webhook Upseller:', err);
+    console.error('Erro ao processar webhook Bling:', err);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
 
-// ---------- API: LISTAR EXPEDIÇÕES NO UPSELLER ----------
-app.get('/api/upseller/expeditions', exigirAdmin, async (req, res) => {
+app.get('/api/bling/expeditions', exigirAdmin, async (req, res) => {
   try {
     const pedidos = await db.all(
-      'SELECT numero, cliente, itens, status, total, codigo_rastreamento, upseller_tracking, upseller_status, data_envio FROM pedidos WHERE status IN (?, ?) ORDER BY data DESC',
+      'SELECT numero, cliente, itens, status, total, codigo_rastreamento, bling_tracking, bling_status, data_envio FROM pedidos WHERE status IN (?, ?) ORDER BY data DESC',
       ['Em Preparação', 'Enviado']
     );
 
@@ -1495,9 +1768,9 @@ app.get('/api/upseller/expeditions', exigirAdmin, async (req, res) => {
         cliente_nome: cli.nome || 'N/A',
         cliente_email: cli.email || 'N/A',
         status_mio: p.status,
-        status_upseller: p.upseller_status,
+        status_upseller: p.bling_status,
         tracking_mio: p.codigo_rastreamento,
-        tracking_upseller: p.upseller_tracking,
+        tracking_upseller: p.bling_tracking,
         data_envio: p.data_envio,
         total: p.total
       };
@@ -1729,14 +2002,14 @@ app.put('/api/pedidos/:id', exigirAdmin, async (req, res) => {
     valores.push(req.params.id);
     await db.run(`UPDATE pedidos SET ${campos.join(', ')} WHERE id = ?`, valores);
     
-    // Se mudou para "Em Preparação" e ainda não foi enviado ao Upseller, enviar
-    if (status === 'Em Preparação' && !pedido.upseller_id) {
+    // Se mudou para "Em Preparação" e ainda não foi enviado ao Bling, enviar
+    if (status === 'Em Preparação' && !pedido.bling_id && !pedido.upseller_id) {
       const pedidoAtualizado = await db.get('SELECT * FROM pedidos WHERE id = ?', [req.params.id]);
-      const result = await enviarPedidoParaUpseller(pedidoAtualizado);
+      const result = await enviarPedidoParaBling(pedidoAtualizado);
       if (result.ok) {
-        res.json({ ok: true, upseller: "Pedido enviado para expedição" });
+        res.json({ ok: true, bling: "Pedido enviado para ERP/expedição" });
       } else {
-        res.json({ ok: true, aviso: "Pedido atualizado, mas não foi enviado ao Upseller: " + result.motivo });
+        res.json({ ok: true, aviso: "Pedido atualizado, mas não foi enviado ao Bling: " + result.motivo });
       }
     } else {
       res.json({ ok: true });

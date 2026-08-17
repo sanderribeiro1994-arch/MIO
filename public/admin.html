@@ -363,33 +363,33 @@
 
                     <div class="bg-zinc-900/10 border border-zinc-900 rounded-xl p-5">
                         <h3 class="text-sm font-bold uppercase mb-4 flex items-center gap-2">
-                            <i data-lucide="package" class="w-4 h-4 text-amber-400"></i> Upseller (Expedição)
+                            <i data-lucide="package" class="w-4 h-4 text-amber-400"></i> Bling (ERP / Expedição)
                         </h3>
-                        <p class="text-[11px] text-zinc-500 mb-4">Envie os pedidos aprovados para o Upseller controlar a expedição.</p>
+                        <p class="text-[11px] text-zinc-500 mb-4">Envie pedidos para o Bling para controle do ERP, faturamento e expedição.</p>
                         <div class="space-y-3">
                             <div>
-                                <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Token da API</label>
+                                <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">API Key</label>
                                 <input type="text" id="up-token" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2.5 text-sm focus:outline-none focus:border-amber-400">
                             </div>
                             <div>
-                                <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Store ID</label>
+                                <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">API Token</label>
                                 <input type="text" id="up-storeId" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2.5 text-sm focus:outline-none focus:border-amber-400">
                             </div>
                             <div>
                                 <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">URL da API</label>
-                                <input type="text" id="up-url" value="https://api.upseller.com.br" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2.5 text-sm focus:outline-none focus:border-amber-400">
+                                <input type="text" id="up-url" value="https://www.bling.com.br/Api/v3" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2.5 text-sm focus:outline-none focus:border-amber-400">
                             </div>
                             <div class="flex items-center gap-2">
                                 <input type="checkbox" id="up-ativo" class="accent-amber-500">
-                                <label class="text-xs text-zinc-400">Ativar envio automático de pedidos ao Upseller</label>
+                                <label class="text-xs text-zinc-400">Ativar sincronização automática com o Bling</label>
                             </div>
                         </div>
                         <div class="mt-4 flex gap-3">
-                            <button onclick="testarIntegracao('upseller')" class="bg-zinc-800 hover:bg-zinc-700 px-4 py-2.5 rounded text-xs font-bold uppercase transition flex items-center gap-2">
+                            <button onclick="testarIntegracao('bling')" class="bg-zinc-800 hover:bg-zinc-700 px-4 py-2.5 rounded text-xs font-bold uppercase transition flex items-center gap-2">
                                 <i data-lucide="plug-zap" class="w-4 h-4"></i> Testar
                             </button>
                             <button onclick="salvarIntegracoes()" class="bg-amber-500 hover:bg-amber-400 text-black px-5 py-2.5 rounded text-xs font-black uppercase transition flex items-center gap-2">
-                                <i data-lucide="save" class="w-4 h-4"></i> Salvar Expedição
+                                <i data-lucide="save" class="w-4 h-4"></i> Salvar ERP
                             </button>
                         </div>
                         <p id="msg-up" class="text-xs font-mono mt-3 hidden"></p>
@@ -670,7 +670,7 @@ let config = {};
 conteudo: ['Conteúdo do Site', 'Edite banners, carrossel e destaques'],
             config: ['Configurações', 'Contatos, redes e segurança'],
             pagamentos: ['Pagamentos', 'Integração com PagSeguro'],
-            envio: ['Envio & Expedição', 'Melhor Envio e Upseller']
+            envio: ['Envio & ERP', 'Melhor Envio e Bling']
         };
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -1522,10 +1522,10 @@ config.logo = {
                         token: document.getElementById('me-token').value,
                         cepOrigem: document.getElementById('me-cepOrigem').value
                     },
-                    upseller: {
+                    bling: {
                         ativo: document.getElementById('up-ativo').checked,
-                        token: document.getElementById('up-token').value,
-                        storeId: document.getElementById('up-storeId').value,
+                        apiKey: document.getElementById('up-token').value,
+                        apiToken: document.getElementById('up-storeId').value,
                         url: document.getElementById('up-url').value
                     }
                 };
@@ -1557,7 +1557,7 @@ config.logo = {
                 const int = await API('/api/integracoes');
                 const pg = int.pagamento || {};
                 const me = int.envio || {};
-                const up = int.upseller || {};
+                const bl = int.bling || int.upseller || {};
                 document.getElementById('pg-ativo').checked = !!pg.ativo;
                 if (pg.modo) document.getElementById('pg-modo').value = pg.modo;
                 if (pg.email) document.getElementById('pg-email').value = pg.email;
@@ -1570,10 +1570,10 @@ config.logo = {
                 if (me.token) document.getElementById('me-token').value = me.token;
                 if (me.cepOrigem) document.getElementById('me-cepOrigem').value = me.cepOrigem;
 
-                document.getElementById('up-ativo').checked = !!up.ativo;
-                if (up.token) document.getElementById('up-token').value = up.token;
-                if (up.storeId) document.getElementById('up-storeId').value = up.storeId;
-                if (up.url) document.getElementById('up-url').value = up.url;
+                document.getElementById('up-ativo').checked = !!bl.ativo;
+                if (bl.apiKey) document.getElementById('up-token').value = bl.apiKey;
+                if (bl.apiToken) document.getElementById('up-storeId').value = bl.apiToken;
+                if (bl.url) document.getElementById('up-url').value = bl.url;
             } catch (err) {
                 // ignora se não carregou
             }
