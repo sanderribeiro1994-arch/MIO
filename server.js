@@ -436,6 +436,23 @@ const BLING_AUTH_URL = process.env.BLING_AUTH_URL || 'https://www.bling.com.br/A
 const BLING_TOKEN_URL = process.env.BLING_TOKEN_URL || 'https://www.bling.com.br/Api/v3/oauth/token';
 const BLING_API_BASE = process.env.BLING_API_BASE || 'https://www.bling.com.br/Api/v3';
 
+function getBlingClientCredentials(cfg = {}) {
+  const clientId = (cfg.clientId || process.env.BLING_CLIENT_ID || BLING_CLIENT_ID || '').trim();
+  const clientSecret = (cfg.clientSecret || process.env.BLING_CLIENT_SECRET || BLING_CLIENT_SECRET || '').trim();
+  return { clientId, clientSecret };
+}
+
+function getBlingTokenHeaders(cfg = {}) {
+  const { clientId, clientSecret } = getBlingClientCredentials(cfg);
+  const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+
+  if (clientId && clientSecret) {
+    headers.Authorization = `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`;
+  }
+
+  return headers;
+}
+
 async function getBlingOauthConfig() {
   return getConfigChave('bling_oauth', {
     clientId: BLING_CLIENT_ID,
@@ -883,17 +900,22 @@ app.get('/auth/callback', async (req, res) => {
     }
 
     const cfg = await getBlingOauthConfig();
+    const clientId = cfg.clientId || BLING_CLIENT_ID;
+    const clientSecret = cfg.clientSecret || BLING_CLIENT_SECRET;
     const body = new URLSearchParams({
       grant_type: 'authorization_code',
       code,
       redirect_uri: cfg.redirectUri || BLING_CALLBACK_URL,
-      client_id: cfg.clientId || BLING_CLIENT_ID,
-      client_secret: cfg.clientSecret || BLING_CLIENT_SECRET
+      client_id: clientId,
+      client_secret: clientSecret
     });
 
     const tokenRes = await fetch(BLING_TOKEN_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: {
+        ...getBlingTokenHeaders({ clientId, clientSecret }),
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
       body: body.toString()
     });
 
@@ -962,16 +984,21 @@ app.post('/api/bling/auth/refresh', exigirAdmin, async (req, res) => {
       return res.status(400).json({ ok: false, error: 'Refresh token do Bling não encontrado.' });
     }
 
+    const clientId = oauth.clientId || BLING_CLIENT_ID;
+    const clientSecret = oauth.clientSecret || BLING_CLIENT_SECRET;
     const body = new URLSearchParams({
       grant_type: 'refresh_token',
       refresh_token: oauth.refreshToken,
-      client_id: oauth.clientId || BLING_CLIENT_ID,
-      client_secret: oauth.clientSecret || BLING_CLIENT_SECRET
+      client_id: clientId,
+      client_secret: clientSecret
     });
 
     const tokenRes = await fetch(BLING_TOKEN_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: {
+        ...getBlingTokenHeaders({ clientId, clientSecret }),
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
       body: body.toString()
     });
 
