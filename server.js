@@ -487,7 +487,7 @@ function getBlingTokenHeaders(cfg = {}) {
 }
 
 async function getBlingOauthConfig() {
-  return getConfigChave('bling_oauth', {
+  const cfg = await getConfigChave('bling_oauth', {
     clientId: BLING_CLIENT_ID,
     clientSecret: BLING_CLIENT_SECRET,
     redirectUri: BLING_CALLBACK_URL,
@@ -498,6 +498,14 @@ async function getBlingOauthConfig() {
     connected: false,
     scope: 'pedido:read pedido:write produto:read produto:write estoque:read estoque:write'
   });
+
+  return {
+    ...cfg,
+    clientId: cfg.clientId || BLING_CLIENT_ID,
+    clientSecret: cfg.clientSecret || BLING_CLIENT_SECRET,
+    redirectUri: cfg.redirectUri || BLING_CALLBACK_URL,
+    scope: cfg.scope || 'pedido:read pedido:write produto:read produto:write estoque:read estoque:write'
+  };
 }
 
 async function salvarBlingOauthConfig(data = {}) {
@@ -884,7 +892,15 @@ app.get('/api/integracoes', exigirAdmin, async (req, res) => {
       envio.cepOrigem = process.env.MELHOR_ENVIO_CEP;
     }
 
-    res.json({ pagamento, envio, bling, upseller: bling, blingOauth: oauth });
+    const blingOauth = {
+      ...oauth,
+      clientId: oauth.clientId || BLING_CLIENT_ID,
+      clientSecret: oauth.clientSecret || BLING_CLIENT_SECRET,
+      redirectUri: oauth.redirectUri || BLING_CALLBACK_URL,
+      connected: Boolean(oauth.connected || oauth.accessToken)
+    };
+
+    res.json({ pagamento, envio, bling, upseller: bling, blingOauth });
   } catch (err) {
     res.status(500).json({ error: "Erro ao buscar integrações." });
   }
