@@ -636,6 +636,7 @@ let config = {};
                 token = data.token;
                 localStorage.setItem('mio_admin_token', data.token);
                 localStorage.setItem('mio_admin_email', data.email);
+                document.cookie = 'admin_token=' + encodeURIComponent(data.token) + '; path=/; Max-Age=900; SameSite=Lax';
                 document.getElementById('adminEmailLabel').innerText = data.email;
                 document.getElementById('telaLogin').classList.add('hidden');
                 document.getElementById('painelAdmin').classList.remove('hidden');
@@ -655,6 +656,7 @@ let config = {};
             localStorage.removeItem('mio_admin_token');
             localStorage.removeItem('mio_admin_email');
             localStorage.removeItem('mio_admin_logado');
+            document.cookie = 'admin_token=; Max-Age=0; path=/; SameSite=Lax';
             document.getElementById('painelAdmin').classList.add('hidden');
             document.getElementById('painelAdmin').classList.remove('flex');
             document.getElementById('telaLogin').classList.remove('hidden');
@@ -1604,14 +1606,9 @@ config.logo = {
         // liberar o painel. Se o token for inválido/expirado, volta ao login.
         async function inicializarSessao() {
             const tokenSalvo = localStorage.getItem('mio_admin_token');
-            if (!tokenSalvo) {
-                const cookieToken = document.cookie.split('; ').find(row => row.startsWith('admin_token='));
-                if (cookieToken) {
-                    token = decodeURIComponent(cookieToken.split('=')[1]);
-                }
-            } else {
-                token = tokenSalvo;
-            }
+            const cookieToken = document.cookie.split('; ').find(row => row.startsWith('admin_token='));
+            const tokenCookie = cookieToken ? decodeURIComponent(cookieToken.split('=').slice(1).join('=')) : null;
+            token = tokenSalvo || tokenCookie || null;
 
             if (!token) return;
 
@@ -1622,7 +1619,6 @@ config.logo = {
                 });
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok || !data.valid) {
-                    // Token inválido ou expirado: limpa e mantém na tela de login
                     token = null;
                     localStorage.removeItem('mio_admin_token');
                     localStorage.removeItem('mio_admin_email');
@@ -1630,13 +1626,14 @@ config.logo = {
                     document.cookie = 'admin_token=; Max-Age=0; path=/; SameSite=Lax';
                     return;
                 }
+                localStorage.setItem('mio_admin_token', token);
+                if (data.email) localStorage.setItem('mio_admin_email', data.email);
                 document.getElementById('adminEmailLabel').innerText = data.email || localStorage.getItem('mio_admin_email') || '';
                 document.getElementById('telaLogin').classList.add('hidden');
                 document.getElementById('painelAdmin').classList.remove('hidden');
                 document.getElementById('painelAdmin').classList.add('flex');
                 carregarTudo();
             } catch (err) {
-                // Servidor indisponível: não abre o painel para evitar acesso inseguro
                 token = null;
                 localStorage.removeItem('mio_admin_token');
                 localStorage.removeItem('mio_admin_email');

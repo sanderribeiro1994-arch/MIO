@@ -79,6 +79,27 @@ function gerarTokenCSRF() {
   return crypto.randomBytes(24).toString('hex');
 }
 
+function salvarSessaoAdmin(token, email, expiraEm) {
+  if (!token || !email) return;
+  sessaoAdmin.set(token, { email, expiraEm });
+}
+
+function carregarSessaoAdmin(token) {
+  if (!token) return null;
+  const sessao = sessaoAdmin.get(token);
+  if (!sessao) return null;
+  if (sessao.expiraEm < Date.now()) {
+    sessaoAdmin.delete(token);
+    return null;
+  }
+  return sessao;
+}
+
+function limparSessaoAdmin(token) {
+  if (!token) return;
+  sessaoAdmin.delete(token);
+}
+
 function exigirCliente(req, res, next) {
   const token = req.headers['x-client-token'];
   if (!token || !sessaoCliente.has(token)) {
@@ -908,7 +929,7 @@ app.get('/auth/callback', async (req, res) => {
       return res.status(400).json({ ok: false, error: error_description || error || 'Autorização cancelada pelo Bling.' });
     }
     if (!code) {
-      return res.status(400).json({ ok: false, error: 'Código de autorização não recebido pelo Bling.' });
+      return res.redirect('/admin.html?bling_error=missing_code&message=' + encodeURIComponent('Acesso ao callback do Bling sem code. Use a rota /api/bling/auth para iniciar o login.'));
     }
 
     const cfg = await getBlingOauthConfig();
@@ -1857,13 +1878,15 @@ app.post('/api/admin/login', loginLimiter, async (req, res) => {
       return res.status(401).json({ error: "Credenciais inválidas." });
     }
     const token = crypto.randomBytes(32).toString('hex');
-    sessaoAdmin.set(token, { email: admin.email, expiraEm: Date.now() + 15 * 60 * 1000 });
+    const expiraEm = Date.now() + 15 * 60 * 1000;
+    await salvarSessaoAdmin(token, admin.email, expiraEm);
 
     res.cookie('admin_token', token, {
-      httpOnly: true,
+      httpOnly: false,
       sameSite: 'lax',
       secure: IS_PROD,
-      maxAge: 15 * 60 * 1000
+      maxAge: 15 * 60 * 1000,
+      path: '/'
     });
 
     res.json({ token, email: admin.email });
@@ -1872,25 +1895,27 @@ app.post('/api/admin/login', loginLimiter, async (req, res) => {
   }
 });
 
-app.post('/api/admin/logout', (req, res) => {
+app.post('/api/admin/logout', async (req, res) => {
   const token = getAdminTokenFromRequest(req);
-  if (token) sessaoAdmin.delete(token);
-  res.clearCookie('admin_token');
+  limparSessaoAdmin(token);
+  res.clearCookie('admin_token', { path: '/' });
   res.json({ ok: true });
 });
 
 // Verifica se um token de admin é válido (usado ao restaurar sessão no painel)
-app.get('/api/admin/verificar', (req, res) => {
+app.get('/api/admin/verificar', async (req, res) => {
   const token = getAdminTokenFromRequest(req);
-  if (!token || !sessaoAdmin.has(token)) {
+  if (!token) {
     return res.status(401).json({ valid: false });
   }
-  const sessao = sessaoAdmin.get(token);
-  if (sessao.expiraEm < Date.now()) {
-    sessaoAdmin.delete(token);
+
+  const sessao = await carregarSessaoAdmin(token);
+  if (!sessao) {
     return res.status(401).json({ valid: false });
   }
-  sessao.expiraEm = Date.now() + 15 * 60 * 1000; // renova (deslizante)
+
+  sessao.expiraEm = Date.now() + 15 * 60 * 1000;
+  await salvarSessaoAdmin(token, sessao.email, sessao.expiraEm);
   res.json({ valid: true, email: sessao.email });
 });
 
