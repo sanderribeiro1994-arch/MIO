@@ -676,6 +676,7 @@ async function buscarConfigPagSeguro() {
     modo: 'sandbox',
     email: '',
     token: '',
+    publicKey: '',
     appId: '',
     appKey: ''
   });
@@ -685,6 +686,7 @@ async function buscarConfigPagSeguro() {
     modo: process.env.PAGBANK_MODO || cfg.modo || 'sandbox',
     email: process.env.PAGBANK_EMAIL || cfg.email || '',
     token: process.env.PAGBANK_TOKEN || cfg.token || '',
+    publicKey: process.env.PAGBANK_PUBLIC_KEY || cfg.publicKey || '',
     appId: process.env.PAGBANK_APP_ID || cfg.appId || '',
     appKey: process.env.PAGBANK_APP_KEY || cfg.appKey || ''
   };
@@ -1169,11 +1171,11 @@ app.post('/api/integracoes/testar', exigirAdmin, async (req, res) => {
   const { tipo } = req.body || {};
   try {
     if (tipo === 'pagamento') {
-      const cfg = await getConfigChave('pagseguro_config', {});
-      if (!cfg.token && !(cfg.appKey && cfg.appId)) {
+      const cfg = await buscarConfigPagSeguro();
+      if (!cfg.token) {
         return res.json({ ok: false, mensagem: "Credenciais do PagSeguro não preenchidas." });
       }
-      return res.json({ ok: true, mensagem: "Credenciais PagSeguro configuradas. Conecte ao PagSeguro para validar o token." });
+      return res.json({ ok: true, mensagem: "Token PagBank configurado. Para cartão, informe também a chave pública." });
     }
     if (tipo === 'envio') {
       let cfg = await getConfigChave('melhorenvio_config', {});
@@ -1204,7 +1206,8 @@ app.get('/api/pagseguro/public-config', async (req, res) => {
       ok: true,
       ativo: !!cfg.ativo,
       modo: cfg.modo || 'sandbox',
-      configurado: Boolean(cfg.token && cfg.appId && cfg.appKey)
+      configurado: Boolean(cfg.token),
+      publicKey: cfg.publicKey || ''
     });
   } catch (error) {
     res.status(500).json({ ok: false, error: 'Erro ao carregar configurações públicas do PagSeguro.' });
@@ -1301,24 +1304,10 @@ async function criarCargaPagSeguro(req, payload) {
 app.get('/api/pagseguro/session', async (req, res) => {
   try {
     const cfg = await buscarConfigPagSeguro();
-    if (!cfg.ativo || (!cfg.appId || !cfg.appKey)) {
-      return res.status(403).json({ ok: false, error: 'PagSeguro desativado ou credenciais incompletas no painel administrativo.' });
+    if (!cfg.ativo || !cfg.token) {
+      return res.status(403).json({ ok: false, error: 'PagBank desativado ou token não configurado.' });
     }
-    const base = getPagSeguroBase(cfg);
-    const fetchRes = await fetch(base + '/sessions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${cfg.token || ''}`,
-        'x-api-key': cfg.appKey,
-        'x-api-version': '2024-01-01'
-      }
-    });
-    const data = await fetchRes.json().catch(() => ({}));
-    if (!fetchRes.ok) {
-      return res.status(502).json({ ok: false, error: data.message || 'Erro ao obter sessão do PagSeguro.' });
-    }
-    return res.json({ ok: true, sessionId: data.id || data.session_id || data.sessionId });
+    return res.json({ ok: true, sessionId: null });
   } catch (error) {
     return res.status(500).json({ ok: false, error: 'Erro interno ao gerar sessão do PagSeguro: ' + error.message });
   }

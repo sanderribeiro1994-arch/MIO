@@ -243,7 +243,7 @@
     let metodoPagamento = 'pix';
     const FRETE_FIXO = 14.90;
     const META_FRETE_GRATIS = 249.00;
-    let pagSeguroConfig = { ativo: false, appKey: '', appId: '', modo: 'sandbox' };
+    let pagSeguroConfig = { ativo: false, publicKey: '', modo: 'sandbox' };
     let pagSeguroSessionId = '';
     let pollingPix = null;
     // Frete cotado via Melhor Envio (ou fallback pela UF). Padrão: R$ 14,90
@@ -282,25 +282,11 @@
     }
 
     async function prepararPagSeguro() {
-      if (!pagSeguroConfig.ativo || !pagSeguroConfig.appKey) {
+      if (!pagSeguroConfig.ativo || !pagSeguroConfig.publicKey) {
         throw new Error('O PagSeguro está desativado no painel administrativo. Ative a integração para aceitar pagamentos.');
       }
       await adicionarScriptPagSeguro();
-      if (!pagSeguroSessionId) {
-        const res = await fetch('/api/pagseguro/session');
-        const data = await res.json();
-        if (!res.ok || !data.ok) {
-          throw new Error(data.error || 'Não foi possível iniciar a sessão do PagSeguro.');
-        }
-        pagSeguroSessionId = data.sessionId;
-      }
-      if (window.PagSeguro && typeof window.PagSeguro.setSessionId === 'function') {
-        window.PagSeguro.setSessionId(pagSeguroSessionId);
-      }
-      if (window.PagSeguroDirectPayment && typeof window.PagSeguroDirectPayment.setSessionId === 'function') {
-        window.PagSeguroDirectPayment.setSessionId(pagSeguroSessionId);
-      }
-      return pagSeguroSessionId;
+      return true;
     }
 
     async function gerarEncryptedCard() {
@@ -330,14 +316,14 @@
       if (window.PagSeguro && typeof window.PagSeguro.encryptCard === 'function') {
         return new Promise((resolve, reject) => {
           window.PagSeguro.encryptCard({
-            cardNumber: numero,
-            brand,
-            cvv,
-            expirationMonth: month,
-            expirationYear: year,
-            success: (res) => resolve(res.encryptedCard || res.encrypted || res.cardToken || res.token),
-            error: (err) => reject(new Error((err && err.message) || 'Erro ao criptografar os dados do cartão.'))
-          });
+            publicKey: pagSeguroConfig.publicKey,
+            holder: nome,
+            number: numero,
+            expMonth: month,
+            expYear: year,
+            securityCode: cvv
+          }).then((res) => resolve(res.encryptedCard || res.encrypted || res.cardToken || res.token))
+            .catch((err) => reject(new Error((err && err.message) || 'Erro ao criptografar os dados do cartão.')));
         });
       }
       throw new Error('A SDK do PagSeguro não está disponível para criptografar o cartão.');

@@ -295,7 +295,11 @@
                         </div>
                         <div>
                             <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Token</label>
-                            <input type="text" id="pg-token" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2.5 text-sm focus:outline-none focus:border-amber-400">
+                            <input type="password" id="pg-token" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2.5 text-sm focus:outline-none focus:border-amber-400">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Chave Pública (cartão)</label>
+                            <input type="text" id="pg-publicKey" placeholder="Necessária para criptografar cartão" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2.5 text-sm focus:outline-none focus:border-amber-400">
                         </div>
                         <div>
                             <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Application ID</label>
@@ -1542,6 +1546,7 @@ config.logo = {
                         modo: document.getElementById('pg-modo').value,
                         email: document.getElementById('pg-email').value,
                         token: document.getElementById('pg-token').value,
+                        publicKey: document.getElementById('pg-publicKey').value,
                         appId: document.getElementById('pg-appId').value,
                         appKey: document.getElementById('pg-appKey').value
                     },
@@ -1596,6 +1601,7 @@ config.logo = {
                 if (pg.modo) document.getElementById('pg-modo').value = pg.modo;
                 if (pg.email) document.getElementById('pg-email').value = pg.email;
                 if (pg.token) document.getElementById('pg-token').value = pg.token;
+                if (pg.publicKey) document.getElementById('pg-publicKey').value = pg.publicKey;
                 if (pg.appId) document.getElementById('pg-appId').value = pg.appId;
                 if (pg.appKey) document.getElementById('pg-appKey').value = pg.appKey;
 
