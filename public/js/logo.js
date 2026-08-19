@@ -11,6 +11,15 @@
 
   var LOGO_CONFIG_KEY = 'mio_logo_cache';
 
+  function atualizarIndicadorAdmin() {
+    var btnHeader = document.getElementById('btnMembroHeader');
+    if (!btnHeader) return;
+
+    var adminLogado = Boolean(localStorage.getItem('mio_admin_token'));
+    btnHeader.style.color = adminLogado ? '#fbbf24' : '#ffffff';
+    btnHeader.title = adminLogado ? 'Administrador conectado' : 'Área de Membros';
+  }
+
   function aplicarLogo(cfg) {
     var logo = (cfg && cfg.logo) || {};
     var colecoes = document.querySelectorAll('.mio-logo');
@@ -66,9 +75,20 @@
       });
   }
 
+  function inicializarIndicadorAdmin() {
+    atualizarIndicadorAdmin();
+    window.addEventListener('storage', function (event) {
+      if (event.key === 'mio_admin_token') atualizarIndicadorAdmin();
+    });
+  }
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', carregarConfig);
+    document.addEventListener('DOMContentLoaded', function () {
+      carregarConfig();
+      inicializarIndicadorAdmin();
+    });
   } else {
     carregarConfig();
+    inicializarIndicadorAdmin();
   }
 })();
