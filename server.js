@@ -1915,10 +1915,11 @@ app.get('/api/bling/expeditions', exigirAdmin, async (req, res) => {
 // ---------- API: AUTENTICAÇÃO ADMIN ----------
 app.post('/api/admin/login', loginLimiter, async (req, res) => {
   const { email, senha } = req.body || {};
+  const emailBusca = String(email || '').trim().toLowerCase();
   try {
     const admin = await db.get('SELECT * FROM admin_conta WHERE id = 1');
     const senhaOk = admin ? await compararSenha(senha || '', admin.senha_hash) : false;
-    if (!admin || admin.email !== email || !senhaOk) {
+    if (!admin || String(admin.email || '').trim().toLowerCase() !== emailBusca || !senhaOk) {
       return res.status(401).json({ error: "Credenciais inválidas." });
     }
     const token = crypto.randomBytes(32).toString('hex');
