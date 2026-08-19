@@ -1518,7 +1518,7 @@ config.logo = {
                 const clientSecret = document.getElementById('bling-client-secret').value.trim();
 
                 if (!clientId || !clientSecret) {
-                    toast('Informe BLING_CLIENT_ID e BLING_CLIENT_SECRET antes de conectar.', 'erro');
+                    toast('Bling não configurado. Preencha o Client ID e o Client Secret antes de autorizar.', 'erro');
                     return;
                 }
 
@@ -1527,7 +1527,14 @@ config.logo = {
                     blingOauth: { clientId, clientSecret, redirectUri: 'https://usemio.com.br/auth/callback', connected: false }
                 }) });
 
-                window.location.href = '/api/bling/auth';
+                const authRes = await fetch('/api/bling/auth', { credentials: 'include' });
+                if (!authRes.ok) {
+                    const data = await authRes.json().catch(() => ({}));
+                    throw new Error(data.error || 'Não foi possível abrir a autorização do Bling.');
+                }
+
+                const url = authRes.url;
+                window.location.href = url;
             } catch (err) {
                 toast(err.message, 'erro');
             }
@@ -1639,6 +1646,24 @@ config.logo = {
         // Restaura a sessão do admin apenas se houver um token válido.
         // O token é validado no servidor (GET /api/admin/verificar) antes de
         // liberar o painel. Se o token for inválido/expirado, volta ao login.
+        function mostrarMensagemBlingNaTela() {
+            const params = new URLSearchParams(window.location.search);
+            const msg = params.get('message');
+            const status = params.get('bling_status');
+            const erro = params.get('bling_error');
+
+            if (status === 'connected') {
+                atualizarStatusBling(true);
+                if (msg) toast(decodeURIComponent(msg));
+                return;
+            }
+
+            if (erro || msg) {
+                if (msg) toast(decodeURIComponent(msg), 'erro');
+                atualizarStatusBling(false);
+            }
+        }
+
         async function inicializarSessao() {
             const tokenSalvo = localStorage.getItem('mio_admin_token');
             const cookieToken = document.cookie.split('; ').find(row => row.startsWith('admin_token='));
@@ -1667,6 +1692,7 @@ config.logo = {
                 document.getElementById('telaLogin').classList.add('hidden');
                 document.getElementById('painelAdmin').classList.remove('hidden');
                 document.getElementById('painelAdmin').classList.add('flex');
+                mostrarMensagemBlingNaTela();
                 carregarTudo();
             } catch (err) {
                 token = null;
@@ -1678,6 +1704,7 @@ config.logo = {
         }
 
         lucide.createIcons();
+        mostrarMensagemBlingNaTela();
     </script>
 </body>
 </html>

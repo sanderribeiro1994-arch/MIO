@@ -923,9 +923,19 @@ app.put('/api/integracoes', exigirAdmin, async (req, res) => {
 app.get('/api/bling/auth', async (req, res) => {
   try {
     const cfg = await getBlingOauthConfig();
+    const clientId = (cfg.clientId || BLING_CLIENT_ID || '').trim();
+    const clientSecret = (cfg.clientSecret || BLING_CLIENT_SECRET || '').trim();
+
+    if (!clientId || !clientSecret) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Bling não configurado. Preencha BLING_CLIENT_ID e BLING_CLIENT_SECRET antes de iniciar a autorização.'
+      });
+    }
+
     const params = new URLSearchParams({
       response_type: 'code',
-      client_id: cfg.clientId || BLING_CLIENT_ID,
+      client_id: clientId,
       redirect_uri: cfg.redirectUri || BLING_CALLBACK_URL,
       scope: cfg.scope || 'pedido:read pedido:write produto:read produto:write estoque:read estoque:write',
       state: crypto.randomBytes(16).toString('hex')
@@ -942,7 +952,8 @@ app.get('/auth/callback', async (req, res) => {
   try {
     const { code, state, error, error_description } = req.query || {};
     if (error) {
-      return res.status(400).json({ ok: false, error: error_description || error || 'Autorização cancelada pelo Bling.' });
+      const msg = encodeURIComponent(error_description || error || 'Autorização cancelada pelo Bling.');
+      return res.redirect('/admin.html?bling_error=1&message=' + msg);
     }
     if (!code) {
       return res.redirect('/admin.html?bling_error=missing_code&message=' + encodeURIComponent('Acesso ao callback do Bling sem code. Use a rota /api/bling/auth para iniciar o login.'));
@@ -970,7 +981,8 @@ app.get('/auth/callback', async (req, res) => {
 
     const tokenData = await tokenRes.json().catch(() => ({}));
     if (!tokenRes.ok || !tokenData.access_token) {
-      return res.status(502).json({ ok: false, error: tokenData.error_description || tokenData.error || 'Erro ao trocar código do Bling por token.' });
+      const msg = encodeURIComponent(tokenData.error_description || tokenData.error || 'Erro ao trocar código do Bling por token.');
+      return res.redirect('/admin.html?bling_error=1&message=' + msg);
     }
 
     await salvarBlingOauthConfig({
@@ -983,16 +995,10 @@ app.get('/auth/callback', async (req, res) => {
       authCode: code
     });
 
-    return res.json({
-      ok: true,
-      connected: true,
-      accessToken: tokenData.access_token,
-      refreshToken: tokenData.refresh_token || '',
-      expiresIn: Number(tokenData.expires_in) || 3600,
-      callbackUrl: cfg.redirectUri || BLING_CALLBACK_URL
-    });
+    return res.redirect('/admin.html?bling_status=connected&message=' + encodeURIComponent('Bling conectado com sucesso!'));
   } catch (err) {
-    res.status(500).json({ ok: false, error: 'Erro ao processar callback do Bling: ' + err.message });
+    const msg = encodeURIComponent('Erro ao processar callback do Bling: ' + err.message);
+    return res.redirect('/admin.html?bling_error=1&message=' + msg);
   }
 });
 
