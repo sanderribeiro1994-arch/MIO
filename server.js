@@ -80,25 +80,41 @@ function gerarTokenCSRF() {
   return crypto.randomBytes(24).toString('hex');
 }
 
-function salvarSessaoAdmin(token, email, expiraEm) {
+async function salvarSessaoAdmin(token, email, expiraEm) {
   if (!token || !email) return;
   sessaoAdmin.set(token, { email, expiraEm });
+  if (db) {
+    await db.run(
+      `INSERT INTO admin_sessoes (token, email, expira_em) VALUES (?, ?, ?)
+       ON CONFLICT(token) DO UPDATE SET email = excluded.email, expira_em = excluded.expira_em`,
+      [token, email, expiraEm]
+    );
+  }
 }
 
-function carregarSessaoAdmin(token) {
+async function carregarSessaoAdmin(token) {
   if (!token) return null;
-  const sessao = sessaoAdmin.get(token);
+  let sessao = sessaoAdmin.get(token);
+  if (!sessao && db) {
+    const row = await db.get('SELECT email, expira_em FROM admin_sessoes WHERE token = ?', [token]);
+    if (row) {
+      sessao = { email: row.email, expiraEm: row.expira_em };
+      sessaoAdmin.set(token, sessao);
+    }
+  }
   if (!sessao) return null;
   if (sessao.expiraEm < Date.now()) {
     sessaoAdmin.delete(token);
+    if (db) await db.run('DELETE FROM admin_sessoes WHERE token = ?', [token]);
     return null;
   }
   return sessao;
 }
 
-function limparSessaoAdmin(token) {
+async function limparSessaoAdmin(token) {
   if (!token) return;
   sessaoAdmin.delete(token);
+  if (db) await db.run('DELETE FROM admin_sessoes WHERE token = ?', [token]);
 }
 
 function exigirCliente(req, res, next) {
@@ -224,6 +240,12 @@ CREATE TABLE IF NOT EXISTS admin_conta (
       foto TEXT,
       endereco TEXT,
       cnpj TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS admin_sessoes (
+      token TEXT PRIMARY KEY,
+      email TEXT NOT NULL,
+      expira_em INTEGER NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS avaliacoes (
@@ -419,17 +441,18 @@ function getAdminTokenFromRequest(req) {
   return value || null;
 }
 
-function exigirAdmin(req, res, next) {
+async function exigirAdmin(req, res, next) {
   const token = getAdminTokenFromRequest(req);
-  if (!token || !sessaoAdmin.has(token)) {
+  const sessao = await carregarSessaoAdmin(token);
+  if (!sessao) {
     return res.status(401).json({ error: "Não autenticado. Faça login no painel." });
   }
-  const sessao = sessaoAdmin.get(token);
   if (sessao.expiraEm < Date.now()) {
-    sessaoAdmin.delete(token);
+    await limparSessaoAdmin(token);
     return res.status(401).json({ error: "Sessão expirada. Faça login novamente." });
   }
   sessao.expiraEm = Date.now() + ADMIN_SESSION_TTL_MS;
+  await salvarSessaoAdmin(token, sessao.email, sessao.expiraEm);
   next();
 }
 
@@ -1918,7 +1941,7 @@ app.post('/api/admin/login', loginLimiter, async (req, res) => {
 
 app.post('/api/admin/logout', async (req, res) => {
   const token = getAdminTokenFromRequest(req);
-  limparSessaoAdmin(token);
+  await limparSessaoAdmin(token);
   res.clearCookie('admin_token', { path: '/' });
   res.json({ ok: true });
 });
@@ -1983,7 +2006,7 @@ app.put('/api/admin/conta', exigirAdmin, async (req, res) => {
     const adminAtualizado = await db.get('SELECT * FROM admin_conta WHERE id = 1');
     const token = getAdminTokenFromRequest(req);
     if (token && adminAtualizado.email) {
-      salvarSessaoAdmin(token, adminAtualizado.email, Date.now() + ADMIN_SESSION_TTL_MS);
+      await salvarSessaoAdmin(token, adminAtualizado.email, Date.now() + ADMIN_SESSION_TTL_MS);
     }
 
     return res.json({ ok: true, message: 'Dados do administrador atualizados.', email: adminAtualizado.email });
