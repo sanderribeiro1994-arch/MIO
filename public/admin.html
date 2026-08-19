@@ -333,7 +333,7 @@
                         <div class="space-y-3">
                             <div>
                                 <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">Token da API</label>
-                                <input type="text" id="me-token" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2.5 text-sm focus:outline-none focus:border-amber-400">
+                                <input type="password" id="me-token" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2.5 text-sm focus:outline-none focus:border-amber-400">
                             </div>
                             <div>
                                 <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">CEP de Origem</label>
@@ -1528,14 +1528,7 @@ config.logo = {
                     blingOauth: { clientId, clientSecret, redirectUri: 'https://usemio.com.br/auth/callback', connected: false }
                 }) });
 
-                const authRes = await fetch('/api/bling/auth', { credentials: 'include' });
-                if (!authRes.ok) {
-                    const data = await authRes.json().catch(() => ({}));
-                    throw new Error(data.error || 'Não foi possível abrir a autorização do Bling.');
-                }
-
-                const url = authRes.url;
-                window.location.href = url;
+                window.location.href = '/api/bling/auth';
             } catch (err) {
                 toast(err.message, 'erro');
             }
