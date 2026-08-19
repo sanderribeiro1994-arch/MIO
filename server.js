@@ -671,7 +671,7 @@ function getParcelamentoMaximo(valorTotal) {
 }
 
 async function buscarConfigPagSeguro() {
-  return getConfigChave('pagseguro_config', {
+  const cfg = await getConfigChave('pagseguro_config', {
     ativo: false,
     modo: 'sandbox',
     email: '',
@@ -679,6 +679,15 @@ async function buscarConfigPagSeguro() {
     appId: '',
     appKey: ''
   });
+  return {
+    ...cfg,
+    ativo: process.env.PAGBANK_ATIVO !== undefined ? process.env.PAGBANK_ATIVO === 'true' : !!cfg.ativo,
+    modo: process.env.PAGBANK_MODO || cfg.modo || 'sandbox',
+    email: process.env.PAGBANK_EMAIL || cfg.email || '',
+    token: process.env.PAGBANK_TOKEN || cfg.token || '',
+    appId: process.env.PAGBANK_APP_ID || cfg.appId || '',
+    appKey: process.env.PAGBANK_APP_KEY || cfg.appKey || ''
+  };
 }
 
 async function findPedidoByReference(reference) {
@@ -1195,10 +1204,7 @@ app.get('/api/pagseguro/public-config', async (req, res) => {
       ok: true,
       ativo: !!cfg.ativo,
       modo: cfg.modo || 'sandbox',
-      appId: cfg.appId || '',
-      appKey: cfg.appKey || '',
-      email: cfg.email || '',
-      token: cfg.token || ''
+      configurado: Boolean(cfg.token && cfg.appId && cfg.appKey)
     });
   } catch (error) {
     res.status(500).json({ ok: false, error: 'Erro ao carregar configurações públicas do PagSeguro.' });
