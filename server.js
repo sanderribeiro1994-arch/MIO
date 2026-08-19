@@ -44,6 +44,7 @@ if (IS_PROD) {
 
 // --- SESSÕES ADMIN EM MEMÓRIA (tokens) ---
 // Tokens aleatórios de 32 bytes com expiração (15 min de inatividade).
+const ADMIN_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 dias para manter o admin logado
 const sessaoAdmin = new Map(); // token -> { email, expiraEm }
 const sessaoCliente = new Map(); // token -> { email, expiraEm }
 
@@ -423,14 +424,12 @@ function exigirAdmin(req, res, next) {
   if (!token || !sessaoAdmin.has(token)) {
     return res.status(401).json({ error: "Não autenticado. Faça login no painel." });
   }
-  // Verifica expiração da sessão (15 min de inatividade)
   const sessao = sessaoAdmin.get(token);
   if (sessao.expiraEm < Date.now()) {
     sessaoAdmin.delete(token);
     return res.status(401).json({ error: "Sessão expirada. Faça login novamente." });
   }
-  // Renova a sessão (deslizante)
-  sessao.expiraEm = Date.now() + 15 * 60 * 1000;
+  sessao.expiraEm = Date.now() + ADMIN_SESSION_TTL_MS;
   next();
 }
 
@@ -1900,14 +1899,14 @@ app.post('/api/admin/login', loginLimiter, async (req, res) => {
       return res.status(401).json({ error: "Credenciais inválidas." });
     }
     const token = crypto.randomBytes(32).toString('hex');
-    const expiraEm = Date.now() + 15 * 60 * 1000;
+    const expiraEm = Date.now() + ADMIN_SESSION_TTL_MS;
     await salvarSessaoAdmin(token, admin.email, expiraEm);
 
     res.cookie('admin_token', token, {
       httpOnly: false,
       sameSite: 'lax',
       secure: IS_PROD,
-      maxAge: 15 * 60 * 1000,
+      maxAge: ADMIN_SESSION_TTL_MS,
       path: '/'
     });
 
@@ -1936,9 +1935,61 @@ app.get('/api/admin/verificar', async (req, res) => {
     return res.status(401).json({ valid: false });
   }
 
-  sessao.expiraEm = Date.now() + 15 * 60 * 1000;
+  sessao.expiraEm = Date.now() + ADMIN_SESSION_TTL_MS;
   await salvarSessaoAdmin(token, sessao.email, sessao.expiraEm);
   res.json({ valid: true, email: sessao.email });
+});
+
+app.put('/api/admin/conta', exigirAdmin, async (req, res) => {
+  const { email, senhaAtual, novaSenha } = req.body || {};
+  try {
+    const admin = await db.get('SELECT * FROM admin_conta WHERE id = 1');
+    if (!admin) {
+      return res.status(404).json({ error: 'Administrador não encontrado.' });
+    }
+
+    const novoEmail = typeof email === 'string' ? email.trim().toLowerCase() : admin.email;
+    if (novoEmail && !/^\S+@\S+\.\S+$/.test(novoEmail)) {
+      return res.status(400).json({ error: 'E-mail inválido.' });
+    }
+
+    if (senhaAtual || novaSenha) {
+      const senhaOk = await compararSenha(String(senhaAtual || ''), admin.senha_hash);
+      if (!senhaOk) {
+        return res.status(401).json({ error: 'Senha atual incorreta.' });
+      }
+      if (!novaSenha || String(novaSenha).length < 6) {
+        return res.status(400).json({ error: 'A nova senha deve ter pelo menos 6 caracteres.' });
+      }
+    }
+
+    const updates = [];
+    const values = [];
+    if (novoEmail && novoEmail !== admin.email) {
+      updates.push('email = ?');
+      values.push(novoEmail);
+    }
+    if (senhaAtual && novaSenha) {
+      updates.push('senha_hash = ?');
+      values.push(await hashSenha(novaSenha));
+    }
+
+    if (updates.length === 0) {
+      return res.json({ ok: true, message: 'Nenhuma alteração foi necessária.', email: admin.email });
+    }
+
+    await db.run(`UPDATE admin_conta SET ${updates.join(', ')} WHERE id = 1`, values);
+
+    const adminAtualizado = await db.get('SELECT * FROM admin_conta WHERE id = 1');
+    const token = getAdminTokenFromRequest(req);
+    if (token && adminAtualizado.email) {
+      salvarSessaoAdmin(token, adminAtualizado.email, Date.now() + ADMIN_SESSION_TTL_MS);
+    }
+
+    return res.json({ ok: true, message: 'Dados do administrador atualizados.', email: adminAtualizado.email });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao alterar dados do administrador.' });
+  }
 });
 
 app.put('/api/admin/senha', exigirAdmin, async (req, res) => {

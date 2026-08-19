@@ -259,10 +259,11 @@
                     <h3 class="text-sm font-bold uppercase mb-4 flex items-center gap-2">
                         <i data-lucide="shield" class="w-4 h-4 text-amber-400"></i> Segurança do Administrador
                     </h3>
-                    <form id="formTrocarSenha" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <form id="formTrocarSenha" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <input type="email" id="adminEmail" placeholder="E-mail do administrador" class="bg-zinc-950 border border-zinc-800 rounded px-3 py-2.5 text-sm focus:outline-none focus:border-amber-400">
                         <input type="password" id="senhaAtual" placeholder="Senha atual" class="bg-zinc-950 border border-zinc-800 rounded px-3 py-2.5 text-sm focus:outline-none focus:border-amber-400">
                         <input type="password" id="novaSenha" placeholder="Nova senha" class="bg-zinc-950 border border-zinc-800 rounded px-3 py-2.5 text-sm focus:outline-none focus:border-amber-400">
-                        <button type="submit" class="bg-amber-500 hover:bg-amber-400 text-black font-black text-xs uppercase tracking-widest px-4 py-2.5 rounded transition">Alterar Senha</button>
+                        <button type="submit" class="bg-amber-500 hover:bg-amber-400 text-black font-black text-xs uppercase tracking-widest px-4 py-2.5 rounded transition">Salvar Admin</button>
                     </form>
                     <p id="msgSenha" class="text-xs font-mono mt-3 hidden"></p>
                 </div>
@@ -631,7 +632,7 @@ let config = {};
                 token = data.token;
                 localStorage.setItem('mio_admin_token', data.token);
                 localStorage.setItem('mio_admin_email', data.email);
-                document.cookie = 'admin_token=' + encodeURIComponent(data.token) + '; path=/; Max-Age=900; SameSite=Lax';
+                document.cookie = 'admin_token=' + encodeURIComponent(data.token) + '; path=/; Max-Age=2592000; SameSite=Lax';
                 document.getElementById('adminEmailLabel').innerText = data.email;
                 document.getElementById('telaLogin').classList.add('hidden');
                 document.getElementById('painelAdmin').classList.remove('hidden');
@@ -1626,15 +1627,31 @@ config.logo = {
         // =============== TROCAR SENHA ===============
         document.getElementById('formTrocarSenha').addEventListener('submit', async (e) => {
             e.preventDefault();
+            const email = document.getElementById('adminEmail').value.trim();
             const senhaAtual = document.getElementById('senhaAtual').value;
             const novaSenha = document.getElementById('novaSenha').value;
             const msg = document.getElementById('msgSenha');
             try {
-                await API('/api/admin/senha', { method: 'PUT', body: JSON.stringify({ senhaAtual, novaSenha }) });
-                msg.innerText = 'Senha alterada com sucesso!';
+                const payload = {};
+                if (email) payload.email = email;
+                if (senhaAtual || novaSenha) {
+                    payload.senhaAtual = senhaAtual;
+                    payload.novaSenha = novaSenha;
+                }
+                const data = await API('/api/admin/conta', { method: 'PUT', body: JSON.stringify(payload) });
+                if (data.email) {
+                    const emailAtual = data.email || localStorage.getItem('mio_admin_email') || '';
+                    localStorage.setItem('mio_admin_email', emailAtual);
+                    document.getElementById('adminEmailLabel').innerText = emailAtual;
+                    if (token) {
+                        document.cookie = 'admin_token=' + encodeURIComponent(token) + '; path=/; Max-Age=2592000; SameSite=Lax';
+                    }
+                }
+                msg.innerText = data.message || 'Dados do administrador atualizados com sucesso!';
                 msg.className = 'text-xs font-mono mt-3 text-emerald-400';
                 msg.classList.remove('hidden');
                 document.getElementById('formTrocarSenha').reset();
+                if (data.email) document.getElementById('adminEmail').value = data.email;
             } catch (err) {
                 msg.innerText = err.message;
                 msg.className = 'text-xs font-mono mt-3 text-red-400';
@@ -1689,6 +1706,8 @@ config.logo = {
                 localStorage.setItem('mio_admin_token', token);
                 if (data.email) localStorage.setItem('mio_admin_email', data.email);
                 document.getElementById('adminEmailLabel').innerText = data.email || localStorage.getItem('mio_admin_email') || '';
+                const adminEmailInput = document.getElementById('adminEmail');
+                if (adminEmailInput) adminEmailInput.value = data.email || localStorage.getItem('mio_admin_email') || '';
                 document.getElementById('telaLogin').classList.add('hidden');
                 document.getElementById('painelAdmin').classList.remove('hidden');
                 document.getElementById('painelAdmin').classList.add('flex');
