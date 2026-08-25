@@ -1244,7 +1244,8 @@ renderizarConteudo();
                     ${campoTexto('cs-texto-' + i, 'Texto', s.texto)}
                     ${campoTexto('cs-botao-' + i, 'Texto do Botão', s.botao)}
                     ${campoTexto('cs-link-' + i, 'Link do Botão', s.link)}
-                    ${campoUpload('cs-imagem-' + i, 'Imagem', s.imagem, 'fileCarrossel' + i)}
+                    ${campoUpload('cs-imagem-' + i, 'Imagem Desktop', s.imagem, 'fileCarrossel' + i)}
+                    ${campoUpload('cs-imagem-mobile-' + i, 'Imagem Mobile', s.imagemMobile, 'fileCarrosselMobile' + i)}
                 </div>
             `).join('');
 
@@ -1256,7 +1257,8 @@ renderizarConteudo();
                     ${campoTexto('bn-titulo-' + i, 'Título', b.titulo)}
                     ${campoTexto('bn-texto-' + i, 'Texto', b.texto)}
                     ${campoTexto('bn-link-' + i, 'Link', b.link)}
-                    ${campoUpload('bn-imagem-' + i, 'Imagem', b.imagem, 'fileBanner' + i)}
+                    ${campoUpload('bn-imagem-' + i, 'Imagem Desktop', b.imagem, 'fileBanner' + i)}
+                    ${campoUpload('bn-imagem-mobile-' + i, 'Imagem Mobile', b.imagemMobile, 'fileBannerMobile' + i)}
                 </div>
             `).join('');
 
@@ -1269,7 +1271,8 @@ renderizarConteudo();
                     ${campoTexto('bi-botao', 'Texto do Botão', bi.botao)}
                     ${campoTexto('bi-link', 'Link', bi.link)}
                 </div>
-                ${campoUpload('bi-imagem', 'Imagem de Fundo', bi.imagem, 'fileBannerIntermediario')}
+                ${campoUpload('bi-imagem', 'Imagem Desktop', bi.imagem, 'fileBannerIntermediario')}
+                ${campoUpload('bi-imagem-mobile', 'Imagem Mobile', bi.imagemMobile, 'fileBannerIntermediarioMobile')}
             `;
 
             const paginas = config.paginas || {};
@@ -1327,20 +1330,23 @@ renderizarConteudo();
                     texto: document.getElementById('cs-texto-' + i).value,
                     botao: document.getElementById('cs-botao-' + i).value,
                     link: document.getElementById('cs-link-' + i).value,
-                    imagem: document.getElementById('cs-imagem-' + i).value
+                    imagem: document.getElementById('cs-imagem-' + i).value,
+                    imagemMobile: document.getElementById('cs-imagem-mobile-' + i).value
                 }));
                 const bannersGrelha = (config.bannersGrelha || []).map((b, i) => ({
                     titulo: document.getElementById('bn-titulo-' + i).value,
                     texto: document.getElementById('bn-texto-' + i).value,
                     link: document.getElementById('bn-link-' + i).value,
-                    imagem: document.getElementById('bn-imagem-' + i).value
+                    imagem: document.getElementById('bn-imagem-' + i).value,
+                    imagemMobile: document.getElementById('bn-imagem-mobile-' + i).value
                 }));
                 config.bannerIntermediario = {
                     titulo: document.getElementById('bi-titulo').value,
                     texto: document.getElementById('bi-texto').value,
                     botao: document.getElementById('bi-botao').value,
                     link: document.getElementById('bi-link').value,
-                    imagem: document.getElementById('bi-imagem').value
+                    imagem: document.getElementById('bi-imagem').value,
+                    imagemMobile: document.getElementById('bi-imagem-mobile').value
                 };
                 config.paginas = {
                     sobre: {
@@ -1379,6 +1385,8 @@ renderizarConteudo();
                 config.carrossel = carrossel;
                 config.bannersGrelha = bannersGrelha;
                 await API('/api/config', { method: 'PUT', body: JSON.stringify(config) });
+                config = await API('/api/config');
+                renderizarConteudo();
                 toast('Conteúdo salvo!');
             } catch (err) { toast(err.message, 'erro'); }
         }
@@ -1458,6 +1466,8 @@ config.logo = {
                     url: document.getElementById('lg-url').value
                 };
                 await API('/api/config', { method: 'PUT', body: JSON.stringify(config) });
+                config = await API('/api/config');
+                renderizarConfig();
 
                 // Salva o endereço da loja (origem do frete) no perfil do admin
                 const endereco = {
@@ -1723,6 +1733,7 @@ config.logo = {
 
         lucide.createIcons();
         mostrarMensagemBlingNaTela();
+        inicializarSessao();
     </script>
 </body>
 </html>

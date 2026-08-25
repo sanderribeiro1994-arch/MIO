@@ -21,6 +21,16 @@
     }
   }
 
+  function atualizarImagemResponsiva(id, desktop, mobile) {
+    const imagem = document.getElementById(id);
+    if (!imagem || imagem.tagName.toLowerCase() !== 'img') return;
+    if (desktop != null && String(desktop).trim() !== '') imagem.src = String(desktop);
+    const fonteMobile = document.getElementById(id + '-mobile');
+    if (fonteMobile && mobile != null && String(mobile).trim() !== '') {
+      fonteMobile.srcset = String(mobile);
+    }
+  }
+
   function atualizarLink(id, valor) {
     if (!id) return;
     const el = document.getElementById(id);
@@ -31,6 +41,12 @@
         el.href = valor.startsWith('mailto:') ? valor : 'mailto:' + valor;
       }
     }
+  }
+
+  function atualizarHref(id, valor) {
+    const el = document.getElementById(id);
+    if (!el || valor == null || String(valor).trim() === '') return;
+    el.href = String(valor);
   }
 
   function carregarConteudo() {
@@ -51,21 +67,39 @@
 
         // Atualizar carrossel
         carrossel.forEach((slide, i) => {
-          atualizarImagem('carrossel-img-' + i, slide.imagem);
+          atualizarImagemResponsiva('carrossel-img-' + i, slide.imagem, slide.imagemMobile);
+          atualizarTexto('carrossel-etiqueta-' + i, slide.etiqueta);
+          atualizarTexto('carrossel-titulo-' + i, slide.titulo);
+          atualizarTexto('carrossel-texto-' + i, slide.texto);
+          atualizarTexto('carrossel-botao-' + i, slide.botao);
+          atualizarHref('carrossel-botao-' + i, slide.link);
         });
 
         // Atualizar banners da grelha
         bannersGrelha.forEach((banner, i) => {
-          atualizarImagem('banner-grelha-img-' + i, banner.imagem);
+          atualizarImagemResponsiva('banner-grelha-img-' + i, banner.imagem, banner.imagemMobile);
+          atualizarTexto('banner-grelha-titulo-' + i, banner.titulo);
+          atualizarTexto('banner-grelha-texto-' + i, banner.texto);
+          atualizarTexto('banner-grelha-botao-' + i, banner.botao);
+          atualizarHref('banner-grelha-link-' + i, banner.link);
         });
 
         // Atualizar banner intermediário
+        atualizarImagemResponsiva('banner-intermediario-img', bannerIntermediario.imagem, bannerIntermediario.imagemMobile);
         if (bannerIntermediario.imagem) {
           const section = document.getElementById('banner-intermediario');
           if (section) {
             section.style.backgroundImage = 'linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.7)), url(' + bannerIntermediario.imagem + ')';
           }
         }
+        atualizarTexto('banner-intermediario-titulo', bannerIntermediario.titulo);
+        atualizarTexto('banner-intermediario-texto', bannerIntermediario.texto);
+        atualizarTexto('banner-intermediario-botao', bannerIntermediario.botao);
+        atualizarHref('banner-intermediario-botao', bannerIntermediario.link);
+
+        const redes = config.redesSociais || {};
+        atualizarHref('rodapeInstagram', redes.instagram);
+        atualizarHref('rodapeTiktok', redes.tiktok);
 
         atualizarTexto('sobreTitulo', sobre.titulo);
         atualizarTexto('sobreTexto1', sobre.texto1);

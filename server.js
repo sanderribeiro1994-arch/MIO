@@ -155,9 +155,9 @@ const ADMIN_PADRAO = {
 
 // --- INICIALIZAÇÃO DO BANCO DE DADOS ---
 let db;
-(async () => {
+const dbReady = (async () => {
   db = await open({
-    filename: './database.db',
+    filename: path.join(__dirname, 'database.db'),
     driver: sqlite3.Database
   });
 
@@ -2437,6 +2437,7 @@ app.delete('/api/avaliacoes/:id', exigirAdmin, async (req, res) => {
 // ---------- API: CONFIGURAÇÃO DO SITE ----------
 app.get('/api/config', async (req, res) => {
   try {
+    await dbReady;
     const row = await db.get('SELECT valor FROM config WHERE chave = ?', 'site_config');
     res.json(row ? JSON.parse(row.valor) : {});
   } catch (err) {
@@ -2446,8 +2447,13 @@ app.get('/api/config', async (req, res) => {
 
 app.put('/api/config', exigirAdmin, async (req, res) => {
   try {
-    await db.run('UPDATE config SET valor = ? WHERE chave = ?', [JSON.stringify(req.body), 'site_config']);
-    res.json({ ok: true });
+    await dbReady;
+    if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+      return res.status(400).json({ error: 'Configuração inválida.' });
+    }
+    await setConfigChave('site_config', req.body);
+    const salva = await getConfigChave('site_config', {});
+    res.json({ ok: true, config: salva });
   } catch (err) {
     res.status(500).json({ error: "Erro ao salvar configurações." });
   }
@@ -2536,7 +2542,7 @@ app.use((req, res) => {
   `);
 });
 
-app.listen(PORT, () => {
+dbReady.then(() => app.listen(PORT, () => {
   console.log(`
   ███╗   ███╗██╗ ██████╗ 
   ████╗ ████║██║██╔═══██╗
@@ -2546,4 +2552,7 @@ app.listen(PORT, () => {
   ╚═╝     ╚═╝╚═╝ ╚═════╝ 
   Servidor MIO Online: http://localhost:${PORT}
   `);
+})).catch((err) => {
+  console.error('Falha ao inicializar o banco de dados:', err);
+  process.exitCode = 1;
 });
