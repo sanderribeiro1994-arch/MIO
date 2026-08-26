@@ -15,12 +15,17 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 const IS_PROD = NODE_ENV === 'production';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const DATA_DIR = process.env.MIO_DATA_DIR || __dirname;
+const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
+
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 // --- CONFIGURAÇÕES ---
 app.use(helmet({ contentSecurityPolicy: false })); // headers de segurança
 app.use(express.json({ limit: '25mb' })); // limite maior p/ fotos base64
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(UPLOADS_DIR));
 
 // Rota explícita para favicon com cache headers
 app.get('/favicon.png', (req, res) => {
@@ -157,7 +162,7 @@ const ADMIN_PADRAO = {
 let db;
 const dbReady = (async () => {
   db = await open({
-    filename: path.join(__dirname, 'database.db'),
+    filename: path.join(DATA_DIR, 'database.db'),
     driver: sqlite3.Database
   });
 
@@ -769,7 +774,7 @@ app.post('/api/upload', exigirAdmin, async (req, res) => {
       if (!matches) return res.status(400).json({ error: "Formato de imagem inválido." });
       const ext = (matches[1].split('/')[1] || 'png').replace('jpeg', 'jpg');
       const buffer = Buffer.from(matches[2], 'base64');
-      const dir = path.join(__dirname, 'public', 'uploads');
+      const dir = UPLOADS_DIR;
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       const fileName = (nome ? nome.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') : 'img') + '-' + Date.now() + '.' + ext;
       fs.writeFileSync(path.join(dir, fileName), buffer);

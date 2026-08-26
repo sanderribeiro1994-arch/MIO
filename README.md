@@ -41,10 +41,16 @@ git push -u origin main
    - **Start Command:** `npm start`
 5. Clique em **Create Web Service**.
 
-### 3. Importante sobre o banco de dados
-O banco `database.db` é criado automaticamente na primeira vez que o servidor roda (o servidor já inclui os produtos iniciais). **Porém**, em serviços gratuitos do Render, o sistema de arquivos é **efêmero** — os dados são perdidos a cada novo deploy/restart.
+### 3. Armazenamento persistente no Render
+O banco e os uploads são salvos no diretório definido por `MIO_DATA_DIR` (por padrão, na pasta do projeto). Em serviços gratuitos do Render, o filesystem é efêmero e apaga as edições do admin após reinícios.
 
-Para manter os dados (clientes, pedidos, produtos) de forma permanente, o recomendado é usar um **banco PostgreSQL** (o Render oferece um plano gratuito) e ajustar o `server.js` para usar esse banco. Se preferir começar simples, os dados funcionam normalmente até o próximo deploy.
+Para manter banners, textos, links, imagens, clientes, pedidos e produtos:
+1. Adicione um **Persistent Disk** ao Web Service no Render.
+2. Use o ponto de montagem `/var/data`.
+3. Em **Environment → Environment Variables**, crie `MIO_DATA_DIR` com o valor `/var/data`.
+4. Faça um novo deploy.
+
+Depois disso, o `database.db` e os arquivos enviados pelo painel ficarão no disco persistente e continuarão disponíveis até a próxima edição no admin. Sem Persistent Disk, não é possível garantir permanência usando SQLite no Render.
 
 ## 🔒 Segurança
 - Troque a senha padrão do admin pelo painel (aba **Configurações → Segurança**).
