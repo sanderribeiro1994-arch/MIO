@@ -22,7 +22,7 @@ SUPABASE_SERVICE_ROLE_KEY=sua-chave-service-role
 SUPABASE_STORAGE_BUCKET=images
 ```
 
-Execute [supabase-schema.sql](supabase-schema.sql) no SQL Editor do Supabase. O script cria as tabelas `produtos`, `banners`, `pedidos`, `clientes`, `cupons` e `admin_sessoes`. A `SUPABASE_SERVICE_ROLE_KEY` deve ficar apenas nas variáveis privadas do servidor. Produtos e banners guardam apenas URLs; os arquivos enviados pelo painel são armazenados no bucket público `images` do Supabase Storage.
+Execute [supabase-schema.sql](supabase-schema.sql) no SQL Editor do Supabase. O script cria as tabelas `produtos`, `banners`, `pedidos`, `clientes`, `cupons`, `admin_sessoes` e `cliente_sessoes`. A `SUPABASE_SERVICE_ROLE_KEY` deve ficar apenas nas variáveis privadas do servidor. Produtos e banners guardam apenas URLs; os arquivos enviados pelo painel são armazenados no bucket público `images` do Supabase Storage.
 
 ### Credenciais de acesso ao painel admin
 - URL: `http://localhost:3000/admin`

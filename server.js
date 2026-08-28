@@ -42,7 +42,6 @@ if (IS_PROD) {
 
 // --- SESSÕES ADMIN PERSISTENTES NO SUPABASE ---
 const ADMIN_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 dias para manter o admin logado
-const sessaoCliente = new Map(); // token -> { email, expiraEm }
 
 // --- RATE LIMITING ---
 // Limita tentativas de login (admin e cliente) para evitar força bruta.
@@ -112,17 +111,36 @@ async function limparSessaoAdmin(token) {
   if (error) throw error;
 }
 
-function exigirCliente(req, res, next) {
-  const token = req.headers['x-client-token'];
-  if (!token || !sessaoCliente.has(token)) {
+function getClientToken(req) {
+  const headerToken = req.headers['x-client-token'];
+  if (headerToken && headerToken !== 'null' && headerToken !== 'undefined') return String(headerToken);
+  const match = (req.headers.cookie || '').split(';').map(v => v.trim()).find(v => v.startsWith('client_token='));
+  return match ? decodeURIComponent(match.split('=').slice(1).join('=')) : null;
+}
+
+async function salvarSessaoCliente(token, email, expiraEm) {
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  const { error } = await supabaseAdmin.from('cliente_sessoes').upsert({ token_hash: tokenHash, email, expira_em: new Date(expiraEm).toISOString() }, { onConflict: 'token_hash' });
+  if (error) throw error;
+}
+
+async function carregarSessaoCliente(token) {
+  if (!token) return null;
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  const { data, error } = await supabaseAdmin.from('cliente_sessoes').select('email, expira_em').eq('token_hash', tokenHash).maybeSingle();
+  if (error) throw error;
+  if (!data || Date.parse(data.expira_em) < Date.now()) return null;
+  return { email: data.email, expiraEm: Date.parse(data.expira_em) };
+}
+
+async function exigirCliente(req, res, next) {
+  const token = getClientToken(req);
+  const sessao = await carregarSessaoCliente(token);
+  if (!sessao) {
     return res.status(401).json({ error: "Não autenticado. Faça login." });
   }
-  const sessao = sessaoCliente.get(token);
-  if (sessao.expiraEm < Date.now()) {
-    sessaoCliente.delete(token);
-    return res.status(401).json({ error: "Sessão expirada. Faça login novamente." });
-  }
   sessao.expiraEm = Date.now() + 15 * 60 * 1000;
+  await salvarSessaoCliente(token, sessao.email, sessao.expiraEm);
   req.clienteEmail = sessao.email;
   next();
 }
@@ -669,7 +687,8 @@ app.post('/api/clientes/login', loginLimiter, async (req, res) => {
     }
     const clienteSemSenha = formatarCliente(c);
     const token = crypto.randomBytes(32).toString('hex');
-    sessaoCliente.set(token, { email: emailBusca, expiraEm: Date.now() + 15 * 60 * 1000 });
+    await salvarSessaoCliente(token, emailBusca, Date.now() + 15 * 60 * 1000);
+    res.cookie('client_token', token, { httpOnly: true, sameSite: 'lax', secure: IS_PROD, maxAge: 15 * 60 * 1000, path: '/' });
     res.json({ ok: true, cliente: clienteSemSenha, token });
   } catch (err) {
     res.status(500).json({ error: "Erro no login." });
@@ -691,14 +710,11 @@ app.get('/api/clientes/me', exigirCliente, async (req, res) => {
 app.put('/api/clientes/perfil', async (req, res) => {
   const { email, senha, dados } = req.body || {};
   let emailBusca = null;
-  const token = req.headers['x-client-token'];
-  if (token && sessaoCliente.has(token)) {
-    const sessao = sessaoCliente.get(token);
-    if (sessao.expiraEm < Date.now()) {
-      sessaoCliente.delete(token);
-      return res.status(401).json({ error: "Sessão expirada. Faça login novamente." });
-    }
+  const token = getClientToken(req);
+  const sessao = token ? await carregarSessaoCliente(token) : null;
+  if (sessao) {
     sessao.expiraEm = Date.now() + 15 * 60 * 1000;
+    await salvarSessaoCliente(token, sessao.email, sessao.expiraEm);
     emailBusca = sessao.email;
   } else if (email && senha) {
     emailBusca = email.toLowerCase().trim();
@@ -2134,9 +2150,9 @@ app.put('/api/pedidos/:id', exigirAdmin, async (req, res) => {
 app.post('/api/pedidos/meus', async (req, res) => {
   const { email } = req.body || {};
   if (!email) return res.status(400).json({ error: "Informe o e-mail usado no pedido." });
-  const token = req.headers['x-client-token'];
-  const sessao = token && sessaoCliente.get(token);
-  if (!sessao || sessao.expiraEm < Date.now()) {
+  const token = getClientToken(req);
+  const sessao = await carregarSessaoCliente(token);
+  if (!sessao) {
     return res.status(401).json({ error: "Faça login para consultar seus pedidos." });
   }
   try {
@@ -2204,14 +2220,11 @@ app.post('/api/clientes', async (req, res) => {
 app.delete('/api/clientes', async (req, res) => {
   const { email, senha } = req.body || {};
   let emailBusca = email ? email.toLowerCase().trim() : null;
-  const token = req.headers['x-client-token'];
-  if (token && sessaoCliente.has(token)) {
-    const sessao = sessaoCliente.get(token);
-    if (sessao.expiraEm < Date.now()) {
-      sessaoCliente.delete(token);
-      return res.status(401).json({ error: "Sessão expirada. Faça login novamente." });
-    }
+  const token = getClientToken(req);
+  const sessao = token ? await carregarSessaoCliente(token) : null;
+  if (sessao) {
     sessao.expiraEm = Date.now() + 15 * 60 * 1000;
+    await salvarSessaoCliente(token, sessao.email, sessao.expiraEm);
     emailBusca = sessao.email;
   }
   if (!emailBusca) return res.status(400).json({ error: "E-mail e senha são obrigatórios para excluir a conta." });
@@ -2226,7 +2239,7 @@ app.delete('/api/clientes', async (req, res) => {
     }
     const { error } = await supabaseAdmin.from('clientes').delete().eq('email', emailBusca);
     if (error) throw error;
-    if (token) sessaoCliente.delete(token);
+    if (token) await supabaseAdmin.from('cliente_sessoes').delete().eq('token_hash', crypto.createHash('sha256').update(token).digest('hex'));
     res.json({ ok: true, message: "Conta excluída com sucesso." });
   } catch (err) {
     res.status(500).json({ error: "Erro ao excluir a conta." });
