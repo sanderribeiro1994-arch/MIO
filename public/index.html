@@ -10,6 +10,10 @@
   <!-- Ícones do Lucide (fáceis de colocar em preto e branco) -->
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
+    body:not(.mio-api-ready) .mio-api-gated { visibility: hidden; }
+    body:not(.mio-api-ready) #mio-loading-state { display: flex; }
+    body.mio-api-ready #mio-loading-state { display: none; }
+    #mio-loading-state { display: none; }
     /* Estilo para esconder barras de rolagem do carrossel */
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
@@ -17,6 +21,7 @@
 <base target="_blank">
 </head>
 <body class="bg-zinc-950 text-white font-sans antialiased">
+  <script>window.mioMarkApiReady = function (tipo, sucesso) { window.mioApiStates = window.mioApiStates || {}; window.mioApiStates[tipo] = Boolean(sucesso); if (window.mioApiStates.config && window.mioApiStates.produtos) document.body.classList.add('mio-api-ready'); };</script>
   
   <!-- ================= HEADER / TOPO 100% CORRIGIDO ================= -->
   <header class="sticky top-0 z-50 bg-zinc-950/95 border-b border-zinc-900 backdrop-blur-md px-4 py-3 lg:px-8">
@@ -161,7 +166,8 @@
 </div>
 
 <!-- ================= CARROSSEL PRINCIPAL (BANNER) ================= -->
-<section id="banner-principal" class="relative w-full h-[60vh] md:h-[80vh] overflow-hidden bg-zinc-950">
+<div id="mio-loading-state" class="fixed inset-0 z-[40] items-center justify-center bg-zinc-950" aria-live="polite"><div class="h-8 w-8 animate-spin rounded-full border-2 border-zinc-700 border-t-amber-400"></div></div>
+<section id="banner-principal" class="mio-api-gated relative w-full h-[60vh] md:h-[80vh] overflow-hidden bg-zinc-950">
   
   <!-- Container dos Slides -->
   <div id="carousel-container" class="relative w-full h-full">
@@ -169,7 +175,7 @@
     <!-- Slide 1: Meias Custom Dyed -->
     <div class="carousel-slide absolute inset-0 w-full h-full transition-opacity duration-1000 ease-in-out opacity-100 z-10">
       <div class="absolute inset-0 bg-black/40 z-10"></div>
-      <picture><source id="carrossel-img-0-mobile" media="(max-width: 767px)" srcset=""><img id="carrossel-img-0" src="banner1.jpg" alt="MIO Meias Customizadas" class="w-full h-full object-cover"></picture>
+      <picture><source id="carrossel-img-0-mobile" media="(max-width: 767px)" srcset=""><img id="carrossel-img-0" src="" alt="" class="w-full h-full object-cover"></picture>
       
       <div class="absolute inset-0 z-20 flex flex-col items-center justify-center text-center px-4">
         <span id="carrossel-etiqueta-0" class="text-[9px] md:text-xs font-bold uppercase tracking-[0.3em] text-amber-400 mb-2 font-mono">NOVIDADES MIO</span>
@@ -182,7 +188,7 @@
     <!-- Slide 2: Organizadores MDF -->
     <div class="carousel-slide absolute inset-0 w-full h-full transition-opacity duration-1000 ease-in-out opacity-0 z-0">
       <div class="absolute inset-0 bg-black/50 z-10"></div>
-      <picture><source id="carrossel-img-1-mobile" media="(max-width: 767px)" srcset=""><img id="carrossel-img-1" src="banner2.jpg" alt="MIO Organizadores" class="w-full h-full object-cover"></picture>
+      <picture><source id="carrossel-img-1-mobile" media="(max-width: 767px)" srcset=""><img id="carrossel-img-1" src="" alt="" class="w-full h-full object-cover"></picture>
       
       <div class="absolute inset-0 z-20 flex flex-col items-center justify-center text-center px-4">
         <span id="carrossel-etiqueta-1" class="text-[9px] md:text-xs font-bold uppercase tracking-[0.3em] text-amber-400 mb-2 font-mono">ORGANIZAÇÃO E ESTILO</span>
@@ -195,7 +201,7 @@
     <!-- Slide 3: Conceito Streetwear / Acessórios -->
     <div class="carousel-slide absolute inset-0 w-full h-full transition-opacity duration-1000 ease-in-out opacity-0 z-0">
       <div class="absolute inset-0 bg-black/50 z-10"></div>
-      <picture><source id="carrossel-img-2-mobile" media="(max-width: 767px)" srcset=""><img id="carrossel-img-2" src="banner3.jpg" alt="MIO Streetwear" class="w-full h-full object-cover"></picture>
+      <picture><source id="carrossel-img-2-mobile" media="(max-width: 767px)" srcset=""><img id="carrossel-img-2" src="" alt="" class="w-full h-full object-cover"></picture>
       
       <div class="absolute inset-0 z-20 flex flex-col items-center justify-center text-center px-4">
         <span id="carrossel-etiqueta-2" class="text-[9px] md:text-xs font-bold uppercase tracking-[0.3em] text-amber-400 mb-2 font-mono">ESSENCIAL URBANO</span>
@@ -227,12 +233,12 @@
 
 
 <!-- ================= GRADE DE 3 BANNERS (MIO CATEGORIAS + CUPOM CENTRAL) ================= -->
-<section class="max-w-7xl mx-auto px-4 py-8">
+<section class="mio-api-gated max-w-7xl mx-auto px-4 py-8">
   <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
     
     <!-- Banner 1: Masculino -->
     <a id="banner-grelha-link-0" href="produto.html?filtro=masculino" class="relative h-80 bg-zinc-900 rounded-sm overflow-hidden group cursor-pointer border border-zinc-800 hover:border-zinc-700 transition block" target="_self">
-      <picture><source id="banner-grelha-img-0-mobile" media="(max-width: 767px)" srcset=""><img id="banner-grelha-img-0" src="https://images.unsplash.com/photo-1556821840-3a63f95609a7?q=80&w=500" class="w-full h-full object-cover opacity-50 group-hover:scale-105 transition-transform duration-500"></picture>
+      <picture><source id="banner-grelha-img-0-mobile" media="(max-width: 767px)" srcset=""><img id="banner-grelha-img-0" src="" alt="" class="w-full h-full object-cover opacity-50 group-hover:scale-105 transition-transform duration-500"></picture>
       <div class="absolute inset-0 flex flex-col justify-center items-center p-6 bg-black/30">
         <h3 id="banner-grelha-titulo-0" class="text-2xl md:text-3xl font-black text-white uppercase italic tracking-wider text-center">Masculino</h3>
         <p id="banner-grelha-texto-0" class="text-sm text-zinc-300 mt-2 font-medium uppercase tracking-widest bg-black/40 px-3 py-1 rounded-sm">Ver Coleção</p>
@@ -241,7 +247,7 @@
 
     <!-- Banner 2 (CENTRAL): GANHE 10% OFF -> Leva para a página do cupom -->
     <a id="banner-grelha-link-1" href="cupom.html" class="relative h-80 bg-zinc-900 rounded-sm overflow-hidden group cursor-pointer border border-amber-500/30 hover:border-amber-500 transition block" target="_self">
-      <picture><source id="banner-grelha-img-1-mobile" media="(max-width: 767px)" srcset=""><img id="banner-grelha-img-1" src="https://images.unsplash.com/photo-1582966772680-860e372bb558?q=80&w=500" class="w-full h-full object-cover opacity-40 group-hover:scale-105 transition-transform duration-500"></picture>
+      <picture><source id="banner-grelha-img-1-mobile" media="(max-width: 767px)" srcset=""><img id="banner-grelha-img-1" src="" alt="" class="w-full h-full object-cover opacity-40 group-hover:scale-105 transition-transform duration-500"></picture>
       <div class="absolute inset-0 bg-gradient-to-b from-amber-500/10 via-transparent to-black/70 z-10"></div>
       <div class="absolute inset-0 flex flex-col justify-center items-center p-6 z-20 text-center">
         <span id="banner-grelha-etiqueta-1" class="text-amber-400 text-xs font-black uppercase tracking-widest bg-amber-500/10 px-3 py-1 rounded-full mb-2 border border-amber-500/20">Presente de Boas-Vindas</span>
@@ -253,7 +259,7 @@
 
     <!-- Banner 3: Feminino -->
     <a id="banner-grelha-link-2" href="produto.html?filtro=feminino" class="relative h-80 bg-zinc-900 rounded-sm overflow-hidden group cursor-pointer border border-zinc-800 hover:border-zinc-700 transition block" target="_self">
-      <picture><source id="banner-grelha-img-2-mobile" media="(max-width: 767px)" srcset=""><img id="banner-grelha-img-2" src="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=500" class="w-full h-full object-cover opacity-50 group-hover:scale-105 transition-transform duration-500"></picture>
+      <picture><source id="banner-grelha-img-2-mobile" media="(max-width: 767px)" srcset=""><img id="banner-grelha-img-2" src="" alt="" class="w-full h-full object-cover opacity-50 group-hover:scale-105 transition-transform duration-500"></picture>
       <div class="absolute inset-0 flex flex-col justify-center items-center p-6 bg-black/30">
         <h3 id="banner-grelha-titulo-2" class="text-2xl md:text-3xl font-black text-white uppercase italic tracking-wider text-center">Feminino</h3>
         <p id="banner-grelha-texto-2" class="text-sm text-zinc-300 mt-2 font-medium uppercase tracking-widest bg-black/40 px-3 py-1 rounded-sm">Ver Coleção</p>
@@ -265,7 +271,7 @@
 
 
 <!-- ================= BARRA DE ORGANIZAÇÃO E FILTROS ================= -->
-<section class="max-w-7xl mx-auto px-4 py-4 border-y border-zinc-900 my-4">
+<section class="mio-api-gated max-w-7xl mx-auto px-4 py-4 border-y border-zinc-900 my-4">
   <div class="flex flex-wrap items-center justify-between gap-4">
     
     <!-- LADO ESQUERDO: DROPDOWN DE FILTROS -->
@@ -335,7 +341,7 @@
 </section>
 
   <!-- ================= SEÇÃO DE PRODUTOS DA VITRINE (HOME) ================= -->
-<section id="vitrine-produtos-secao" class="max-w-7xl mx-auto px-4 py-12">
+<section id="vitrine-produtos-secao" class="mio-api-gated max-w-7xl mx-auto px-4 py-12">
   
   <!-- Linha de Título e Link para Todos os Produtos -->
   <div class="flex items-baseline justify-between border-b border-zinc-900 pb-4 mb-8">
@@ -356,11 +362,10 @@
 </section>
 
   <!-- ================= BANNER INTERMEDIÁRIO EXTRA ================= -->
-  <section id="banner-intermediario" class="w-full my-12 bg-cover bg-center py-24 px-4 relative flex items-center justify-center border-y border-zinc-900 overflow-hidden" style="background-image: linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.7)), url('https://images.unsplash.com/photo-1529139574466-a303027c1d8b?q=80&w=1200');">
-    <picture class="absolute inset-0"><source id="banner-intermediario-img-mobile" media="(max-width: 767px)" srcset=""><img id="banner-intermediario-img" src="https://images.unsplash.com/photo-1529139574466-a303027c1d8b?q=80&w=1200" alt="" class="w-full h-full object-cover"></picture>
+  <section id="banner-intermediario" class="mio-api-gated w-full my-12 bg-cover bg-center py-24 px-4 relative flex items-center justify-center border-y border-zinc-900 overflow-hidden">
+    <picture class="absolute inset-0"><source id="banner-intermediario-img-mobile" media="(max-width: 767px)" srcset=""><img id="banner-intermediario-img" src="" alt="" class="w-full h-full object-cover"></picture>
     <div class="absolute inset-0 bg-black/50"></div>
     <div class="relative z-10 text-center max-w-xl">
-      <span class="text-[9px] uppercase tracking-[0.3em] font-bold text-white bg-zinc-950 px-3 py-1.5 rounded-sm">Estética MIO</span>
       <h3 id="banner-intermediario-titulo" class="text-2xl md:text-4xl font-black uppercase tracking-tight mt-4 mb-3">COLEÇÃO EXCLUSIVA DE MEIAS CUSTOM DYED</h3>
       <p id="banner-intermediario-texto" class="text-xs md:text-sm text-zinc-400 font-light mb-6">Peças únicas tingidas individualmente com técnicas exclusivas da MIO para garantir a originalidade do seu visual.</p>
       <a id="banner-intermediario-botao" href="produto.html?filtro=meias" class="inline-block bg-white text-black font-bold text-xs uppercase px-6 py-2.5 tracking-wider hover:bg-zinc-200 transition" target="_self">Explorar Meias</a>
@@ -487,7 +492,7 @@
  <!-- ================= JAVASCRIPT DE FUNCIONALIDADES (UNIFICADO E SEM DUPLICATAS) ================= -->
 <script>
 // 1. BANCO DE DADOS OFICIAL MIO
-    let produtosOriginais = [
+    let produtosOriginais = []; /*
       {
         id: 1, 
         nome: "Meia Custom Dyed Classic Red MIO", 
@@ -628,9 +633,9 @@
         data: "2026-07-15", 
         relevancia: 2 
       }
-    ];
+    ]; */
 
-    let produtosExibidos = [...produtosOriginais];
+    let produtosExibidos = [];
     let sacolaItens = JSON.parse(localStorage.getItem('mio_sacola_itens')) || [];
     let cupomAtivo = JSON.parse(localStorage.getItem('mio_cupom_ativo')) || null;
     const FRETE_GRATIS_META = 249.00;
@@ -1210,27 +1215,27 @@ function ordenarProdutos(criterio, label) {
 
     // 8.1 CARREGAR PRODUTOS DO BACKEND (banco de dados)
     // A home agora busca os produtos da API para refletir o que foi cadastrado no painel admin.
-    // Mantém produtosOriginais como fallback caso o servidor esteja indisponível.
     async function carregarProdutosAPI() {
       try {
         const res = await fetch('/api/produtos');
         if (res.ok) {
           const apiProdutos = await res.json();
-          if (Array.isArray(apiProdutos) && apiProdutos.length > 0) {
+          if (Array.isArray(apiProdutos)) {
             // Substitui a vitrine pelos produtos reais do banco
             produtosOriginais = apiProdutos;
             produtosExibidos = [...apiProdutos];
             return true;
           }
         }
-      } catch (err) {
-        console.warn("Servidor indisponível na home, usando produtos locais:", err.message);
-      }
+      } catch (err) { console.warn("Servidor indisponível na home:", err.message); }
+      produtosOriginais = [];
+      produtosExibidos = [];
       return false;
     }
 
     document.addEventListener("DOMContentLoaded", async () => {
-      await carregarProdutosAPI();
+      const produtosCarregados = await carregarProdutosAPI();
+      window.mioMarkApiReady('produtos', produtosCarregados);
       renderizarVitrine();
       renderizarItensSacola();
       atualizarContadorHeader();

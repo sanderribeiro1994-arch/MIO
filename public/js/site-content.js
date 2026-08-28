@@ -5,48 +5,55 @@
 (function () {
   'use strict';
 
+  const estadosApi = { config: false, produtos: false };
+  window.mioMarkApiReady = function (tipo, sucesso) {
+    estadosApi[tipo] = Boolean(sucesso);
+    if (estadosApi.config && estadosApi.produtos) {
+      document.body.classList.add('mio-api-ready');
+    }
+  };
+
   function atualizarTexto(id, valor) {
     if (!id) return;
     const el = document.getElementById(id);
     if (!el) return;
-    el.textContent = valor != null && String(valor).trim() !== '' ? String(valor) : el.textContent;
+    el.textContent = valor != null ? String(valor) : '';
   }
 
   function atualizarImagem(id, valor) {
     if (!id) return;
     const el = document.getElementById(id);
     if (!el || !(el.tagName.toLowerCase() === 'img')) return;
-    if (valor != null && String(valor).trim() !== '') {
-      el.src = String(valor);
-    }
+    el.removeAttribute('src');
+    if (valor != null && String(valor).trim() !== '') el.src = String(valor);
   }
 
   function atualizarImagemResponsiva(id, desktop, mobile) {
     const imagem = document.getElementById(id);
     if (!imagem || imagem.tagName.toLowerCase() !== 'img') return;
+    imagem.removeAttribute('src');
     if (desktop != null && String(desktop).trim() !== '') imagem.src = String(desktop);
     const fonteMobile = document.getElementById(id + '-mobile');
-    if (fonteMobile && mobile != null && String(mobile).trim() !== '') {
-      fonteMobile.srcset = String(mobile);
-    }
+    if (fonteMobile) fonteMobile.removeAttribute('srcset');
+    if (fonteMobile && mobile != null && String(mobile).trim() !== '') fonteMobile.srcset = String(mobile);
   }
 
   function atualizarLink(id, valor) {
     if (!id) return;
     const el = document.getElementById(id);
     if (!el) return;
-    if (valor != null && String(valor).trim() !== '') {
-      el.textContent = String(valor);
-      if (el.tagName.toLowerCase() === 'a') {
-        el.href = valor.startsWith('mailto:') ? valor : 'mailto:' + valor;
-      }
+    el.textContent = valor != null ? String(valor) : '';
+    if (el.tagName.toLowerCase() === 'a') {
+      el.removeAttribute('href');
+      if (valor != null && String(valor).trim() !== '') el.href = valor.startsWith('mailto:') ? valor : 'mailto:' + valor;
     }
   }
 
   function atualizarHref(id, valor) {
     const el = document.getElementById(id);
-    if (!el || valor == null || String(valor).trim() === '') return;
-    el.href = String(valor);
+    if (!el) return;
+    el.removeAttribute('href');
+    if (valor != null && String(valor).trim() !== '') el.href = String(valor);
   }
 
   function carregarConteudo() {
@@ -56,6 +63,7 @@
         return res.json();
       })
       .then(function (config) {
+        window.mioMarkApiReady && window.mioMarkApiReady('config', true);
         const paginas = config.paginas || {};
         const sobre = paginas.sobre || {};
         const politicas = paginas.politicas || {};
@@ -78,6 +86,7 @@
         // Atualizar banners da grelha
         bannersGrelha.forEach((banner, i) => {
           atualizarImagemResponsiva('banner-grelha-img-' + i, banner.imagem, banner.imagemMobile);
+          atualizarTexto('banner-grelha-etiqueta-' + i, banner.etiqueta);
           atualizarTexto('banner-grelha-titulo-' + i, banner.titulo);
           atualizarTexto('banner-grelha-texto-' + i, banner.texto);
           atualizarTexto('banner-grelha-botao-' + i, banner.botao);
@@ -134,6 +143,7 @@
         }
       })
       .catch(function (err) {
+        window.mioMarkApiReady && window.mioMarkApiReady('config', false);
         console.warn(err.message || err);
       });
   }

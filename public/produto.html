@@ -8,12 +8,17 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
+    body:not(.mio-api-ready) .mio-api-gated { visibility: hidden; }
+    body:not(.mio-api-ready) #mio-loading-state { display: flex; }
+    body.mio-api-ready #mio-loading-state { display: none; }
+    #mio-loading-state { display: none; }
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
   </style>
 <base target="_blank">
 </head>
 <body class="bg-zinc-950 text-white font-sans antialiased">
+  <script>window.mioMarkApiReady = function (tipo, sucesso) { if (tipo === 'produtos' && sucesso) document.body.classList.add('mio-api-ready'); };</script>
 
   <header class="sticky top-0 z-50 bg-zinc-950/95 border-b border-zinc-900 backdrop-blur-md px-4 py-3 lg:px-8">
     <div class="max-w-7xl mx-auto grid grid-cols-3 items-center">
@@ -104,15 +109,15 @@
   <main class="max-w-7xl mx-auto px-4 py-8 w-full flex-1">
     <div id="vitrine-todos-container" class="hidden mb-12">
       <p id="contador-produtos-vitrine" class="text-xs font-mono text-zinc-500 uppercase mb-6"></p>
-      <div id="grid-produtos-todos" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6"></div>
+      <div id="grid-produtos-todos" class="mio-api-gated grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6"></div>
     </div>
-    <div id="detalhes-produto-wrapper">
+    <div id="detalhes-produto-wrapper" class="mio-api-gated">
       <div id="detalhes-produto-container" class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start"></div>
       <section class="mt-20 border-t border-zinc-900 pt-12">
         <h2 class="text-lg font-black text-white uppercase tracking-tight mb-6 flex items-center gap-2">
           <span class="w-2 h-2 bg-amber-400 rounded-full"></span> Voce Tambem Pode Gostar
         </h2>
-        <div id="produtos-relacionados-container" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4"></div>
+        <div id="produtos-relacionados-container" class="mio-api-gated grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4"></div>
       </section>
       <section class="mt-20 border-t border-zinc-900 pt-12">
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
@@ -172,6 +177,7 @@
   </main>
 
   <!-- ================ MODAL DE ZOOM DA IMAGEM ================ -->
+  <div id="mio-loading-state" class="fixed inset-0 z-[40] items-center justify-center bg-zinc-950" aria-live="polite"><div class="h-8 w-8 animate-spin rounded-full border-2 border-zinc-700 border-t-amber-400"></div></div>
   <div id="modalZoomImagem" class="fixed inset-0 bg-black/95 z-50 hidden flex items-center justify-center p-4" onclick="fecharModalZoom(event)">
     <div class="absolute top-4 right-4 flex gap-2 z-10">
       <button onclick="aumentarZoom()" class="bg-white/20 hover:bg-white/40 text-white p-2 rounded-lg transition flex items-center gap-1" title="Aumentar zoom">
@@ -297,7 +303,7 @@
   </footer>
 
   <script>
-let produtosOriginais = [
+  let produtosOriginais = []; /*
       { id: 1, nome: "Meia Custom Dyed Classic Red MIO", preco: 29.90, precoOriginal: 39.90, estaEmPromocao: true, corDestaquePromo: "#f59e0b", textoDestaquePromo: "Super Drop", categoria: "meias", genero: "masculino", imagem: "https://images.unsplash.com/photo-1582966772680-860e372bb558?q=80&w=400", fotos: ["https://images.unsplash.com/photo-1582966772680-860e372bb558?q=80&w=400","https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=400"], cores: [{ nome: "Acid Red", codigoHex: "#ef4444" }], tamanhos: ["U", "34-38", "39-43"], estoque: 15, cronometro: "2026-08-30T23:59:59", descricao: "<p>Meia artesanal de alta qualidade feita com tingimento reativo.</p>", data: "2026-07-10", relevancia: 5 },
       { id: 2, nome: "Meia Custom Dyed Ocean Blue MIO", preco: 29.90, precoOriginal: 39.90, estaEmPromocao: true, corDestaquePromo: "#06b6d4", textoDestaquePromo: "Saldao MIO", categoria: "meias", genero: "feminino", imagem: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=400", fotos: ["https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=400"], cores: [{ nome: "Ocean Blue", codigoHex: "#0284c7" }], tamanhos: ["U"], estoque: 8, cronometro: "2026-08-15T18:00:00", descricao: "<p>Tingimento em tons azuis oceanicos.</p>", data: "2026-07-01", relevancia: 3 },
       { id: 3, nome: "Meia Custom Dyed Neon Acid MIO", preco: 34.90, precoOriginal: 44.90, estaEmPromocao: true, corDestaquePromo: "#22c55e", textoDestaquePromo: "Oferta Relampago", categoria: "meias", genero: "infantil", imagem: "https://images.unsplash.com/photo-1582966772680-860e372bb558?q=80&w=400", fotos: ["https://images.unsplash.com/photo-1582966772680-860e372bb558?q=80&w=400"], cores: [{ nome: "Neon Acid", codigoHex: "#84cc16" }], tamanhos: ["U", "34-38"], estoque: 5, cronometro: "2026-07-31T23:59:59", descricao: "<p>Estilo neon vibrante sob medida.</p>", data: "2026-07-12", relevancia: 9 },
@@ -305,9 +311,9 @@ let produtosOriginais = [
       { id: 5, nome: "Corta Vento Windbreaker MIO Black", preco: 189.90, precoOriginal: 229.90, estaEmPromocao: true, corDestaquePromo: "#f59e0b", textoDestaquePromo: "Promo Inverno", categoria: "roupas", genero: "feminino", imagem: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=400", fotos: ["https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=400"], cores: [{ nome: "Black Matte", codigoHex: "#09090b" }], tamanhos: ["P", "M", "G"], estoque: 3, cronometro: "2026-08-01T23:59:59", descricao: "<p>Corta vento impermeavel premium.</p>", data: "2026-07-11", relevancia: 10 },
       { id: 6, nome: "Meia Custom Dyed Tie-Dye Pink", preco: 29.90, precoOriginal: 39.90, estaEmPromocao: true, corDestaquePromo: "#ec4899", textoDestaquePromo: "Edicao Limitada", categoria: "meias", genero: "feminino", imagem: "https://images.unsplash.com/photo-1582966772680-860e372bb558?q=80&w=400", fotos: ["https://images.unsplash.com/photo-1582966772680-860e372bb558?q=80&w=400"], cores: [{ nome: "Tie-Dye Pink", codigoHex: "#f472b6" }], tamanhos: ["U", "34-38"], estoque: 11, cronometro: "2026-08-10T23:59:59", descricao: "<p>Tingimento em tons rosa e lavanda.</p>", data: "2026-07-05", relevancia: 4 },
       { id: 7, nome: "Produto Nao Promocional de Exemplo", preco: 59.90, precoOriginal: 59.90, estaEmPromocao: false, categoria: "meias", genero: "masculino", imagem: "https://images.unsplash.com/photo-1582966772680-860e372bb558?q=80&w=400", fotos: ["https://images.unsplash.com/photo-1582966772680-860e372bb558?q=80&w=400"], cores: [{ nome: "Cinza", codigoHex: "#71717a" }], tamanhos: ["U"], estoque: 10, descricao: "<p>Um produto padrao sem desconto ativo.</p>", data: "2026-07-15", relevancia: 2 }
-    ];
+    ]; */
 
-    let produtosExibidos = [...produtosOriginais];
+    let produtosExibidos = [];
     let sacolaItens = JSON.parse(localStorage.getItem('mio_sacola_itens')) || [];
     let cupomAtivo = JSON.parse(localStorage.getItem('mio_cupom_ativo')) || null;
     let usuarioLogado = null;
@@ -1243,27 +1249,26 @@ if (!container || !wrapperDetalhes || !containerVitrine) return;
     localStorage.removeItem('mio_cupom_ativo');
 
     // Carrega os produtos reais do banco de dados via API, refletindo o que é
-    // cadastrado no painel admin. Mantém produtosOriginais como fallback local
-    // caso o servidor esteja indisponível.
     async function carregarProdutosAPI() {
       try {
         const res = await fetch('/api/produtos');
         if (res.ok) {
           const apiProdutos = await res.json();
-          if (Array.isArray(apiProdutos) && apiProdutos.length > 0) {
+          if (Array.isArray(apiProdutos)) {
             produtosOriginais = apiProdutos;
             produtosExibidos = [...apiProdutos];
             return true;
           }
         }
-      } catch (err) {
-        console.warn("Servidor indisponível no catálogo, usando produtos locais:", err.message);
-      }
+      } catch (err) { console.warn("Servidor indisponível no catálogo:", err.message); }
+      produtosOriginais = [];
+      produtosExibidos = [];
       return false;
     }
 
     window.addEventListener('DOMContentLoaded', async () => {
-      await carregarProdutosAPI();
+      const produtosCarregados = await carregarProdutosAPI();
+      window.mioMarkApiReady('produtos', produtosCarregados);
       verificarSessaoUsuario();
       renderizarItensSacola();
       atualizarContadorHeader();
