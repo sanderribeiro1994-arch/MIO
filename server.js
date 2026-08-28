@@ -1,10 +1,7 @@
 import express from 'express';
 import path from 'path';
 import crypto from 'crypto';
-import fs from 'fs';
 import { fileURLToPath } from 'url';
-import sqlite3 from 'sqlite3';
-import { open } from 'sqlite';
 import bcrypt from 'bcryptjs';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -16,9 +13,6 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 const IS_PROD = NODE_ENV === 'production';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const DATA_DIR = process.env.MIO_DATA_DIR || __dirname;
-
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 // --- CONFIGURAÇÕES ---
 app.use(helmet({ contentSecurityPolicy: false })); // headers de segurança
@@ -155,188 +149,19 @@ const ADMIN_PADRAO = {
 };
 
 // --- INICIALIZAÇÃO DO BANCO DE DADOS ---
-let db;
-const dbReady = (async () => {
-  db = await open({
-    filename: path.join(DATA_DIR, 'database.db'),
-    driver: sqlite3.Database
-  });
+const dbReady = inicializarSupabase();
 
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS config (
-      chave TEXT PRIMARY KEY,
-      valor TEXT
-    );
-
-CREATE TABLE IF NOT EXISTS admin_conta (
-      id INTEGER PRIMARY KEY CHECK (id = 1),
-      email TEXT,
-      senha_hash TEXT,
-      nome TEXT,
-      foto TEXT,
-      endereco TEXT,
-      cnpj TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS avaliacoes (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      produto_id INTEGER,
-      nome TEXT,
-      nota INTEGER,
-      comentario TEXT,
-      foto TEXT,
-      data TEXT,
-      status TEXT DEFAULT 'pendente',
-      data_cadastro DATE
-    );
-  `);
-
-  // Migração: adiciona colunas de perfil do admin se ainda não existirem
-  const colsAdmin = await db.all(`PRAGMA table_info(admin_conta)`);
-  const nomesAdmin = colsAdmin.map(c => c.name);
-  if (!nomesAdmin.includes('nome')) await db.exec(`ALTER TABLE admin_conta ADD COLUMN nome TEXT`);
-  if (!nomesAdmin.includes('foto')) await db.exec(`ALTER TABLE admin_conta ADD COLUMN foto TEXT`);
-  if (!nomesAdmin.includes('endereco')) await db.exec(`ALTER TABLE admin_conta ADD COLUMN endereco TEXT`);
-  if (!nomesAdmin.includes('cnpj')) await db.exec(`ALTER TABLE admin_conta ADD COLUMN cnpj TEXT`);
-
-// Migração: adiciona colunas de consentimento/foto se ainda não existirem
-  const colsClientes = await db.all(`PRAGMA table_info(clientes)`);
-  const nomesCols = colsClientes.map(c => c.name);
-  if (!nomesCols.includes('whatsapp_ok')) {
-    await db.exec(`ALTER TABLE clientes ADD COLUMN whatsapp_ok BOOLEAN DEFAULT 0`);
-  }
-  if (!nomesCols.includes('aceitou_termos')) {
-    await db.exec(`ALTER TABLE clientes ADD COLUMN aceitou_termos BOOLEAN DEFAULT 0`);
-  }
-
-  const colunasPedidos = await db.all(`PRAGMA table_info(pedidos)`);
-  const nomesPedidos = new Set(colunasPedidos.map(c => c.name));
-  const camposPedido = [
-    ['frete_modalidade', 'TEXT'],
-    ['frete_codigo', 'TEXT'],
-    ['frete_valor', 'REAL'],
-    ['frete_prazo', 'TEXT'],
-    ['frete_origem', 'TEXT'],
-    ['frete_detalhes', 'TEXT'],
-    ['codigo_rastreamento', 'TEXT'],
-    ['url_rastreamento', 'TEXT'],
-    ['data_envio', 'TEXT'],
-    ['data_entrega', 'TEXT'],
-    ['upseller_id', 'TEXT'],
-    ['upseller_tracking', 'TEXT'],
-    ['upseller_status', 'TEXT'],
-    ['data_upseller_sync', 'TEXT']
-  ];
-  for (const [nome, tipo] of camposPedido) {
-    if (!nomesPedidos.has(nome)) {
-      await db.exec(`ALTER TABLE pedidos ADD COLUMN ${nome} ${tipo}`);
-    }
-  }
-
-// Garantir admin padrão (com hash bcrypt seguro)
-  const adminRow = await db.get('SELECT * FROM admin_conta WHERE id = 1');
-  if (!adminRow) {
+async function inicializarSupabase() {
+  const admin = await buscarAdmin();
+  if (!admin) {
     const senhaHash = await hashSenha('admin123');
-    await db.run('INSERT INTO admin_conta (id, email, senha_hash) VALUES (1, ?, ?)', [ADMIN_PADRAO.email, senhaHash]);
-  } else if (!adminRow.senha_hash || (typeof adminRow.senha_hash === 'string' && adminRow.senha_hash.length === 64 && /^[a-f0-9]{64}$/.test(adminRow.senha_hash))) {
-    // Migra o hash legado SHA-256 para bcrypt automaticamente
-    const senhaHash = await hashSenha('admin123');
-    await db.run('UPDATE admin_conta SET senha_hash = ? WHERE id = 1', [senhaHash]);
-  }
-
-  // Garante o cupom de boas-vindas ativo no banco (para a página cupom.html funcionar)
-  const { data: cupomBW, error: cupomError } = await supabaseAdmin.from('cupons').select('id').eq('codigo', 'MIO10OFF').maybeSingle();
-  if (cupomError) throw cupomError;
-  if (!cupomBW) {
-    const { error } = await supabaseAdmin.from('cupons').insert({ codigo: 'MIO10OFF', tipo: 'porcentagem', valor: 10, limiteUso: 0, usos: 0, validade: null, ativo: true });
+    const { error } = await supabaseAdmin.from('admin_conta').insert({
+      id: 1, email: ADMIN_PADRAO.email, senha_hash: senhaHash, nome: '', foto: '', endereco: {}, cnpj: ''
+    });
     if (error) throw error;
   }
-
-  // Config padrão (banners, contato, redes, logo, textos)
-  const cfgCount = await db.get('SELECT COUNT(*) as total FROM config');
-  let configPadraoParaBanners = {};
-  if (cfgCount.total === 0) {
-    configPadraoParaBanners = {
-      logo: { texto: "MIO", url: "" },
-      redesSociais: { instagram: "https://instagram.com", tiktok: "https://tiktok.com" },
-      contato: {
-        emailAtendimento: "suporte@miostreetwear.com.br",
-        emailParcerias: "parcerias@miostreetwear.com.br",
-        emailCarreiras: "carreiras@miostreetwear.com.br",
-        whatsapp: "5541995209813",
-        telefone: "(41) 99520-9813"
-      },
-      carrossel: [
-        { etiqueta: "NOVIDADES MIO", titulo: "CORES QUE DESTACAM", texto: "Estilo único em cada passo. Descubra a nova coleção de meias tingidas exclusivas.", botao: "VER NOVO DROP", link: "produto.html?filtro=feminino", imagem: "https://images.unsplash.com/photo-1582966772680-860e372bb558?q=80&w=1200" },
-        { etiqueta: "ORGANIZAÇÃO E ESTILO", titulo: "COLEÇÃO MIO HOME", texto: "Organizadores de MDF premium cortados a laser.", botao: "VER ORGANIZADORES", link: "produto.html?filtro=masculino", imagem: "https://images.unsplash.com/photo-1556821840-3a63f95609a7?q=80&w=1200" },
-        { etiqueta: "ESSENCIAL URBANO", titulo: "MIO STREETWEAR", texto: "Peças limitadas para expressar sua autenticidade.", botao: "EXPLORAR COLEÇÃO", link: "produto.html?filtro=infantil", imagem: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=1200" }
-      ],
-      bannersGrelha: [
-        { titulo: "Masculino", texto: "Ver Coleção", link: "produto.html?filtro=masculino", imagem: "https://images.unsplash.com/photo-1556821840-3a63f95609a7?q=80&w=500" },
-        { titulo: "10% OFF", texto: "Primeira Compra", link: "cupom.html", imagem: "https://images.unsplash.com/photo-1582966772680-860e372bb558?q=80&w=500" },
-        { titulo: "Feminino", texto: "Ver Coleção", link: "produto.html?filtro=feminino", imagem: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=500" }
-      ],
-bannerIntermediario: {
-        titulo: "COLEÇÃO EXCLUSIVA DE MEIAS CUSTOM DYED",
-        texto: "Peças únicas tingidas individualmente.",
-        botao: "Explorar Meias",
-        link: "produto.html?filtro=meias",
-        imagem: "https://images.unsplash.com/photo-1529139574466-a303027c1d8b?q=80&w=1200"
-      },
-      enderecoLoja: {
-        cep: "83650-000",
-        rua: "Rua da Loja",
-        numero: "123",
-        bairro: "Centro",
-        cidade: "Lapa",
-        uf: "PR"
-      },
-      freteGratisMeta: 249.00,
-      pixCopiaCola: "00020126360014BR.GOV.BCB.PIX0114mio@exemplo.com520400005303986540574.705802BR5903MIO6009SAO PAULO62070503***6304E2CA",
-      rodape: {
-        slogan: "Design autêntico, peças exclusivas e estilo streetwear para expressar sua individualidade.",
-        direitos: "© 2026 MIO Streetwear. Todos os direitos reservados.",
-        politicasTexto: "Políticas da Loja",
-        privacidadeTexto: "Privacidade"
-      },
-      paginas: {
-        sobre: {
-          titulo: "MIO Streetwear",
-          texto1: "Nascida do asfalto e da cultura urbana, a MIO é mais do que uma marca de roupas — é um conceito de expressão pessoal. Desenvolvemos peças exclusivas, drops extremamente limitados e acessórios customizados para quem dita o seu próprio ritmo e não segue padrões.",
-          texto2: "Cada costura, estampa e detalhe carrega a nossa obsessão por autenticidade, qualidade extrema e um design minimalista premium. Nós não fazemos moda para as massas; criamos peças de coleção para quem compreende o valor do estilo urbano.",
-          imagens: [
-            "https://images.unsplash.com/photo-1582966772680-860e372bb558?auto=format&fit=crop&q=80&w=600",
-            "https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&q=80&w=600",
-            "https://images.unsplash.com/photo-1513519245088-0e12902e5a38?auto=format&fit=crop&q=80&w=600"
-          ]
-        },
-        politicas: {
-          titulo: "POLÍTICAS DA LOJA",
-          sec1Titulo: "1. Envio e Entrega",
-          sec1Texto: "Todos os pedidos da MIO Streetwear são processados e enviados dentro do prazo de 2 a 5 dias úteis após a confirmação do pagamento. O prazo final de entrega e o valor do frete variam de acordo com a sua região e a modalidade escolhida no checkout.",
-          sec2Titulo: "2. Trocas e Devoluções",
-          sec2Texto: "Garantimos o direito de troca ou devolução do produto no prazo de até 7 (sete) dias corridos após o recebimento, conforme o Código de Defesa do Consumidor. O produto não deve apresentar sinais de uso, lavagem ou alterações e deve ser mantido na embalagem original com etiqueta fixada.",
-          sec3Titulo: "3. Peças Exclusivas & Garimpo",
-          sec3Texto: "Trabalhamos com tiragens limitadas e processos artesanais/customizados (Custom Dyed). Por conta disso, eventuais variações sutis de tonalidade reforçam a autenticidade e exclusividade de cada peça."
-        },
-        faleConosco: {
-          titulo: "FALE CONOSCO",
-          texto: "Entre em contato diretamente com nossa equipe através dos canais oficiais abaixo.",
-          emailAtendimento: "suporte@miostreetwear.com.br",
-          emailParcerias: "parcerias@miostreetwear.com.br",
-          emailCarreiras: "carreiras@miostreetwear.com.br"
-        }
-      }
-    };
-    const configPersistida = { ...configPadraoParaBanners };
-    delete configPersistida.carrossel;
-    delete configPersistida.bannersGrelha;
-    delete configPersistida.bannerIntermediario;
-    await db.run('INSERT INTO config (chave, valor) VALUES (?, ?)', ['site_config', JSON.stringify(configPersistida)]);
-  }
-
-  await garantirBannersNoSupabase(configPadraoParaBanners);
-})();
+  await garantirBannersNoSupabase();
+}
 
 // ---------- MIDDLEWARE DE AUTENTICAÇÃO ADMIN ----------
 function getAdminTokenFromRequest(req) {
@@ -447,6 +272,12 @@ async function incrementarUsoCupom(codigo) {
   if (error) throw error;
 }
 
+async function buscarAdmin() {
+  const { data, error } = await supabaseAdmin.from('admin_conta').select('*').eq('id', 1).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 function formatarBanner(banner) {
   const { id, tipo, ordem, ...conteudo } = banner;
   return { ...conteudo, id, tipo, ordem };
@@ -505,18 +336,15 @@ async function garantirBannersNoSupabase(configFallback = {}) {
 // --- Helpers de configuração por chave ---
 async function getConfigChave(chave, fallback = {}) {
   try {
-    const row = await db.get('SELECT valor FROM config WHERE chave = ?', chave);
-    return row ? JSON.parse(row.valor) : fallback;
+    const { data, error } = await supabaseAdmin.from('config').select('valor').eq('chave', chave).maybeSingle();
+    if (error) throw error;
+    return data?.valor || fallback;
   } catch (e) { return fallback; }
 }
 
 async function setConfigChave(chave, valor) {
-  const existe = await db.get('SELECT chave FROM config WHERE chave = ?', chave);
-  if (existe) {
-    await db.run('UPDATE config SET valor = ? WHERE chave = ?', [JSON.stringify(valor), chave]);
-  } else {
-    await db.run('INSERT INTO config (chave, valor) VALUES (?, ?)', [chave, JSON.stringify(valor)]);
-  }
+  const { error } = await supabaseAdmin.from('config').upsert({ chave, valor }, { onConflict: 'chave' });
+  if (error) throw error;
 }
 
 function obterBaseUrl(req) {
@@ -1757,7 +1585,7 @@ app.post('/api/frete/calcular', async (req, res) => {
     let token = cfg.token || process.env.MELHOR_ENVIO_TOKEN || '';
     let modo = cfg.modo || process.env.MELHOR_ENVIO_MODO || 'sandbox';
     
-    const adminPerfil = await db.get('SELECT endereco FROM admin_conta WHERE id = 1').catch(() => null);
+    const adminPerfil = await buscarAdmin().catch(() => null);
     let cepOrigem = (cfg.cepOrigem || process.env.MELHOR_ENVIO_CEP || '').replace(/\D/g, '');
     if (adminPerfil && adminPerfil.endereco) {
       const end = parseJsonArray(adminPerfil.endereco, {});
@@ -1822,7 +1650,7 @@ app.post('/api/envio/calcular', async (req, res) => {
 
     // Fonte de origem do frete: prioriza o endereço da loja (perfil do admin).
     // Se o admin preencheu o endereço da loja, o CEP dele é usado como origem.
-    const adminPerfil = await db.get('SELECT endereco FROM admin_conta WHERE id = 1').catch(() => null);
+    const adminPerfil = await buscarAdmin().catch(() => null);
     let cepOrigem = cfg.cepOrigem || process.env.MELHOR_ENVIO_CEP || '';
     if (adminPerfil && adminPerfil.endereco) {
       const end = parseJsonArray(adminPerfil.endereco, {});
@@ -1962,7 +1790,7 @@ app.post('/api/admin/login', loginLimiter, async (req, res) => {
   const { email, senha } = req.body || {};
   const emailBusca = String(email || '').trim().toLowerCase();
   try {
-    const admin = await db.get('SELECT * FROM admin_conta WHERE id = 1');
+    const admin = await buscarAdmin();
     const senhaOk = admin ? await compararSenha(senha || '', admin.senha_hash) : false;
     if (!admin || String(admin.email || '').trim().toLowerCase() !== emailBusca || !senhaOk) {
       return res.status(401).json({ error: "Credenciais inválidas." });
@@ -2012,7 +1840,7 @@ app.get('/api/admin/verificar', async (req, res) => {
 app.put('/api/admin/conta', exigirAdmin, async (req, res) => {
   const { email, senhaAtual, novaSenha } = req.body || {};
   try {
-    const admin = await db.get('SELECT * FROM admin_conta WHERE id = 1');
+    const admin = await buscarAdmin();
     if (!admin) {
       return res.status(404).json({ error: 'Administrador não encontrado.' });
     }
@@ -2047,9 +1875,13 @@ app.put('/api/admin/conta', exigirAdmin, async (req, res) => {
       return res.json({ ok: true, message: 'Nenhuma alteração foi necessária.', email: admin.email });
     }
 
-    await db.run(`UPDATE admin_conta SET ${updates.join(', ')} WHERE id = 1`, values);
+    const camposConta = {};
+    if (novoEmail && novoEmail !== admin.email) camposConta.email = novoEmail;
+    if (senhaAtual && novaSenha) camposConta.senha_hash = await hashSenha(novaSenha);
+    const { error: contaError } = await supabaseAdmin.from('admin_conta').update(camposConta).eq('id', 1);
+    if (contaError) throw contaError;
 
-    const adminAtualizado = await db.get('SELECT * FROM admin_conta WHERE id = 1');
+    const adminAtualizado = await buscarAdmin();
     const token = getAdminTokenFromRequest(req);
     if (token && adminAtualizado.email) {
       await salvarSessaoAdmin(token, adminAtualizado.email, Date.now() + ADMIN_SESSION_TTL_MS);
@@ -2064,7 +1896,7 @@ app.put('/api/admin/conta', exigirAdmin, async (req, res) => {
 app.put('/api/admin/senha', exigirAdmin, async (req, res) => {
   const { senhaAtual, novaSenha } = req.body || {};
   try {
-    const admin = await db.get('SELECT * FROM admin_conta WHERE id = 1');
+    const admin = await buscarAdmin();
     const senhaOk = admin ? await compararSenha(senhaAtual, admin.senha_hash) : false;
     if (!senhaOk) {
       return res.status(401).json({ error: "Senha atual incorreta." });
@@ -2072,7 +1904,8 @@ app.put('/api/admin/senha', exigirAdmin, async (req, res) => {
     if (!novaSenha || novaSenha.length < 6) {
       return res.status(400).json({ error: "A nova senha deve ter pelo menos 6 caracteres." });
     }
-    await db.run('UPDATE admin_conta SET senha_hash = ? WHERE id = 1', [await hashSenha(novaSenha)]);
+    const { error } = await supabaseAdmin.from('admin_conta').update({ senha_hash: await hashSenha(novaSenha) }).eq('id', 1);
+    if (error) throw error;
     res.json({ ok: true, message: "Senha do administrador atualizada." });
   } catch (err) {
     res.status(500).json({ error: "Erro ao alterar senha." });
@@ -2082,7 +1915,7 @@ app.put('/api/admin/senha', exigirAdmin, async (req, res) => {
 // ---------- API: PERFIL DO ADMIN (foto, nome, endereço da loja, CNPJ) ----------
 app.get('/api/admin/perfil', exigirAdmin, async (req, res) => {
   try {
-    const admin = await db.get('SELECT nome, foto, endereco, cnpj, email FROM admin_conta WHERE id = 1');
+    const admin = await buscarAdmin();
     if (!admin) return res.status(404).json({ error: "Admin não encontrado." });
     admin.endereco = parseJsonArray(admin.endereco, {});
     res.json(admin);
@@ -2094,12 +1927,13 @@ app.get('/api/admin/perfil', exigirAdmin, async (req, res) => {
 app.put('/api/admin/perfil', exigirAdmin, async (req, res) => {
   const { nome, foto, endereco, cnpj } = req.body || {};
   try {
-    const admin = await db.get('SELECT * FROM admin_conta WHERE id = 1');
+    const admin = await buscarAdmin();
     const novoNome = nome !== undefined ? nome : admin.nome;
     const novoFoto = foto !== undefined ? foto : (admin.foto || '');
     const novoEnd = endereco !== undefined ? JSON.stringify(endereco) : admin.endereco;
     const novoCnpj = cnpj !== undefined ? cnpj : (admin.cnpj || '');
-    await db.run('UPDATE admin_conta SET nome=?, foto=?, endereco=?, cnpj=? WHERE id = 1', [novoNome, novoFoto, novoEnd, novoCnpj]);
+    const { error } = await supabaseAdmin.from('admin_conta').update({ nome: novoNome, foto: novoFoto, endereco: endereco !== undefined ? endereco : parseJsonArray(admin.endereco, {}), cnpj: novoCnpj }).eq('id', 1);
+    if (error) throw error;
     res.json({ ok: true, message: "Perfil do administrador atualizado." });
   } catch (err) {
     res.status(500).json({ error: "Erro ao salvar perfil do admin." });
@@ -2476,12 +2310,10 @@ app.post('/api/cupons/validar', async (req, res) => {
 app.get('/api/avaliacoes', async (req, res) => {
   try {
     const produtoId = req.query.produto_id;
-    let rows;
-    if (produtoId) {
-      rows = await db.all("SELECT id, produto_id, nome, nota, comentario, foto, data, status FROM avaliacoes WHERE produto_id = ? AND status = 'aprovado' ORDER BY id DESC", produtoId);
-    } else {
-      rows = await db.all("SELECT id, produto_id, nome, nota, comentario, foto, data, status FROM avaliacoes WHERE status = 'aprovado' ORDER BY id DESC");
-    }
+    let query = supabaseAdmin.from('avaliacoes').select('id, produto_id, nome, nota, comentario, foto, data, status').eq('status', 'aprovado').order('id', { ascending: false });
+    if (produtoId) query = query.eq('produto_id', produtoId);
+    const { data: rows, error } = await query;
+    if (error) throw error;
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: "Erro ao buscar avaliações." });
@@ -2495,8 +2327,8 @@ app.post('/api/avaliacoes', async (req, res) => {
   }
   try {
     const nota = Math.max(1, Math.min(5, parseInt(a.nota) || 5));
-    await db.run(`INSERT INTO avaliacoes (produto_id, nome, nota, comentario, foto, data, status, data_cadastro) VALUES (?,?,?,?,?,?,?,?)`,
-      [a.produto_id, String(a.nome).slice(0, 60), nota, String(a.comentario || '').slice(0, 500), a.foto || '', new Date().toISOString(), 'pendente', new Date().toISOString().slice(0, 10)]);
+    const { error } = await supabaseAdmin.from('avaliacoes').insert({ produto_id: a.produto_id, nome: String(a.nome).slice(0, 60), nota, comentario: String(a.comentario || '').slice(0, 500), foto: a.foto || '', data: new Date().toISOString(), status: 'pendente', data_cadastro: new Date().toISOString() });
+    if (error) throw error;
     res.json({ ok: true, message: "Avaliação enviada. Aguardando aprovação." });
   } catch (err) {
     res.status(500).json({ error: "Erro ao salvar avaliação." });
@@ -2506,7 +2338,8 @@ app.post('/api/avaliacoes', async (req, res) => {
 // Endpoints de moderação de avaliações (admin)
 app.get('/api/avaliacoes/todas', exigirAdmin, async (req, res) => {
   try {
-    const rows = await db.all('SELECT * FROM avaliacoes ORDER BY id DESC');
+    const { data: rows, error } = await supabaseAdmin.from('avaliacoes').select('*').order('id', { ascending: false });
+    if (error) throw error;
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: "Erro ao buscar avaliações." });
@@ -2518,7 +2351,8 @@ app.put('/api/avaliacoes/:id/status', exigirAdmin, async (req, res) => {
   const valido = ['aprovado', 'pendente', 'rejeitado'];
   if (!valido.includes(status)) return res.status(400).json({ error: "Status inválido." });
   try {
-    await db.run('UPDATE avaliacoes SET status = ? WHERE id = ?', [status, req.params.id]);
+    const { error } = await supabaseAdmin.from('avaliacoes').update({ status }).eq('id', req.params.id);
+    if (error) throw error;
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: "Erro ao atualizar avaliação." });
@@ -2527,7 +2361,8 @@ app.put('/api/avaliacoes/:id/status', exigirAdmin, async (req, res) => {
 
 app.delete('/api/avaliacoes/:id', exigirAdmin, async (req, res) => {
   try {
-    await db.run('DELETE FROM avaliacoes WHERE id = ?', req.params.id);
+    const { error } = await supabaseAdmin.from('avaliacoes').delete().eq('id', req.params.id);
+    if (error) throw error;
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: "Erro ao excluir avaliação." });
@@ -2537,9 +2372,7 @@ app.delete('/api/avaliacoes/:id', exigirAdmin, async (req, res) => {
 // ---------- API: CONFIGURAÇÃO DO SITE ----------
 app.get('/api/config', async (req, res) => {
   try {
-    await dbReady;
-    const row = await db.get('SELECT valor FROM config WHERE chave = ?', 'site_config');
-    const config = row ? JSON.parse(row.valor) : {};
+    const config = await getConfigChave('site_config', {});
     const banners = await carregarBanners();
     res.json({ ...config, ...banners });
   } catch (err) {

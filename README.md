@@ -31,7 +31,7 @@ Execute [supabase-schema.sql](supabase-schema.sql) no SQL Editor do Supabase. O 
 
 ## ☁️ Deploy no Render (gratuito)
 
-Este projeto usa **Node.js + Express + SQLite**. O GitHub Pages **não é compatível** (não roda backend).
+Este projeto usa **Node.js + Express + Supabase**. O GitHub Pages **não é compatível** (não roda backend).
 
 ### 1. Enviar para o GitHub
 ```bash
@@ -53,17 +53,6 @@ git push -u origin main
    - **Build Command:** `npm install`
    - **Start Command:** `npm start`
 5. Clique em **Create Web Service**.
-
-### 3. Armazenamento persistente no Render
-O banco e os uploads são salvos no diretório definido por `MIO_DATA_DIR` (por padrão, na pasta do projeto). Em serviços gratuitos do Render, o filesystem é efêmero e apaga as edições do admin após reinícios.
-
-Para manter banners, textos, links, imagens, clientes, pedidos e produtos:
-1. Adicione um **Persistent Disk** ao Web Service no Render.
-2. Use o ponto de montagem `/var/data`.
-3. Em **Environment → Environment Variables**, crie `MIO_DATA_DIR` com o valor `/var/data`.
-4. Faça um novo deploy.
-
-Depois disso, o `database.db` e os arquivos enviados pelo painel ficarão no disco persistente e continuarão disponíveis até a próxima edição no admin. Sem Persistent Disk, não é possível garantir permanência usando SQLite no Render.
 
 ## 🔒 Segurança
 - Troque a senha padrão do admin pelo painel (aba **Configurações → Segurança**).

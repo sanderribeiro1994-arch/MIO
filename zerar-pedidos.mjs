@@ -1,17 +1,10 @@
-import sqlite3 from 'sqlite3';
-import { open } from 'sqlite';
+import { supabaseAdmin } from './supabase.js';
 
-async function main() {
-  const db = await open({
-    filename: './database.db',
-    driver: sqlite3.Database
-  });
-  const antes = await db.get('SELECT COUNT(*) as total FROM pedidos');
-  await db.run('DELETE FROM pedidos');
-  const depois = await db.get('SELECT COUNT(*) as total FROM pedidos');
-  console.log('Pedidos antes: ' + antes.total);
-  console.log('Pedidos após limpeza: ' + depois.total);
-  await db.close();
-}
-
-main().catch(e => { console.error('Erro:', e.message); });
+const { count: antes, error: antesError } = await supabaseAdmin.from('pedidos').select('id', { count: 'exact', head: true });
+if (antesError) throw antesError;
+const { error } = await supabaseAdmin.from('pedidos').delete().not('id', 'is', null);
+if (error) throw error;
+const { count: depois, error: depoisError } = await supabaseAdmin.from('pedidos').select('id', { count: 'exact', head: true });
+if (depoisError) throw depoisError;
+console.log('Pedidos antes:', antes || 0);
+console.log('Pedidos após limpeza:', depois || 0);
