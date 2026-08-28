@@ -11,6 +11,18 @@ npm start
 
 Acesse `http://localhost:3000`
 
+### Supabase
+
+Configure no ambiente do servidor:
+
+```bash
+SUPABASE_URL=https://seu-projeto.supabase.co
+SUPABASE_ANON_KEY=sua-chave-anon
+SUPABASE_STORAGE_BUCKET=images
+```
+
+Execute [supabase-schema.sql](supabase-schema.sql) no SQL Editor do Supabase e crie um bucket público chamado `images`. Produtos e banners guardam apenas URLs; os arquivos enviados pelo painel são armazenados no Supabase Storage.
+
 ### Credenciais de acesso ao painel admin
 - URL: `http://localhost:3000/admin`
 - Email: `admin@miostreetwear.com.br`

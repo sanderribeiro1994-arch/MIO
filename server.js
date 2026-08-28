@@ -8,6 +8,7 @@ import { open } from 'sqlite';
 import bcrypt from 'bcryptjs';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import { supabase } from './supabase.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -167,27 +168,6 @@ const dbReady = (async () => {
   });
 
   await db.exec(`
-    CREATE TABLE IF NOT EXISTS produtos (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      nome TEXT,
-      preco REAL,
-      precoOriginal REAL,
-      estaEmPromocao BOOLEAN,
-      textoDestaquePromo TEXT,
-      cronometro TEXT,
-      categoria TEXT,
-      genero TEXT,
-      imagem TEXT,
-      fotos TEXT,
-      cores TEXT,
-      tamanhos TEXT,
-      descricao TEXT,
-      estoque INTEGER,
-      relevancia INTEGER,
-      data TEXT,
-      data_cadastro DATE
-    );
-
     CREATE TABLE IF NOT EXISTS pedidos (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       numero TEXT,
@@ -266,17 +246,6 @@ CREATE TABLE IF NOT EXISTS admin_conta (
     );
   `);
 
-// Migração: adiciona colunas de produtos que podem faltar em bancos antigos
-  const colsProdutos = await db.all(`PRAGMA table_info(produtos)`);
-  const nomesProdutos = colsProdutos.map(c => c.name);
-  if (!nomesProdutos.includes('precoOriginal')) await db.exec(`ALTER TABLE produtos ADD COLUMN precoOriginal REAL`);
-  if (!nomesProdutos.includes('estaEmPromocao')) await db.exec(`ALTER TABLE produtos ADD COLUMN estaEmPromocao BOOLEAN`);
-  if (!nomesProdutos.includes('textoDestaquePromo')) await db.exec(`ALTER TABLE produtos ADD COLUMN textoDestaquePromo TEXT`);
-  if (!nomesProdutos.includes('cronometro')) await db.exec(`ALTER TABLE produtos ADD COLUMN cronometro TEXT`);
-  if (!nomesProdutos.includes('cores')) await db.exec(`ALTER TABLE produtos ADD COLUMN cores TEXT`);
-  if (!nomesProdutos.includes('tamanhos')) await db.exec(`ALTER TABLE produtos ADD COLUMN tamanhos TEXT`);
-  if (!nomesProdutos.includes('data')) await db.exec(`ALTER TABLE produtos ADD COLUMN data TEXT`);
-
   // Migração: adiciona colunas de perfil do admin se ainda não existirem
   const colsAdmin = await db.all(`PRAGMA table_info(admin_conta)`);
   const nomesAdmin = colsAdmin.map(c => c.name);
@@ -339,8 +308,9 @@ CREATE TABLE IF NOT EXISTS admin_conta (
 
   // Config padrão (banners, contato, redes, logo, textos)
   const cfgCount = await db.get('SELECT COUNT(*) as total FROM config');
+  let configPadraoParaBanners = {};
   if (cfgCount.total === 0) {
-    const configPadrao = {
+    configPadraoParaBanners = {
       logo: { texto: "MIO", url: "" },
       redesSociais: { instagram: "https://instagram.com", tiktok: "https://tiktok.com" },
       contato: {
@@ -351,9 +321,9 @@ CREATE TABLE IF NOT EXISTS admin_conta (
         telefone: "(41) 99520-9813"
       },
       carrossel: [
-        { etiqueta: "NOVIDADES MIO", titulo: "CORES QUE DESTACAM", texto: "Estilo único em cada passo. Descubra a nova coleção de meias tingidas exclusivas.", botao: "VER NOVO DROP", link: "produto.html?filtro=feminino", imagem: "banner1.jpg" },
-        { etiqueta: "ORGANIZAÇÃO E ESTILO", titulo: "COLEÇÃO MIO HOME", texto: "Organizadores de MDF premium cortados a laser.", botao: "VER ORGANIZADORES", link: "produto.html?filtro=masculino", imagem: "banner2.jpg" },
-        { etiqueta: "ESSENCIAL URBANO", titulo: "MIO STREETWEAR", texto: "Peças limitadas para expressar sua autenticidade.", botao: "EXPLORAR COLEÇÃO", link: "produto.html?filtro=infantil", imagem: "banner3.jpg" }
+        { etiqueta: "NOVIDADES MIO", titulo: "CORES QUE DESTACAM", texto: "Estilo único em cada passo. Descubra a nova coleção de meias tingidas exclusivas.", botao: "VER NOVO DROP", link: "produto.html?filtro=feminino", imagem: "https://images.unsplash.com/photo-1582966772680-860e372bb558?q=80&w=1200" },
+        { etiqueta: "ORGANIZAÇÃO E ESTILO", titulo: "COLEÇÃO MIO HOME", texto: "Organizadores de MDF premium cortados a laser.", botao: "VER ORGANIZADORES", link: "produto.html?filtro=masculino", imagem: "https://images.unsplash.com/photo-1556821840-3a63f95609a7?q=80&w=1200" },
+        { etiqueta: "ESSENCIAL URBANO", titulo: "MIO STREETWEAR", texto: "Peças limitadas para expressar sua autenticidade.", botao: "EXPLORAR COLEÇÃO", link: "produto.html?filtro=infantil", imagem: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=1200" }
       ],
       bannersGrelha: [
         { titulo: "Masculino", texto: "Ver Coleção", link: "produto.html?filtro=masculino", imagem: "https://images.unsplash.com/photo-1556821840-3a63f95609a7?q=80&w=500" },
@@ -412,25 +382,14 @@ bannerIntermediario: {
         }
       }
     };
-    await db.run('INSERT INTO config (chave, valor) VALUES (?, ?)', ['site_config', JSON.stringify(configPadrao)]);
+    const configPersistida = { ...configPadraoParaBanners };
+    delete configPersistida.carrossel;
+    delete configPersistida.bannersGrelha;
+    delete configPersistida.bannerIntermediario;
+    await db.run('INSERT INTO config (chave, valor) VALUES (?, ?)', ['site_config', JSON.stringify(configPersistida)]);
   }
 
-  // Seed produtos se vazio
-  const count = await db.get('SELECT COUNT(*) as total FROM produtos');
-  if (count.total === 0) {
-    console.log("🚀 Populando banco de dados inicial...");
-    const initialProducts = [
-      ["Meia Custom Dyed Classic Red MIO", 29.90, 39.90, 1, "Super Drop", "2026-08-30T23:59:59", "meias", "masculino", "https://images.unsplash.com/photo-1582966772680-860e372bb558?q=80&w=400", '["https://images.unsplash.com/photo-1582966772680-860e372bb558?q=80&w=400","https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=400"]', '[{"nome":"Acid Red","codigoHex":"#ef4444"}]', '["U","34-38","39-43"]', "<p>Meia artesanal reativa.</p>", 15, 5, '2026-07-10', '2026-07-10'],
-      ["Meia Custom Dyed Ocean Blue MIO", 29.90, 39.90, 1, "Saldão MIO", "2026-08-15T18:00:00", "meias", "feminino", "https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=400", '["https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=400"]', '[{"nome":"Ocean Blue","codigoHex":"#0284c7"}]', '["U"]', "<p>Tingimento azul oceânico.</p>", 8, 3, '2026-07-01', '2026-07-01'],
-      ["Meia Custom Dyed Neon Acid MIO", 34.90, 44.90, 1, "Oferta Relâmpago", "2026-07-31T23:59:59", "meias", "infantil", "https://images.unsplash.com/photo-1582966772680-860e372bb558?q=80&w=400", '["https://images.unsplash.com/photo-1582966772680-860e372bb558?q=80&w=400"]', '[{"nome":"Neon Acid","codigoHex":"#84cc16"}]', '["U","34-38"]', "<p>Estilo neon vibrante.</p>", 5, 9, '2026-07-12', '2026-07-12'],
-      ["Camiseta Oversized Drop 01 MIO", 99.90, 119.90, 1, "Drop MIO", "2026-08-20T20:00:00", "roupas", "masculino", "https://images.unsplash.com/photo-1556821840-3a63f95609a7?q=80&w=400", '["https://images.unsplash.com/photo-1556821840-3a63f95609a7?q=80&w=400"]', '[{"nome":"Off-Black","codigoHex":"#18181b"}]', '["P","M","G","GG"]', "<p>Caimento street perfeito.</p>", 20, 8, '2026-06-25', '2026-06-25'],
-      ["Corta Vento MIO Black", 189.90, 229.90, 1, "Promo Inverno", "2026-08-01T23:59:59", "roupas", "feminino", "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=400", '["https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=400"]', '[{"nome":"Black Matte","codigoHex":"#09090b"}]', '["P","M","G"]', "<p>Impermeável premium.</p>", 3, 10, '2026-07-11', '2026-07-11'],
-      ["Meia Custom Dyed Tie-Dye Pink", 29.90, 39.90, 1, "Edição Limitada", "2026-08-10T23:59:59", "meias", "feminino", "https://images.unsplash.com/photo-1582966772680-860e372bb558?q=80&w=400", '["https://images.unsplash.com/photo-1582966772680-860e372bb558?q=80&w=400"]', '[{"nome":"Tie-Dye Pink","codigoHex":"#f472b6"}]', '["U","34-38"]', "<p>Tingimento rosa e lavanda.</p>", 11, 4, '2026-07-05', '2026-07-05']
-    ];
-    for (const p of initialProducts) {
-      await db.run(`INSERT INTO produtos (nome, preco, precoOriginal, estaEmPromocao, textoDestaquePromo, cronometro, categoria, genero, imagem, fotos, cores, tamanhos, descricao, estoque, relevancia, data, data_cadastro) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, p);
-    }
-  }
+  await garantirBannersNoSupabase(configPadraoParaBanners);
 })();
 
 // ---------- MIDDLEWARE DE AUTENTICAÇÃO ADMIN ----------
@@ -463,7 +422,89 @@ async function exigirAdmin(req, res, next) {
 
 // ---------- FUNÇÕES AUXILIARES ----------
 function parseJsonArray(str, fallback) {
+  if (Array.isArray(str)) return str;
   try { return str ? JSON.parse(str) : fallback; } catch (e) { return fallback; }
+}
+
+function formatarProduto(produto) {
+  return {
+    ...produto,
+    fotos: parseJsonArray(produto.fotos, produto.imagem ? [produto.imagem] : []),
+    cores: parseJsonArray(produto.cores, []),
+    tamanhos: parseJsonArray(produto.tamanhos, [])
+  };
+}
+
+function validarUrlImagem(valor) {
+  if (valor == null || String(valor).trim() === '') return '';
+  const url = String(valor).trim();
+  if (!/^https?:\/\//i.test(url)) {
+    throw new Error('As imagens precisam ser URLs http(s) hospedadas remotamente.');
+  }
+  return url;
+}
+
+function prepararProduto(produto) {
+  const imagem = validarUrlImagem(produto.imagem);
+  const fotos = parseJsonArray(produto.fotos, imagem ? [imagem] : [])
+    .map(validarUrlImagem)
+    .filter(Boolean);
+  return { ...produto, imagem, fotos };
+}
+
+function formatarBanner(banner) {
+  const { id, tipo, ordem, ...conteudo } = banner;
+  return { ...conteudo, id, tipo, ordem };
+}
+
+async function carregarBanners() {
+  const { data, error } = await supabase
+    .from('banners')
+    .select('*')
+    .order('ordem', { ascending: true });
+  if (error) throw error;
+
+  const configBanners = { carrossel: [], bannersGrelha: [], bannerIntermediario: {} };
+  for (const banner of data || []) {
+    const formatado = formatarBanner(banner);
+    if (banner.tipo === 'carrossel') configBanners.carrossel.push(formatado);
+    if (banner.tipo === 'grelha') configBanners.bannersGrelha.push(formatado);
+    if (banner.tipo === 'intermediario') configBanners.bannerIntermediario = formatado;
+  }
+  return configBanners;
+}
+
+function converterBannersParaLinhas(config) {
+  const linhas = [];
+  (config.carrossel || []).forEach((banner, ordem) => {
+    linhas.push({ tipo: 'carrossel', ordem, ...banner, imagem: validarUrlImagem(banner.imagem), imagemMobile: validarUrlImagem(banner.imagemMobile) });
+  });
+  (config.bannersGrelha || []).forEach((banner, ordem) => {
+    linhas.push({ tipo: 'grelha', ordem, ...banner, imagem: validarUrlImagem(banner.imagem), imagemMobile: validarUrlImagem(banner.imagemMobile) });
+  });
+  if (config.bannerIntermediario) {
+    linhas.push({ tipo: 'intermediario', ordem: 0, ...config.bannerIntermediario, imagem: validarUrlImagem(config.bannerIntermediario.imagem), imagemMobile: validarUrlImagem(config.bannerIntermediario.imagemMobile) });
+  }
+  return linhas.map(({ id, ...linha }) => linha);
+}
+
+async function salvarBanners(config) {
+  const { error: deleteError } = await supabase.from('banners').delete().not('id', 'is', null);
+  if (deleteError) throw deleteError;
+  const linhas = converterBannersParaLinhas(config);
+  if (!linhas.length) return;
+  const { error } = await supabase.from('banners').insert(linhas);
+  if (error) throw error;
+}
+
+async function garantirBannersNoSupabase(configFallback = {}) {
+  const { data, error } = await supabase.from('banners').select('id').limit(1);
+  if (error) throw error;
+  if (data && data.length > 0) return;
+
+  const configLocal = await getConfigChave('site_config', {});
+  const temBannersLocais = configLocal.carrossel || configLocal.bannersGrelha || configLocal.bannerIntermediario;
+  await salvarBanners(temBannersLocais ? configLocal : configFallback);
 }
 
 // --- Helpers de configuração por chave ---
@@ -774,14 +815,19 @@ app.post('/api/upload', exigirAdmin, async (req, res) => {
       if (!matches) return res.status(400).json({ error: "Formato de imagem inválido." });
       const ext = (matches[1].split('/')[1] || 'png').replace('jpeg', 'jpg');
       const buffer = Buffer.from(matches[2], 'base64');
-      const dir = UPLOADS_DIR;
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      const fileName = (nome ? nome.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') : 'img') + '-' + Date.now() + '.' + ext;
-      fs.writeFileSync(path.join(dir, fileName), buffer);
-      return res.json({ ok: true, url: '/uploads/' + fileName });
+      const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'images';
+      const prefixo = nome ? nome.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') : 'img';
+      const filePath = `admin/${prefixo}-${crypto.randomUUID()}.${ext}`;
+      const { error } = await supabase.storage.from(bucket).upload(filePath, buffer, {
+        contentType: matches[1],
+        upsert: false
+      });
+      if (error) throw error;
+      const { data } = supabase.storage.from(bucket).getPublicUrl(filePath);
+      return res.json({ ok: true, url: data.publicUrl });
     }
     // URL externa - retorna a própria URL
-    return res.json({ ok: true, url: imagem });
+    return res.json({ ok: true, url: validarUrlImagem(imagem) });
   } catch (err) {
     res.status(500).json({ error: "Erro ao enviar imagem: " + err.message });
   }
@@ -2064,13 +2110,12 @@ app.put('/api/admin/perfil', exigirAdmin, async (req, res) => {
 // ---------- API: PRODUTOS (CRUD) ----------
 app.get('/api/produtos', async (req, res) => {
   try {
-    const produtos = await db.all('SELECT * FROM produtos ORDER BY relevancia DESC');
-    const formatados = produtos.map(p => ({
-      ...p,
-      fotos: parseJsonArray(p.fotos, [p.imagem]),
-      cores: parseJsonArray(p.cores, []),
-      tamanhos: parseJsonArray(p.tamanhos, [])
-    }));
+    const { data: produtos, error } = await supabase
+      .from('produtos')
+      .select('*')
+      .order('relevancia', { ascending: false });
+    if (error) throw error;
+    const formatados = (produtos || []).map(formatarProduto);
     res.json(formatados);
   } catch (err) {
     res.status(500).json({ error: "Erro ao buscar produtos." });
@@ -2079,12 +2124,14 @@ app.get('/api/produtos', async (req, res) => {
 
 app.get('/api/produto/:id', async (req, res) => {
   try {
-    const produto = await db.get('SELECT * FROM produtos WHERE id = ?', req.params.id);
+    const { data: produto, error } = await supabase
+      .from('produtos')
+      .select('*')
+      .eq('id', req.params.id)
+      .maybeSingle();
+    if (error) throw error;
     if (!produto) return res.status(404).json({ error: "Produto não encontrado." });
-    produto.fotos = parseJsonArray(produto.fotos, [produto.imagem]);
-    produto.cores = parseJsonArray(produto.cores, []);
-    produto.tamanhos = parseJsonArray(produto.tamanhos, []);
-    res.json(produto);
+    res.json(formatarProduto(produto));
   } catch (err) {
     res.status(500).json({ error: "Erro interno." });
   }
@@ -2093,10 +2140,28 @@ app.get('/api/produto/:id', async (req, res) => {
 app.post('/api/produtos', exigirAdmin, async (req, res) => {
   const p = req.body;
   try {
-    const r = await db.run(`INSERT INTO produtos (nome, preco, precoOriginal, estaEmPromocao, textoDestaquePromo, cronometro, categoria, genero, imagem, fotos, cores, tamanhos, descricao, estoque, relevancia, data, data_cadastro)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [p.nome, p.preco, p.precoOriginal||null, p.estaEmPromocao?1:0, p.textoDestaquePromo||'', p.cronometro||null, p.categoria, p.genero, p.imagem||'', JSON.stringify(p.fotos||[p.imagem]), JSON.stringify(p.cores||[]), JSON.stringify(p.tamanhos||[]), p.descricao||'', p.estoque||0, p.relevancia||0, p.data||new Date().toISOString().slice(0,10), new Date().toISOString().slice(0,10)]);
-    res.json({ ok: true, id: r.lastID });
+    const produto = prepararProduto({
+      nome: p.nome,
+      preco: p.preco,
+      precoOriginal: p.precoOriginal || null,
+      estaEmPromocao: !!p.estaEmPromocao,
+      textoDestaquePromo: p.textoDestaquePromo || '',
+      cronometro: p.cronometro || null,
+      categoria: p.categoria,
+      genero: p.genero,
+      imagem: p.imagem || '',
+      fotos: p.fotos || (p.imagem ? [p.imagem] : []),
+      cores: p.cores || [],
+      tamanhos: p.tamanhos || [],
+      descricao: p.descricao || '',
+      estoque: p.estoque || 0,
+      relevancia: p.relevancia || 0,
+      data: p.data || new Date().toISOString().slice(0, 10),
+      data_cadastro: new Date().toISOString()
+    });
+    const { data, error } = await supabase.from('produtos').insert(produto).select('id').single();
+    if (error) throw error;
+    res.json({ ok: true, id: data.id });
   } catch (err) {
     res.status(500).json({ error: "Erro ao criar produto." });
   }
@@ -2105,8 +2170,27 @@ app.post('/api/produtos', exigirAdmin, async (req, res) => {
 app.put('/api/produtos/:id', exigirAdmin, async (req, res) => {
   const p = req.body;
   try {
-    await db.run(`UPDATE produtos SET nome=?, preco=?, precoOriginal=?, estaEmPromocao=?, textoDestaquePromo=?, cronometro=?, categoria=?, genero=?, imagem=?, fotos=?, cores=?, tamanhos=?, descricao=?, estoque=?, relevancia=?, data=? WHERE id=?`,
-      [p.nome, p.preco, p.precoOriginal||null, p.estaEmPromocao?1:0, p.textoDestaquePromo||'', p.cronometro||null, p.categoria, p.genero, p.imagem||'', JSON.stringify(p.fotos||[p.imagem]), JSON.stringify(p.cores||[]), JSON.stringify(p.tamanhos||[]), p.descricao||'', p.estoque||0, p.relevancia||0, p.data||new Date().toISOString().slice(0,10), req.params.id]);
+    const produto = prepararProduto({
+      nome: p.nome,
+      preco: p.preco,
+      precoOriginal: p.precoOriginal || null,
+      estaEmPromocao: !!p.estaEmPromocao,
+      textoDestaquePromo: p.textoDestaquePromo || '',
+      cronometro: p.cronometro || null,
+      categoria: p.categoria,
+      genero: p.genero,
+      imagem: p.imagem || '',
+      fotos: p.fotos || (p.imagem ? [p.imagem] : []),
+      cores: p.cores || [],
+      tamanhos: p.tamanhos || [],
+      descricao: p.descricao || '',
+      estoque: p.estoque || 0,
+      relevancia: p.relevancia || 0,
+      data: p.data || new Date().toISOString().slice(0, 10)
+    });
+    const { data, error } = await supabase.from('produtos').update(produto).eq('id', req.params.id).select('id').maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: "Produto não encontrado." });
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: "Erro ao atualizar produto." });
@@ -2115,7 +2199,9 @@ app.put('/api/produtos/:id', exigirAdmin, async (req, res) => {
 
 app.delete('/api/produtos/:id', exigirAdmin, async (req, res) => {
   try {
-    await db.run('DELETE FROM produtos WHERE id = ?', req.params.id);
+    const { data, error } = await supabase.from('produtos').delete().eq('id', req.params.id).select('id');
+    if (error) throw error;
+    if (!data || data.length === 0) return res.status(404).json({ error: "Produto não encontrado." });
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: "Erro ao excluir produto." });
@@ -2444,7 +2530,9 @@ app.get('/api/config', async (req, res) => {
   try {
     await dbReady;
     const row = await db.get('SELECT valor FROM config WHERE chave = ?', 'site_config');
-    res.json(row ? JSON.parse(row.valor) : {});
+    const config = row ? JSON.parse(row.valor) : {};
+    const banners = await carregarBanners();
+    res.json({ ...config, ...banners });
   } catch (err) {
     res.status(500).json({ error: "Erro ao buscar configurações." });
   }
@@ -2456,8 +2544,10 @@ app.put('/api/config', exigirAdmin, async (req, res) => {
     if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
       return res.status(400).json({ error: 'Configuração inválida.' });
     }
-    await setConfigChave('site_config', req.body);
-    const salva = await getConfigChave('site_config', {});
+    const { carrossel, bannersGrelha, bannerIntermediario, ...configSemBanners } = req.body;
+    await salvarBanners({ carrossel, bannersGrelha, bannerIntermediario });
+    await setConfigChave('site_config', configSemBanners);
+    const salva = { ...(await getConfigChave('site_config', {})), ...(await carregarBanners()) };
     res.json({ ok: true, config: salva });
   } catch (err) {
     res.status(500).json({ error: "Erro ao salvar configurações." });
@@ -2481,9 +2571,10 @@ app.get('/api/estatisticas', exigirAdmin, async (req, res) => {
       });
     });
     // Vendas por categoria
-    const produtos = await db.all('SELECT * FROM produtos');
+    const { data: produtos, error: produtosError } = await supabase.from('produtos').select('nome, categoria');
+    if (produtosError) throw produtosError;
     const catMap = {};
-    produtos.forEach(pr => { catMap[pr.nome] = pr.categoria; });
+    (produtos || []).forEach(pr => { catMap[pr.nome] = pr.categoria; });
     const porCategoria = {};
     vendas.forEach(p => {
       const itens = parseJsonArray(p.itens, []);
