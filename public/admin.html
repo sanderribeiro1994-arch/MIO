@@ -633,10 +633,7 @@ let config = {};
             const senha = document.getElementById('loginSenha').value;
             try {
                 const data = await API('/api/admin/login', { method: 'POST', body: JSON.stringify({ email, senha }) });
-                token = data.token;
-                localStorage.setItem('mio_admin_token', data.token);
                 localStorage.setItem('mio_admin_email', data.email);
-                document.cookie = 'admin_token=' + encodeURIComponent(data.token) + '; path=/; Max-Age=2592000; SameSite=Lax';
                 document.getElementById('adminEmailLabel').innerText = data.email;
                 document.getElementById('telaLogin').classList.add('hidden');
                 document.getElementById('painelAdmin').classList.remove('hidden');
@@ -653,10 +650,8 @@ let config = {};
         async function sairAdmin() {
             try { await API('/api/admin/logout', { method: 'POST' }); } catch (e) {}
             token = null;
-            localStorage.removeItem('mio_admin_token');
             localStorage.removeItem('mio_admin_email');
             localStorage.removeItem('mio_admin_logado');
-            document.cookie = 'admin_token=; Max-Age=0; path=/; SameSite=Lax';
             document.getElementById('painelAdmin').classList.add('hidden');
             document.getElementById('painelAdmin').classList.remove('flex');
             document.getElementById('telaLogin').classList.remove('hidden');
@@ -1652,9 +1647,6 @@ config.logo = {
                     const emailAtual = data.email || localStorage.getItem('mio_admin_email') || '';
                     localStorage.setItem('mio_admin_email', emailAtual);
                     document.getElementById('adminEmailLabel').innerText = emailAtual;
-                    if (token) {
-                        document.cookie = 'admin_token=' + encodeURIComponent(token) + '; path=/; Max-Age=2592000; SameSite=Lax';
-                    }
                 }
                 msg.innerText = data.message || 'Dados do administrador atualizados com sucesso!';
                 msg.className = 'text-xs font-mono mt-3 text-emerald-400';
@@ -1691,28 +1683,17 @@ config.logo = {
         }
 
         async function inicializarSessao() {
-            const tokenSalvo = localStorage.getItem('mio_admin_token');
-            const cookieToken = document.cookie.split('; ').find(row => row.startsWith('admin_token='));
-            const tokenCookie = cookieToken ? decodeURIComponent(cookieToken.split('=').slice(1).join('=')) : null;
-            token = tokenSalvo || tokenCookie || null;
-
-            if (!token) return;
-
             try {
                 const res = await fetch('/api/admin/verificar', {
-                    headers: { 'x-admin-token': token },
                     credentials: 'include'
                 });
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok || !data.valid) {
                     token = null;
-                    localStorage.removeItem('mio_admin_token');
                     localStorage.removeItem('mio_admin_email');
                     localStorage.removeItem('mio_admin_logado');
-                    document.cookie = 'admin_token=; Max-Age=0; path=/; SameSite=Lax';
                     return;
                 }
-                localStorage.setItem('mio_admin_token', token);
                 if (data.email) localStorage.setItem('mio_admin_email', data.email);
                 document.getElementById('adminEmailLabel').innerText = data.email || localStorage.getItem('mio_admin_email') || '';
                 const adminEmailInput = document.getElementById('adminEmail');
@@ -1724,10 +1705,8 @@ config.logo = {
                 carregarTudo();
             } catch (err) {
                 token = null;
-                localStorage.removeItem('mio_admin_token');
                 localStorage.removeItem('mio_admin_email');
                 localStorage.removeItem('mio_admin_logado');
-                document.cookie = 'admin_token=; Max-Age=0; path=/; SameSite=Lax';
             }
         }
 

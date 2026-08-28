@@ -15,9 +15,15 @@
     var btnHeader = document.getElementById('btnMembroHeader');
     if (!btnHeader) return;
 
-    var adminLogado = Boolean(localStorage.getItem('mio_admin_token'));
-    btnHeader.style.color = adminLogado ? '#fbbf24' : '#ffffff';
-    btnHeader.title = adminLogado ? 'Administrador conectado' : 'Área de Membros';
+    fetch('/api/admin/verificar', { credentials: 'include' })
+      .then(function (res) {
+        btnHeader.style.color = res.ok ? '#fbbf24' : '#ffffff';
+        btnHeader.title = res.ok ? 'Administrador conectado' : 'Área de Membros';
+      })
+      .catch(function () {
+        btnHeader.style.color = '#ffffff';
+        btnHeader.title = 'Área de Membros';
+      });
   }
 
   function aplicarLogo(cfg) {
@@ -77,9 +83,7 @@
 
   function inicializarIndicadorAdmin() {
     atualizarIndicadorAdmin();
-    window.addEventListener('storage', function (event) {
-      if (event.key === 'mio_admin_token') atualizarIndicadorAdmin();
-    });
+    window.addEventListener('storage', atualizarIndicadorAdmin);
   }
 
   if (document.readyState === 'loading') {

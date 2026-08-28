@@ -929,26 +929,23 @@ let valorDesconto = 0;
       }
     }
 
-    function aplicarCupom() {
+    async function aplicarCupom() {
       const input = document.getElementById('inputCupom');
       const msg = document.getElementById('mensagemCupom');
       if (!input) return;
 
       const codigo = input.value.trim().toUpperCase();
-      const cuponsCadastrados = JSON.parse(localStorage.getItem('mio_cupons_admin')) || {
-        'MIO10': 10,
-        'PEGASUS': 15,
-        'PRIMEIRACOMPRA': 20
-      };
-
-      if (cuponsCadastrados[codigo]) {
-        cupomAtivo = { codigo: codigo, porcentagem: cuponsCadastrados[codigo] };
+      try {
+        const resposta = await fetch('/api/cupons/validar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codigo, subtotal: sacolaItens.reduce((total, item) => total + (Number(item.preco) * Number(item.quantidade || 1)), 0) }) });
+        const data = await resposta.json();
+        if (!data.ok) throw new Error(data.error || 'Cupom inválido.');
+        cupomAtivo = { ...data.cupom, porcentagem: data.cupom.tipo === 'porcentagem' ? Number(data.cupom.valor) : 0 };
         salvarEstado();
         msg.innerText = `Cupom ${codigo} aplicado (${cupomAtivo.porcentagem}% OFF)!`;
         msg.className = "text-[10px] font-mono mt-1 text-amber-400 font-bold";
         msg.classList.remove('hidden');
         renderizarItensSacola();
-      } else {
+      } catch (error) {
         msg.innerText = "Cupom inválido!";
         msg.className = "text-[10px] font-mono mt-1 text-red-400";
         msg.classList.remove('hidden');

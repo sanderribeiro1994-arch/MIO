@@ -8,7 +8,7 @@ import { open } from 'sqlite';
 import bcrypt from 'bcryptjs';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import { supabase } from './supabase.js';
+import { supabase, supabaseAdmin } from './supabase.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -17,7 +17,6 @@ const IS_PROD = NODE_ENV === 'production';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DATA_DIR = process.env.MIO_DATA_DIR || __dirname;
-const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
@@ -26,7 +25,6 @@ app.use(helmet({ contentSecurityPolicy: false })); // headers de segurança
 app.use(express.json({ limit: '25mb' })); // limite maior p/ fotos base64
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
-app.use('/uploads', express.static(UPLOADS_DIR));
 
 // Rota explícita para favicon com cache headers
 app.get('/favicon.png', (req, res) => {
@@ -48,10 +46,8 @@ if (IS_PROD) {
   });
 }
 
-// --- SESSÕES ADMIN EM MEMÓRIA (tokens) ---
-// Tokens aleatórios de 32 bytes com expiração (15 min de inatividade).
+// --- SESSÕES ADMIN PERSISTENTES NO SUPABASE ---
 const ADMIN_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 dias para manter o admin logado
-const sessaoAdmin = new Map(); // token -> { email, expiraEm }
 const sessaoCliente = new Map(); // token -> { email, expiraEm }
 
 // --- RATE LIMITING ---
@@ -88,30 +84,28 @@ function gerarTokenCSRF() {
 
 async function salvarSessaoAdmin(token, email, expiraEm) {
   if (!token || !email) return;
-  sessaoAdmin.set(token, { email, expiraEm });
-  if (db) {
-    await db.run(
-      `INSERT INTO admin_sessoes (token, email, expira_em) VALUES (?, ?, ?)
-       ON CONFLICT(token) DO UPDATE SET email = excluded.email, expira_em = excluded.expira_em`,
-      [token, email, expiraEm]
-    );
-  }
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  const { error } = await supabaseAdmin.from('admin_sessoes').upsert({
+    token_hash: tokenHash,
+    email,
+    expira_em: new Date(expiraEm).toISOString()
+  }, { onConflict: 'token_hash' });
+  if (error) throw error;
 }
 
 async function carregarSessaoAdmin(token) {
   if (!token) return null;
-  let sessao = sessaoAdmin.get(token);
-  if (!sessao && db) {
-    const row = await db.get('SELECT email, expira_em FROM admin_sessoes WHERE token = ?', [token]);
-    if (row) {
-      sessao = { email: row.email, expiraEm: row.expira_em };
-      sessaoAdmin.set(token, sessao);
-    }
-  }
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  const { data: row, error } = await supabaseAdmin
+    .from('admin_sessoes')
+    .select('email, expira_em')
+    .eq('token_hash', tokenHash)
+    .maybeSingle();
+  if (error) throw error;
+  const sessao = row ? { email: row.email, expiraEm: Date.parse(row.expira_em) } : null;
   if (!sessao) return null;
   if (sessao.expiraEm < Date.now()) {
-    sessaoAdmin.delete(token);
-    if (db) await db.run('DELETE FROM admin_sessoes WHERE token = ?', [token]);
+    await limparSessaoAdmin(token);
     return null;
   }
   return sessao;
@@ -119,8 +113,9 @@ async function carregarSessaoAdmin(token) {
 
 async function limparSessaoAdmin(token) {
   if (!token) return;
-  sessaoAdmin.delete(token);
-  if (db) await db.run('DELETE FROM admin_sessoes WHERE token = ?', [token]);
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  const { error } = await supabaseAdmin.from('admin_sessoes').delete().eq('token_hash', tokenHash);
+  if (error) throw error;
 }
 
 function exigirCliente(req, res, next) {
@@ -168,50 +163,6 @@ const dbReady = (async () => {
   });
 
   await db.exec(`
-    CREATE TABLE IF NOT EXISTS pedidos (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      numero TEXT,
-      data TEXT,
-      cliente TEXT,
-      endereco TEXT,
-      itens TEXT,
-      cupom TEXT,
-      metodo TEXT,
-      status TEXT,
-      total REAL,
-      frete_modalidade TEXT,
-      frete_codigo TEXT,
-      frete_valor REAL,
-      frete_prazo TEXT,
-      frete_origem TEXT,
-      frete_detalhes TEXT
-    );
-
-CREATE TABLE IF NOT EXISTS clientes (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      nome TEXT,
-      email TEXT UNIQUE,
-      cpf TEXT,
-      telefone TEXT,
-      senha TEXT,
-      endereco TEXT,
-      foto TEXT,
-      whatsapp_ok BOOLEAN DEFAULT 0,
-      aceitou_termos BOOLEAN DEFAULT 0,
-      data_cadastro DATE
-    );
-
-    CREATE TABLE IF NOT EXISTS cupons (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      codigo TEXT UNIQUE,
-      tipo TEXT,
-      valor REAL,
-      limiteUso INTEGER,
-      usos INTEGER,
-      validade TEXT,
-      ativo BOOLEAN
-    );
-
     CREATE TABLE IF NOT EXISTS config (
       chave TEXT PRIMARY KEY,
       valor TEXT
@@ -225,12 +176,6 @@ CREATE TABLE IF NOT EXISTS admin_conta (
       foto TEXT,
       endereco TEXT,
       cnpj TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS admin_sessoes (
-      token TEXT PRIMARY KEY,
-      email TEXT NOT NULL,
-      expira_em INTEGER NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS avaliacoes (
@@ -300,10 +245,11 @@ CREATE TABLE IF NOT EXISTS admin_conta (
   }
 
   // Garante o cupom de boas-vindas ativo no banco (para a página cupom.html funcionar)
-  const cupomBW = await db.get('SELECT id FROM cupons WHERE codigo = ?', 'MIO10OFF');
+  const { data: cupomBW, error: cupomError } = await supabaseAdmin.from('cupons').select('id').eq('codigo', 'MIO10OFF').maybeSingle();
+  if (cupomError) throw cupomError;
   if (!cupomBW) {
-    await db.run('INSERT INTO cupons (codigo, tipo, valor, limiteUso, usos, validade, ativo) VALUES (?,?,?,?,?,?,?)',
-      ['MIO10OFF', 'porcentagem', 10, 0, 0, null, 1]);
+    const { error } = await supabaseAdmin.from('cupons').insert({ codigo: 'MIO10OFF', tipo: 'porcentagem', valor: 10, limiteUso: 0, usos: 0, validade: null, ativo: true });
+    if (error) throw error;
   }
 
   // Config padrão (banners, contato, redes, logo, textos)
@@ -452,6 +398,55 @@ function prepararProduto(produto) {
   return { ...produto, imagem, fotos };
 }
 
+function formatarPedido(pedido) {
+  return {
+    ...pedido,
+    cliente: parseJsonArray(pedido.cliente, {}),
+    endereco: parseJsonArray(pedido.endereco, {}),
+    itens: parseJsonArray(pedido.itens, []),
+    cupom: parseJsonArray(pedido.cupom, null)
+  };
+}
+
+function formatarCliente(cliente) {
+  if (!cliente) return null;
+  const { senha, ...semSenha } = cliente;
+  semSenha.endereco = parseJsonArray(semSenha.endereco, {});
+  return semSenha;
+}
+
+async function buscarPedidoPorNumero(numero) {
+  const { data, error } = await supabaseAdmin.from('pedidos').select('*').eq('numero', numero).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+async function buscarPedidoPorId(id) {
+  const { data, error } = await supabaseAdmin.from('pedidos').select('*').eq('id', id).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+async function atualizarPedidoPorNumero(numero, campos) {
+  const { data, error } = await supabaseAdmin.from('pedidos').update(campos).eq('numero', numero).select('*').maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+async function buscarClientePorEmail(email) {
+  const { data, error } = await supabaseAdmin.from('clientes').select('*').eq('email', email).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+async function incrementarUsoCupom(codigo) {
+  if (!codigo) return;
+  const { data: cupom, error: buscarError } = await supabaseAdmin.from('cupons').select('usos').eq('codigo', codigo).maybeSingle();
+  if (buscarError || !cupom) return;
+  const { error } = await supabaseAdmin.from('cupons').update({ usos: Number(cupom.usos || 0) + 1 }).eq('codigo', codigo);
+  if (error) throw error;
+}
+
 function formatarBanner(banner) {
   const { id, tipo, ordem, ...conteudo } = banner;
   return { ...conteudo, id, tipo, ordem };
@@ -493,7 +488,7 @@ async function salvarBanners(config) {
   if (deleteError) throw deleteError;
   const linhas = converterBannersParaLinhas(config);
   if (!linhas.length) return;
-  const { error } = await supabase.from('banners').insert(linhas);
+  const { error } = await supabaseAdmin.from('banners').insert(linhas);
   if (error) throw error;
 }
 
@@ -740,9 +735,9 @@ async function buscarConfigPagSeguro() {
 
 async function findPedidoByReference(reference) {
   if (!reference) return null;
-  const byNumero = await db.get('SELECT * FROM pedidos WHERE numero = ?', [reference]);
+  const byNumero = await buscarPedidoPorNumero(reference);
   if (byNumero) return byNumero;
-  return db.get('SELECT * FROM pedidos WHERE id = ?', [Number(reference)]).catch(() => null);
+  return buscarPedidoPorId(Number(reference));
 }
 
 async function enviarPedidoParaBling(pedido) {
@@ -790,7 +785,7 @@ async function enviarPedidoParaBling(pedido) {
 
     const blingId = data.id || data.pedidoId || data.data?.id || data.numero;
     if (blingId) {
-      await db.run('UPDATE pedidos SET bling_id = ?, bling_order_id = ?, data_bling_sync = ? WHERE numero = ?', [String(blingId), String(blingId), new Date().toISOString(), pedido.numero]).catch(() => {});
+      await atualizarPedidoPorNumero(pedido.numero, { bling_id: String(blingId), bling_order_id: String(blingId), data_bling_sync: new Date().toISOString() }).catch(() => {});
     }
 
     return { ok: true, data };
@@ -818,7 +813,7 @@ app.post('/api/upload', exigirAdmin, async (req, res) => {
       const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'images';
       const prefixo = nome ? nome.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') : 'img';
       const filePath = `admin/${prefixo}-${crypto.randomUUID()}.${ext}`;
-      const { error } = await supabase.storage.from(bucket).upload(filePath, buffer, {
+      const { error } = await supabaseAdmin.storage.from(bucket).upload(filePath, buffer, {
         contentType: matches[1],
         upsert: false
       });
@@ -839,13 +834,12 @@ app.post('/api/clientes/login', loginLimiter, async (req, res) => {
   if (!email || !senha) return res.status(400).json({ error: "Email e senha obrigatórios." });
   const emailBusca = email.toLowerCase().trim();
   try {
-    const c = await db.get('SELECT * FROM clientes WHERE email = ?', emailBusca);
+    const c = await buscarClientePorEmail(emailBusca);
     const senhaOk = c ? await compararSenha(senha, c.senha) : false;
     if (!c || !senhaOk) {
       return res.status(401).json({ error: "E-mail ou senha incorretos." });
     }
-    const { senha: _senha, ...clienteSemSenha } = c;
-    clienteSemSenha.endereco = parseJsonArray(clienteSemSenha.endereco, {});
+    const clienteSemSenha = formatarCliente(c);
     const token = crypto.randomBytes(32).toString('hex');
     sessaoCliente.set(token, { email: emailBusca, expiraEm: Date.now() + 15 * 60 * 1000 });
     res.json({ ok: true, cliente: clienteSemSenha, token });
@@ -856,10 +850,9 @@ app.post('/api/clientes/login', loginLimiter, async (req, res) => {
 
 app.get('/api/clientes/me', exigirCliente, async (req, res) => {
   try {
-    const cliente = await db.get('SELECT id, nome, email, cpf, telefone, endereco, foto, whatsapp_ok, aceitou_termos, data_cadastro FROM clientes WHERE email = ?', req.clienteEmail);
+    const cliente = await buscarClientePorEmail(req.clienteEmail);
     if (!cliente) return res.status(404).json({ error: "Cliente não encontrado." });
-    cliente.endereco = parseJsonArray(cliente.endereco, {});
-    res.json({ ok: true, cliente });
+    res.json({ ok: true, cliente: formatarCliente(cliente) });
   } catch (err) {
     res.status(500).json({ error: "Erro ao buscar cliente." });
   }
@@ -885,7 +878,7 @@ app.put('/api/clientes/perfil', async (req, res) => {
     return res.status(400).json({ error: "E-mail e senha obrigatórios ou token inválido." });
   }
   try {
-    const c = await db.get('SELECT * FROM clientes WHERE email = ?', emailBusca);
+    const c = await buscarClientePorEmail(emailBusca);
     if (!c) return res.status(401).json({ error: "Cliente não encontrado." });
     if (!token) {
       const senhaOk = await compararSenha(senha, c.senha);
@@ -894,8 +887,13 @@ app.put('/api/clientes/perfil', async (req, res) => {
       }
     }
     const d = dados || {};
-    await db.run(`UPDATE clientes SET nome=?, cpf=?, telefone=?, endereco=?, foto=?, whatsapp_ok=?, aceitou_termos=? WHERE email=?`,
-      [d.nome || c.nome, d.cpf || c.cpf || '', d.telefone || c.telefone || '', JSON.stringify(d.endereco || parseJsonArray(c.endereco, {})), d.foto || c.foto || '', d.whatsapp_ok !== undefined ? (d.whatsapp_ok ? 1 : 0) : c.whatsapp_ok, d.aceitou_termos !== undefined ? (d.aceitou_termos ? 1 : 0) : c.aceitou_termos, emailBusca]);
+    const { error } = await supabaseAdmin.from('clientes').update({
+      nome: d.nome || c.nome, cpf: d.cpf || c.cpf || '', telefone: d.telefone || c.telefone || '',
+      endereco: d.endereco || parseJsonArray(c.endereco, {}), foto: d.foto || c.foto || '',
+      whatsapp_ok: d.whatsapp_ok !== undefined ? !!d.whatsapp_ok : c.whatsapp_ok,
+      aceitou_termos: d.aceitou_termos !== undefined ? !!d.aceitou_termos : c.aceitou_termos
+    }).eq('email', emailBusca);
+    if (error) throw error;
     res.json({ ok: true, message: "Perfil atualizado no banco de dados." });
   } catch (err) {
     res.status(500).json({ error: "Erro ao atualizar perfil." });
@@ -909,10 +907,11 @@ app.put('/api/clientes/reenviar-senha', exigirAdmin, async (req, res) => {
   if (!email || !novaSenha) return res.status(400).json({ error: "E-mail e nova senha obrigatórios." });
   try {
     const emailBusca = email.toLowerCase().trim();
-    const existe = await db.get('SELECT id FROM clientes WHERE email = ?', emailBusca);
+    const existe = await buscarClientePorEmail(emailBusca);
     if (!existe) return res.status(404).json({ error: "Cliente não encontrado." });
     const nova = novaSenha.length < 6 ? 'mio123' : novaSenha;
-    await db.run('UPDATE clientes SET senha = ? WHERE email = ?', [await hashSenha(nova), emailBusca]);
+    const { error } = await supabaseAdmin.from('clientes').update({ senha: await hashSenha(nova) }).eq('email', emailBusca);
+    if (error) throw error;
     res.json({ ok: true, novaSenha: nova });
   } catch (err) {
     res.status(500).json({ error: "Erro ao redefinir senha." });
@@ -925,13 +924,14 @@ app.put('/api/clientes/senha', exigirCliente, async (req, res) => {
     return res.status(400).json({ error: "Senha atual e nova senha (mínimo 6 caracteres) são obrigatórias." });
   }
   try {
-    const cliente = await db.get('SELECT * FROM clientes WHERE email = ?', req.clienteEmail);
+    const cliente = await buscarClientePorEmail(req.clienteEmail);
     if (!cliente) return res.status(404).json({ error: "Cliente não encontrado." });
     const senhaOk = await compararSenha(senhaAtual, cliente.senha);
     if (!senhaOk) {
       return res.status(401).json({ error: "Senha atual incorreta." });
     }
-    await db.run('UPDATE clientes SET senha = ? WHERE email = ?', [await hashSenha(novaSenha), req.clienteEmail]);
+    const { error } = await supabaseAdmin.from('clientes').update({ senha: await hashSenha(novaSenha) }).eq('email', req.clienteEmail);
+    if (error) throw error;
     res.json({ ok: true, message: "Senha atualizada com sucesso." });
   } catch (err) {
     res.status(500).json({ error: "Erro ao alterar senha." });
@@ -942,11 +942,13 @@ app.put('/api/clientes/senha', exigirCliente, async (req, res) => {
 // quando o cliente esquece a senha). Retorna a senha para o admin repassar ao cliente.
 app.post('/api/admin/clientes/:id/reset-senha', exigirAdmin, async (req, res) => {
   try {
-    const cliente = await db.get('SELECT id, email, nome FROM clientes WHERE id = ?', req.params.id);
+    const { data: cliente, error: clienteError } = await supabaseAdmin.from('clientes').select('id, email, nome').eq('id', req.params.id).maybeSingle();
+    if (clienteError) throw clienteError;
     if (!cliente) return res.status(404).json({ error: "Cliente não encontrado." });
     // Cria uma senha temporária legível (ex: "mioA7k2P")
     const senhaTemporaria = 'mio' + crypto.randomBytes(4).toString('hex');
-    await db.run('UPDATE clientes SET senha = ? WHERE id = ?', [await hashSenha(senhaTemporaria), cliente.id]);
+    const { error } = await supabaseAdmin.from('clientes').update({ senha: await hashSenha(senhaTemporaria) }).eq('id', cliente.id);
+    if (error) throw error;
     res.json({ ok: true, senhaTemporaria, email: cliente.email, nome: cliente.nome });
   } catch (err) {
     res.status(500).json({ error: "Erro ao redefinir senha." });
@@ -1405,30 +1407,27 @@ app.post('/api/checkout', async (req, res) => {
       freteSelecionado
     };
 
-    await db.run(`INSERT INTO pedidos (numero, data, cliente, endereco, itens, cupom, metodo, status, total, frete_modalidade, frete_codigo, frete_valor, frete_prazo, frete_origem, frete_detalhes, codigo_rastreamento, url_rastreamento, data_envio, data_entrega) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
-      pedidoMio.numero,
-      pedidoMio.data,
-      JSON.stringify(pedidoMio.cliente),
-      JSON.stringify(pedidoMio.endereco),
-      JSON.stringify(pedidoMio.itens),
-      JSON.stringify(pedidoMio.cupom || null),
-      pedidoMio.metodo,
-      pedidoMio.status,
-      pedidoMio.total,
-      freteSelecionado.modalidade || freteSelecionado.nome || 'Entrega Padrão',
-      freteSelecionado.codigo || freteSelecionado.nome || 'padrao',
-      Number(freteSelecionado.valor || pedidoMio.frete || 0),
-      freteSelecionado.prazo || '5 dias úteis',
-      freteSelecionado.origem || 'checkout',
-      JSON.stringify(freteSelecionado),
-      null,
-      null,
-      null,
-      null
-    ]);
+    const { error: pedidoError } = await supabaseAdmin.from('pedidos').insert({
+      numero: pedidoMio.numero,
+      data: pedidoMio.data,
+      cliente: pedidoMio.cliente,
+      endereco: pedidoMio.endereco,
+      itens: pedidoMio.itens,
+      cupom: pedidoMio.cupom,
+      metodo: pedidoMio.metodo,
+      status: pedidoMio.status,
+      total: pedidoMio.total,
+      frete_modalidade: freteSelecionado.modalidade || freteSelecionado.nome || 'Entrega Padrão',
+      frete_codigo: freteSelecionado.codigo || freteSelecionado.nome || 'padrao',
+      frete_valor: Number(freteSelecionado.valor || pedidoMio.frete || 0),
+      frete_prazo: freteSelecionado.prazo || '5 dias úteis',
+      frete_origem: freteSelecionado.origem || 'checkout',
+      frete_detalhes: freteSelecionado
+    });
+    if (pedidoError) throw pedidoError;
 
     if (pedidoMio.cupom && pedidoMio.cupom.codigo) {
-      await db.run('UPDATE cupons SET usos = usos + 1 WHERE codigo = ?', [pedidoMio.cupom.codigo]);
+      await incrementarUsoCupom(String(pedidoMio.cupom.codigo).toUpperCase().trim());
     }
 
     if (metodo === 'pix') {
@@ -1441,7 +1440,7 @@ app.post('/api/checkout', async (req, res) => {
       });
 
       if (result.error) {
-        await db.run('UPDATE pedidos SET status = ? WHERE numero = ?', ['Falhou', numeroPedido]);
+        await atualizarPedidoPorNumero(numeroPedido, { status: 'Falhou' });
         return res.status(result.statusCode || 502).json({ ok: false, error: result.error });
       }
 
@@ -1451,7 +1450,7 @@ app.post('/api/checkout', async (req, res) => {
       const copiaCola = qr.text || qr.arrangement_information || data.copy_and_paste || '';
       const qrCodeImage = qr.image || `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(copiaCola || `MIO_PIX_${numeroPedido}`)}`;
 
-      await db.run('UPDATE pedidos SET status = ? WHERE numero = ?', ['Aguardando Pagamento', numeroPedido]);
+      await atualizarPedidoPorNumero(numeroPedido, { status: 'Aguardando Pagamento' });
       return res.json({
         ok: true,
         numeroPedido,
@@ -1469,7 +1468,7 @@ app.post('/api/checkout', async (req, res) => {
       const parcelasPermitidas = getParcelamentoMaximo(valorTotal);
       const parcelasFinal = Math.max(1, Math.min(parcelasPermitidas, Number(parcelas || 1)));
       if (!encryptedCard) {
-        await db.run('UPDATE pedidos SET status = ? WHERE numero = ?', ['Falhou', numeroPedido]);
+        await atualizarPedidoPorNumero(numeroPedido, { status: 'Falhou' });
         return res.status(400).json({ ok: false, error: 'Cartão criptografado não informado. Use a SDK do PagSeguro no frontend.' });
       }
 
@@ -1485,7 +1484,7 @@ app.post('/api/checkout', async (req, res) => {
       });
 
       if (result.error) {
-        await db.run('UPDATE pedidos SET status = ? WHERE numero = ?', ['Falhou', numeroPedido]);
+        await atualizarPedidoPorNumero(numeroPedido, { status: 'Falhou' });
         return res.status(result.statusCode || 502).json({ ok: false, error: result.error });
       }
 
@@ -1494,7 +1493,7 @@ app.post('/api/checkout', async (req, res) => {
       const aprovado = statusFinal === 'PAID' || statusFinal === '3' || data.status === 3;
       const pedidoStatus = aprovado ? 'PAGO' : 'Aguardando Pagamento';
 
-      await db.run('UPDATE pedidos SET status = ? WHERE numero = ?', [pedidoStatus, numeroPedido]);
+      await atualizarPedidoPorNumero(numeroPedido, { status: pedidoStatus });
       return res.json({
         ok: true,
         numeroPedido,
@@ -1588,7 +1587,7 @@ app.post('/api/pagamento/webhook', async (req, res) => {
     const pedido = referencia ? await findPedidoByReference(referencia) : null;
 
     if (pedido && (status === 'PAID' || status === '3')) {
-      await db.run("UPDATE pedidos SET status = 'PAGO' WHERE numero = ?", [pedido.numero]);
+      await atualizarPedidoPorNumero(pedido.numero, { status: 'PAGO' });
       const envio = await enviarPedidoParaUpseller(pedido);
       return res.json({ ok: true, pago: true, upseller: envio });
     }
@@ -1606,7 +1605,7 @@ app.post('/api/pagamento/webhook', async (req, res) => {
         const reference = data.reference_id || data.referenceId || '';
         const isPaid = orderStatus === 'PAID' || orderStatus === '3';
         if (isPaid && reference) {
-          await db.run("UPDATE pedidos SET status = 'PAGO' WHERE numero = ?", [reference]);
+          await atualizarPedidoPorNumero(reference, { status: 'PAGO' });
           const pedidoPago = await findPedidoByReference(reference);
           if (pedidoPago) {
             await enviarPedidoParaUpseller(pedidoPago);
@@ -1651,7 +1650,7 @@ app.post('/api/webhooks/pagseguro', async (req, res) => {
     const pago = orderStatus === 'PAID' || chargeStatus === 'PAID' || orderStatus === '3';
 
     if (pago && reference) {
-      await db.run("UPDATE pedidos SET status = 'PAGO' WHERE numero = ?", [reference]);
+      await atualizarPedidoPorNumero(reference, { status: 'PAGO' });
       const pedidoPago = await findPedidoByReference(reference);
       if (pedidoPago) await enviarPedidoParaUpseller(pedidoPago);
       return res.json({ ok: true, pago: true, reference, status: 'PAGO' });
@@ -1891,7 +1890,7 @@ app.post('/api/upseller/pedido', async (req, res) => {
 app.post('/api/bling/reenviar/:numeroPedido', exigirAdmin, async (req, res) => {
   const numeroPedido = req.params.numeroPedido;
   try {
-    const pedido = await db.get('SELECT * FROM pedidos WHERE numero = ?', [numeroPedido]);
+    const pedido = await buscarPedidoPorNumero(numeroPedido);
     if (!pedido) return res.status(404).json({ error: 'Pedido não encontrado.' });
     const resultado = await enviarPedidoParaBling(pedido);
     if (!resultado.ok) return res.status(502).json({ error: resultado.motivo || 'Erro ao enviar ao Bling.' });
@@ -1909,18 +1908,18 @@ app.post('/api/webhooks/bling', async (req, res) => {
     const status = body.status || body.estado || 'Enviado';
     if (!order_number) return res.status(400).json({ ok: false, error: 'order_number obrigatório' });
 
-    const pedido = await db.get('SELECT * FROM pedidos WHERE numero = ?', [order_number]);
+    const pedido = await buscarPedidoPorNumero(order_number);
     if (!pedido) return res.status(404).json({ ok: false, error: 'Pedido não encontrado' });
 
     const statusMap = { pending: 'Em Preparação', processing: 'Em Preparação', shipped: 'Enviado', delivered: 'Entregue', cancelled: 'Cancelado', sent: 'Enviado' };
     const statusMio = statusMap[String(status).toLowerCase()] || String(status || 'Enviado');
-    await db.run(
-      `UPDATE pedidos SET bling_status = ?, bling_tracking = ?, data_bling_sync = ?, status = ?, data_envio = ? WHERE numero = ?`,
-      [String(status), tracking_number || null, new Date().toISOString(), statusMio, body.data_envio || null, order_number]
-    );
+    await atualizarPedidoPorNumero(order_number, {
+      bling_status: String(status), bling_tracking: tracking_number || null,
+      data_bling_sync: new Date().toISOString(), status: statusMio, data_envio: body.data_envio || null
+    });
 
     if (tracking_number && !pedido.codigo_rastreamento) {
-      await db.run('UPDATE pedidos SET codigo_rastreamento = ? WHERE numero = ?', [tracking_number, order_number]);
+      await atualizarPedidoPorNumero(order_number, { codigo_rastreamento: tracking_number });
     }
 
     res.json({ ok: true, message: 'Webhook Bling recebido e processado' });
@@ -1932,10 +1931,10 @@ app.post('/api/webhooks/bling', async (req, res) => {
 
 app.get('/api/bling/expeditions', exigirAdmin, async (req, res) => {
   try {
-    const pedidos = await db.all(
-      'SELECT numero, cliente, itens, status, total, codigo_rastreamento, bling_tracking, bling_status, data_envio FROM pedidos WHERE status IN (?, ?) ORDER BY data DESC',
-      ['Em Preparação', 'Enviado']
-    );
+    const { data: pedidos, error } = await supabaseAdmin.from('pedidos')
+      .select('numero, cliente, itens, status, total, codigo_rastreamento, bling_tracking, bling_status, data_envio')
+      .in('status', ['Em Preparação', 'Enviado']).order('data', { ascending: false });
+    if (error) throw error;
 
     const expeditions = pedidos.map(p => {
       const cli = parseJsonArray(p.cliente, {});
@@ -1973,14 +1972,14 @@ app.post('/api/admin/login', loginLimiter, async (req, res) => {
     await salvarSessaoAdmin(token, admin.email, expiraEm);
 
     res.cookie('admin_token', token, {
-      httpOnly: false,
+      httpOnly: true,
       sameSite: 'lax',
       secure: IS_PROD,
       maxAge: ADMIN_SESSION_TTL_MS,
       path: '/'
     });
 
-    res.json({ token, email: admin.email });
+    res.json({ email: admin.email });
   } catch (err) {
     res.status(500).json({ error: "Erro no login." });
   }
@@ -1989,7 +1988,7 @@ app.post('/api/admin/login', loginLimiter, async (req, res) => {
 app.post('/api/admin/logout', async (req, res) => {
   const token = getAdminTokenFromRequest(req);
   await limparSessaoAdmin(token);
-  res.clearCookie('admin_token', { path: '/' });
+  res.clearCookie('admin_token', { httpOnly: true, sameSite: 'lax', secure: IS_PROD, path: '/' });
   res.json({ ok: true });
 });
 
@@ -2159,7 +2158,7 @@ app.post('/api/produtos', exigirAdmin, async (req, res) => {
       data: p.data || new Date().toISOString().slice(0, 10),
       data_cadastro: new Date().toISOString()
     });
-    const { data, error } = await supabase.from('produtos').insert(produto).select('id').single();
+    const { data, error } = await supabaseAdmin.from('produtos').insert(produto).select('id').single();
     if (error) throw error;
     res.json({ ok: true, id: data.id });
   } catch (err) {
@@ -2188,7 +2187,7 @@ app.put('/api/produtos/:id', exigirAdmin, async (req, res) => {
       relevancia: p.relevancia || 0,
       data: p.data || new Date().toISOString().slice(0, 10)
     });
-    const { data, error } = await supabase.from('produtos').update(produto).eq('id', req.params.id).select('id').maybeSingle();
+    const { data, error } = await supabaseAdmin.from('produtos').update(produto).eq('id', req.params.id).select('id').maybeSingle();
     if (error) throw error;
     if (!data) return res.status(404).json({ error: "Produto não encontrado." });
     res.json({ ok: true });
@@ -2199,7 +2198,7 @@ app.put('/api/produtos/:id', exigirAdmin, async (req, res) => {
 
 app.delete('/api/produtos/:id', exigirAdmin, async (req, res) => {
   try {
-    const { data, error } = await supabase.from('produtos').delete().eq('id', req.params.id).select('id');
+    const { data, error } = await supabaseAdmin.from('produtos').delete().eq('id', req.params.id).select('id');
     if (error) throw error;
     if (!data || data.length === 0) return res.status(404).json({ error: "Produto não encontrado." });
     res.json({ ok: true });
@@ -2211,14 +2210,9 @@ app.delete('/api/produtos/:id', exigirAdmin, async (req, res) => {
 // ---------- API: PEDIDOS ----------
 app.get('/api/pedidos', exigirAdmin, async (req, res) => {
   try {
-    const pedidos = await db.all('SELECT * FROM pedidos ORDER BY id DESC');
-    const formatados = pedidos.map(pd => ({
-      ...pd,
-      cliente: parseJsonArray(pd.cliente, {}),
-      endereco: parseJsonArray(pd.endereco, {}),
-      itens: parseJsonArray(pd.itens, []),
-      cupom: parseJsonArray(pd.cupom, null)
-    }));
+    const { data: pedidos, error } = await supabaseAdmin.from('pedidos').select('*').order('id', { ascending: false });
+    if (error) throw error;
+    const formatados = (pedidos || []).map(formatarPedido);
     res.json(formatados);
   } catch (err) {
     res.status(500).json({ error: "Erro ao buscar pedidos." });
@@ -2230,10 +2224,14 @@ app.post('/api/pedidos', async (req, res) => {
   if (!pd || !pd.cliente || !pd.itens) return res.status(400).json({ error: "Dados do pedido inválidos." });
   try {
     const total = (pd.itens || []).reduce((acc, i) => acc + (i.preco * i.quantidade), 0) - (pd.desconto || 0) + (pd.frete || 0);
-    await db.run(`INSERT INTO pedidos (numero, data, cliente, endereco, itens, cupom, metodo, status, total) VALUES (?,?,?,?,?,?,?,?,?)`,
-      [pd.numero, pd.data || new Date().toISOString(), JSON.stringify(pd.cliente), JSON.stringify(pd.endereco||{}), JSON.stringify(pd.itens), JSON.stringify(pd.cupom||null), pd.metodo||'pix', pd.status||'Aguardando Pagamento', total]);
+    const { error } = await supabaseAdmin.from('pedidos').insert({
+      numero: pd.numero, data: pd.data || new Date().toISOString(), cliente: pd.cliente,
+      endereco: pd.endereco || {}, itens: pd.itens, cupom: pd.cupom || null,
+      metodo: pd.metodo || 'pix', status: pd.status || 'Aguardando Pagamento', total
+    });
+    if (error) throw error;
     if (pd.cupom && pd.cupom.codigo) {
-      await db.run('UPDATE cupons SET usos = usos + 1 WHERE codigo = ?', [pd.cupom.codigo]);
+      await incrementarUsoCupom(String(pd.cupom.codigo).toUpperCase().trim());
     }
     res.json({ ok: true });
   } catch (err) {
@@ -2243,7 +2241,7 @@ app.post('/api/pedidos', async (req, res) => {
 
 app.get('/api/pedidos/:id/status', async (req, res) => {
   try {
-    const pedido = await db.get('SELECT * FROM pedidos WHERE numero = ? OR id = ?', [req.params.id, Number(req.params.id)]);
+    const pedido = await buscarPedidoPorNumero(req.params.id) || await buscarPedidoPorId(Number(req.params.id));
     if (!pedido) return res.status(404).json({ ok: false, error: 'Pedido não encontrado.' });
     res.json({ ok: true, status: pedido.status || 'Aguardando Pagamento', numero: pedido.numero, total: pedido.total });
   } catch (error) {
@@ -2256,7 +2254,7 @@ app.post('/api/pedidos/atualizar-status', async (req, res) => {
   const { numero, status } = req.body || {};
   if (!numero || !status) return res.status(400).json({ error: "Número e status obrigatórios." });
   try {
-    await db.run('UPDATE pedidos SET status = ? WHERE numero = ?', [status, numero]);
+    await atualizarPedidoPorNumero(numero, { status });
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: "Erro ao atualizar status." });
@@ -2266,28 +2264,24 @@ app.post('/api/pedidos/atualizar-status', async (req, res) => {
 app.put('/api/pedidos/:id', exigirAdmin, async (req, res) => {
   const { status, codigo_rastreamento, url_rastreamento, data_envio, data_entrega } = req.body;
   try {
-    const pedido = await db.get('SELECT * FROM pedidos WHERE id = ?', [req.params.id]);
+    const pedido = await buscarPedidoPorId(req.params.id);
     if (!pedido) return res.status(404).json({ error: "Pedido não encontrado." });
 
-    let campos = [];
-    let valores = [];
-    if (status !== undefined) { campos.push('status = ?'); valores.push(status); }
-    if (codigo_rastreamento !== undefined) { campos.push('codigo_rastreamento = ?'); valores.push(codigo_rastreamento); }
-    if (url_rastreamento !== undefined) { campos.push('url_rastreamento = ?'); valores.push(url_rastreamento); }
-    if (data_envio !== undefined) { campos.push('data_envio = ?'); valores.push(data_envio); }
-    if (data_entrega !== undefined) { campos.push('data_entrega = ?'); valores.push(data_entrega); }
-    
-    if (campos.length === 0) {
+    const atualizacoes = {};
+    if (status !== undefined) atualizacoes.status = status;
+    if (codigo_rastreamento !== undefined) atualizacoes.codigo_rastreamento = codigo_rastreamento;
+    if (url_rastreamento !== undefined) atualizacoes.url_rastreamento = url_rastreamento;
+    if (data_envio !== undefined) atualizacoes.data_envio = data_envio;
+    if (data_entrega !== undefined) atualizacoes.data_entrega = data_entrega;
+    if (Object.keys(atualizacoes).length === 0) {
       return res.status(400).json({ error: "Nenhum campo para atualizar." });
     }
-    
-    valores.push(req.params.id);
-    await db.run(`UPDATE pedidos SET ${campos.join(', ')} WHERE id = ?`, valores);
+    const pedidoAtualizado = await supabaseAdmin.from('pedidos').update(atualizacoes).eq('id', req.params.id).select('*').maybeSingle();
+    if (pedidoAtualizado.error) throw pedidoAtualizado.error;
     
     // Se mudou para "Em Preparação" e ainda não foi enviado ao Bling, enviar
     if (status === 'Em Preparação' && !pedido.bling_id && !pedido.upseller_id) {
-      const pedidoAtualizado = await db.get('SELECT * FROM pedidos WHERE id = ?', [req.params.id]);
-      const result = await enviarPedidoParaBling(pedidoAtualizado);
+      const result = await enviarPedidoParaBling(pedidoAtualizado.data);
       if (result.ok) {
         res.json({ ok: true, bling: "Pedido enviado para ERP/expedição" });
       } else {
@@ -2306,9 +2300,16 @@ app.put('/api/pedidos/:id', exigirAdmin, async (req, res) => {
 app.post('/api/pedidos/meus', async (req, res) => {
   const { email } = req.body || {};
   if (!email) return res.status(400).json({ error: "Informe o e-mail usado no pedido." });
+  const token = req.headers['x-client-token'];
+  const sessao = token && sessaoCliente.get(token);
+  if (!sessao || sessao.expiraEm < Date.now()) {
+    return res.status(401).json({ error: "Faça login para consultar seus pedidos." });
+  }
   try {
-    const pedidos = await db.all('SELECT * FROM pedidos ORDER BY id DESC');
+    const { data: pedidos, error } = await supabaseAdmin.from('pedidos').select('*').order('id', { ascending: false });
+    if (error) throw error;
     const emailBusca = String(email).toLowerCase().trim();
+    if (sessao.email !== emailBusca) return res.status(403).json({ error: "Acesso não autorizado." });
     const meus = pedidos.filter(pd => {
       const cli = parseJsonArray(pd.cliente, {});
       return String(cli.email || '').toLowerCase().trim() === emailBusca;
@@ -2331,8 +2332,9 @@ app.post('/api/pedidos/meus', async (req, res) => {
 // ---------- API: CLIENTES ----------
 app.get('/api/clientes', exigirAdmin, async (req, res) => {
   try {
-    const clientes = await db.all('SELECT id, nome, email, cpf, telefone, endereco, foto, whatsapp_ok, aceitou_termos, data_cadastro FROM clientes ORDER BY id DESC');
-    const formatados = clientes.map(c => ({ ...c, endereco: parseJsonArray(c.endereco, {}) }));
+    const { data: clientes, error } = await supabaseAdmin.from('clientes').select('id, nome, email, cpf, telefone, endereco, foto, whatsapp_ok, aceitou_termos, data_cadastro').order('id', { ascending: false });
+    if (error) throw error;
+    const formatados = (clientes || []).map(formatarCliente);
     res.json(formatados);
   } catch (err) {
     res.status(500).json({ error: "Erro ao buscar clientes." });
@@ -2346,14 +2348,17 @@ app.post('/api/clientes', async (req, res) => {
   }
   try {
     const emailBusca = c.email.toLowerCase().trim();
-    const existe = await db.get('SELECT id FROM clientes WHERE email = ?', emailBusca);
+    const existe = await buscarClientePorEmail(emailBusca);
     if (existe) {
-      await db.run('UPDATE clientes SET nome=?, cpf=?, telefone=?, endereco=?, foto=?, whatsapp_ok=?, aceitou_termos=? WHERE email=?',
-        [c.nome, c.cpf||'', c.telefone||'', JSON.stringify(c.endereco||{}), c.foto||'', c.whatsapp_ok?1:0, c.aceitou_termos?1:0, emailBusca]);
+      const { error } = await supabaseAdmin.from('clientes').update({ nome: c.nome, cpf: c.cpf || '', telefone: c.telefone || '', endereco: c.endereco || {}, foto: c.foto || '', whatsapp_ok: !!c.whatsapp_ok, aceitou_termos: !!c.aceitou_termos }).eq('email', emailBusca);
+      if (error) throw error;
       return res.json({ ok: true, novo: false });
     }
-    await db.run('INSERT INTO clientes (nome, email, cpf, telefone, senha, endereco, foto, whatsapp_ok, aceitou_termos, data_cadastro) VALUES (?,?,?,?,?,?,?,?,?,?)',
-      [c.nome, emailBusca, c.cpf||'', c.telefone||'', await hashSenha(c.senha), JSON.stringify(c.endereco||{}), c.foto||'', c.whatsapp_ok?1:0, c.aceitou_termos?1:0, new Date().toISOString().slice(0,10)]);
+    const { error } = await supabaseAdmin.from('clientes').insert({
+      nome: c.nome, email: emailBusca, cpf: c.cpf || '', telefone: c.telefone || '', senha: await hashSenha(c.senha),
+      endereco: c.endereco || {}, foto: c.foto || '', whatsapp_ok: !!c.whatsapp_ok, aceitou_termos: !!c.aceitou_termos
+    });
+    if (error) throw error;
     res.json({ ok: true, novo: true });
   } catch (err) {
     res.status(500).json({ error: "Erro ao salvar cliente." });
@@ -2377,7 +2382,7 @@ app.delete('/api/clientes', async (req, res) => {
   }
   if (!emailBusca) return res.status(400).json({ error: "E-mail e senha são obrigatórios para excluir a conta." });
   try {
-    const cliente = await db.get('SELECT * FROM clientes WHERE email = ?', emailBusca);
+    const cliente = await buscarClientePorEmail(emailBusca);
     if (!cliente) return res.status(404).json({ error: "Conta não encontrada." });
     if (!token) {
       const senhaOk = await compararSenha(senha, cliente.senha);
@@ -2385,7 +2390,8 @@ app.delete('/api/clientes', async (req, res) => {
         return res.status(401).json({ error: "Senha incorreta. Não foi possível excluir a conta." });
       }
     }
-    await db.run('DELETE FROM clientes WHERE email = ?', [emailBusca]);
+    const { error } = await supabaseAdmin.from('clientes').delete().eq('email', emailBusca);
+    if (error) throw error;
     if (token) sessaoCliente.delete(token);
     res.json({ ok: true, message: "Conta excluída com sucesso." });
   } catch (err) {
@@ -2396,7 +2402,8 @@ app.delete('/api/clientes', async (req, res) => {
 // ---------- API: CUPONS ----------
 app.get('/api/cupons', exigirAdmin, async (req, res) => {
   try {
-    const cupons = await db.all('SELECT * FROM cupons ORDER BY id DESC');
+    const { data: cupons, error } = await supabaseAdmin.from('cupons').select('*').order('id', { ascending: false });
+    if (error) throw error;
     res.json(cupons);
   } catch (err) {
     res.status(500).json({ error: "Erro ao buscar cupons." });
@@ -2406,8 +2413,8 @@ app.get('/api/cupons', exigirAdmin, async (req, res) => {
 app.post('/api/cupons', exigirAdmin, async (req, res) => {
   const c = req.body;
   try {
-    await db.run('INSERT INTO cupons (codigo, tipo, valor, limiteUso, usos, validade, ativo) VALUES (?,?,?,?,?,?,?)',
-      [c.codigo.toUpperCase(), c.tipo||'porcentagem', c.valor, c.limiteUso||0, 0, c.validade||null, c.ativo?1:0]);
+    const { error } = await supabaseAdmin.from('cupons').insert({ codigo: c.codigo.toUpperCase(), tipo: c.tipo || 'porcentagem', valor: c.valor, limiteUso: c.limiteUso || 0, usos: 0, validade: c.validade || null, ativo: !!c.ativo });
+    if (error) throw error;
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: "Erro ao criar cupom." });
@@ -2417,8 +2424,8 @@ app.post('/api/cupons', exigirAdmin, async (req, res) => {
 app.put('/api/cupons/:id', exigirAdmin, async (req, res) => {
   const c = req.body;
   try {
-    await db.run('UPDATE cupons SET codigo=?, tipo=?, valor=?, limiteUso=?, validade=?, ativo=? WHERE id=?',
-      [c.codigo.toUpperCase(), c.tipo, c.valor, c.limiteUso||0, c.validade||null, c.ativo?1:0, req.params.id]);
+    const { error } = await supabaseAdmin.from('cupons').update({ codigo: c.codigo.toUpperCase(), tipo: c.tipo, valor: c.valor, limiteUso: c.limiteUso || 0, validade: c.validade || null, ativo: !!c.ativo }).eq('id', req.params.id);
+    if (error) throw error;
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: "Erro ao atualizar cupom." });
@@ -2427,7 +2434,8 @@ app.put('/api/cupons/:id', exigirAdmin, async (req, res) => {
 
 app.delete('/api/cupons/:id', exigirAdmin, async (req, res) => {
   try {
-    await db.run('DELETE FROM cupons WHERE id = ?', req.params.id);
+    const { error } = await supabaseAdmin.from('cupons').delete().eq('id', req.params.id);
+    if (error) throw error;
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: "Erro ao excluir cupom." });
@@ -2440,7 +2448,8 @@ app.post('/api/cupons/validar', async (req, res) => {
   const { codigo, subtotal } = req.body || {};
   if (!codigo) return res.status(400).json({ ok: false, error: "Informe um cupom." });
   try {
-    const cupom = await db.get('SELECT * FROM cupons WHERE codigo = ?', String(codigo).toUpperCase().trim());
+    const { data: cupom, error } = await supabaseAdmin.from('cupons').select('*').eq('codigo', String(codigo).toUpperCase().trim()).maybeSingle();
+    if (error) throw error;
     if (!cupom) return res.json({ ok: false, error: "Cupom inválido." });
     if (!cupom.ativo) return res.json({ ok: false, error: "Este cupom está inativo." });
     if (cupom.limiteUso > 0 && cupom.usos >= cupom.limiteUso) {
@@ -2557,7 +2566,8 @@ app.put('/api/config', exigirAdmin, async (req, res) => {
 // ---------- API: ESTATÍSTICAS ----------
 app.get('/api/estatisticas', exigirAdmin, async (req, res) => {
   try {
-    const pedidos = await db.all('SELECT * FROM pedidos');
+    const { data: pedidos, error: pedidosError } = await supabaseAdmin.from('pedidos').select('*');
+    if (pedidosError) throw pedidosError;
     const vendas = pedidos.filter(p => p.status !== 'Cancelado' && p.status !== 'Aguardando Pagamento');
     const faturamento = vendas.reduce((acc, p) => acc + (p.total || 0), 0);
     // Vendas por produto
@@ -2594,7 +2604,7 @@ app.get('/api/estatisticas', exigirAdmin, async (req, res) => {
     });
     res.json({
       totalPedidos: pedidos.length,
-      totalClientes: (await db.get('SELECT COUNT(*) as t FROM clientes')).t,
+      totalClientes: (await supabaseAdmin.from('clientes').select('id', { count: 'exact', head: true })).count || 0,
       faturamento,
       porProduto,
       porCategoria,

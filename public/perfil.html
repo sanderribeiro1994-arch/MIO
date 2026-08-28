@@ -870,10 +870,22 @@
     }
 
     // ===== HISTÓRICO DE COMPRAS =====
-    function carregarHistorico() {
+    async function carregarHistorico() {
       const container = document.getElementById('listaHistoricoPedidos');
-      const pedidos = JSON.parse(localStorage.getItem('mio_historico_pedidos') || '[]')
-        .filter(p => p.cliente && p.cliente.email === usuarioAtual.email);
+      let pedidos = [];
+      try {
+        const resposta = await fetch('/api/pedidos/meus', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-client-token': usuarioToken },
+          body: JSON.stringify({ email: usuarioAtual.email })
+        });
+        const dados = await resposta.json();
+        if (!resposta.ok) throw new Error(dados.error || 'Não foi possível carregar os pedidos.');
+        pedidos = dados.pedidos || [];
+      } catch (error) {
+        container.innerHTML = '<p class="text-xs text-red-400 italic text-center py-8">' + error.message + '</p>';
+        return;
+      }
 
       if (pedidos.length === 0) {
         container.innerHTML = '<p class="text-xs text-zinc-500 italic text-center py-8">Você ainda não realizou compras na MIO.</p>';
