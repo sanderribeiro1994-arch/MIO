@@ -66,15 +66,6 @@ const apiLimiter = rateLimit({
 // Para rotas mutáveis protegidas por exigirAdmin, validamos o token admin.
 // Para rotas públicas de cadastro/checkout, usamos reCAPTCHA-style rate limit.
 
-// --- TOKENS DE CSRF para sessões não-admin ---
-// Guarda tokens por endereço de e-mail/CPF temporário. Simples o suficiente
-// para bloquear POST forjados em formulários públicos.
-const csrfTokens = new Map(); // clientToken -> expiraEm
-
-function gerarTokenCSRF() {
-  return crypto.randomBytes(24).toString('hex');
-}
-
 async function salvarSessaoAdmin(token, email, expiraEm) {
   if (!token || !email) return;
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
