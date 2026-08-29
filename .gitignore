@@ -19,4 +19,8 @@ public/uploads/*
 # Sistema
 .DS_Store
 
+# Variáveis de ambiente
+.env
+.env.local
+
 
