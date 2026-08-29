@@ -16,6 +16,7 @@ create table if not exists public.produtos (
   estoque integer not null default 0,
   relevancia integer not null default 0,
   data date,
+  bling_id text unique default null,
   data_cadastro timestamptz not null default now()
 );
 

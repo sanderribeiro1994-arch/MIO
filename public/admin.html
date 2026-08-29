@@ -387,9 +387,15 @@
                                 </span>
                             </div>
                         </div>
-                        <div class="mt-4 flex gap-3">
+                        <div class="mt-4 flex flex-wrap gap-3">
                             <button onclick="conectarBling()" class="bg-amber-500 hover:bg-amber-400 text-black px-5 py-2.5 rounded text-xs font-black uppercase transition flex items-center gap-2">
                                 <i data-lucide="plug-zap" class="w-4 h-4"></i> Conectar / Autorizar Bling
+                            </button>
+                            <button onclick="sincronizarBlingCatalogo()" class="bg-zinc-800 hover:bg-zinc-700 text-white px-5 py-2.5 rounded text-xs font-black uppercase transition flex items-center gap-2">
+                                <i data-lucide="refresh-cw" class="w-4 h-4"></i> Sincronizar Catálogo
+                            </button>
+                            <button onclick="sincronizarBlingPedidos()" class="bg-zinc-800 hover:bg-zinc-700 text-white px-5 py-2.5 rounded text-xs font-black uppercase transition flex items-center gap-2">
+                                <i data-lucide="truck" class="w-4 h-4"></i> Sincronizar Pedidos
                             </button>
                         </div>
                         <p id="msg-up" class="text-xs font-mono mt-3 hidden"></p>
@@ -1538,6 +1544,26 @@ config.logo = {
                 }) });
 
                 window.location.href = '/api/bling/auth';
+            } catch (err) {
+                toast(err.message, 'erro');
+            }
+        }
+
+        async function sincronizarBlingCatalogo() {
+            try {
+                const res = await API('/api/produtos/sync/bling');
+                if (res.ok === false) throw new Error(res.error || 'Falha ao sincronizar catálogo do Bling.');
+                toast(`Catálogo sincronizado: ${res.importados || 0} produtos importados.`);
+            } catch (err) {
+                toast(err.message, 'erro');
+            }
+        }
+
+        async function sincronizarBlingPedidos() {
+            try {
+                const res = await API('/api/bling/sync/pedidos');
+                if (res.ok === false) throw new Error(res.error || 'Falha ao sincronizar pedidos do Bling.');
+                toast(`Pedidos sincronizados: ${Array.isArray(res.pedidos) ? res.pedidos.length : 0}.`);
             } catch (err) {
                 toast(err.message, 'erro');
             }

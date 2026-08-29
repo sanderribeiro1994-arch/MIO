@@ -232,6 +232,169 @@ function prepararProduto(produto) {
   return { ...produto, imagem, fotos };
 }
 
+function extrairListaProdutosBling(payload) {
+  if (Array.isArray(payload)) return payload;
+  const chaves = ['data', 'produtos', 'result', 'itens', 'produto'];
+  for (const chave of chaves) {
+    const valor = payload?.[chave];
+    if (Array.isArray(valor)) return valor;
+  }
+  if (payload && typeof payload === 'object') {
+    const objeto = payload.data || payload.result || payload.produtos || payload.itens || payload.produto;
+    if (objeto && typeof objeto === 'object') {
+      const nested = objeto.data || objeto.produtos || objeto.result || objeto.itens || objeto.produto;
+      if (Array.isArray(nested)) return nested;
+    }
+  }
+  return [];
+}
+
+function mapearProdutoParaBling(produto = {}) {
+  const preco = Number(produto.preco ?? 0);
+  const precoOriginal = Number(produto.precoOriginal ?? produto.preco ?? 0);
+  return {
+    codigo: String(produto.codigo || produto.bling_id || produto.id || `site-${Date.now()}`),
+    nome: String(produto.nome || 'Produto sem nome'),
+    descricao: String(produto.descricao || ''),
+    tipo: 'P',
+    situacao: 'Ativo',
+    preco,
+    preco_custo: precoOriginal || preco,
+    categoria: produto.categoria || '',
+    genero: produto.genero || '',
+    imagem: produto.imagem || ''
+  };
+}
+
+function mapearProdutoBlingParaSite(item = {}) {
+  const produto = item.produto || item;
+  const nome = produto.nome || produto.descricao || 'Produto importado';
+  const preco = Number(produto.preco ?? produto.precoVenda ?? produto.valor ?? 0);
+  const precoOriginal = Number(produto.precoOriginal ?? produto.precoVenda ?? produto.preco ?? preco);
+  return {
+    nome,
+    preco,
+    precoOriginal: precoOriginal > 0 ? precoOriginal : null,
+    estaEmPromocao: Boolean(produto.estaEmPromocao || produto.emPromocao || false),
+    textoDestaquePromo: produto.textoDestaquePromo || '',
+    cronometro: produto.cronometro || null,
+    categoria: produto.categoria || produto.categoriaProduto || '',
+    genero: produto.genero || '',
+    imagem: produto.imagem || produto.foto || produto.fotos?.[0] || '',
+    fotos: Array.isArray(produto.fotos) ? produto.fotos : (produto.imagem ? [produto.imagem] : []),
+    cores: Array.isArray(produto.cores) ? produto.cores : [],
+    tamanhos: Array.isArray(produto.tamanhos) ? produto.tamanhos : [],
+    descricao: produto.descricao || produto.observacoes || '',
+    estoque: Number(produto.estoque ?? produto.estoqueAtual ?? 0),
+    relevancia: Number(produto.relevancia ?? 0),
+    data: produto.data || new Date().toISOString().slice(0, 10),
+    bling_id: String(produto.id || produto.codigo || '') || null,
+    codigo: produto.codigo || null
+  };
+}
+
+async function enviarProdutoParaBling(produto) {
+  const oauth = await getBlingOauthConfig();
+  if (!oauth.accessToken) {
+    return { ok: false, motivo: 'Token do Bling ausente. Faça login via OAuth primeiro.' };
+  }
+
+  const payloadBase = mapearProdutoParaBling(produto);
+  const payloads = [
+    { produto: payloadBase },
+    payloadBase
+  ];
+
+  const endpoints = [
+    `${BLING_API_BASE}/produto`,
+    `${BLING_API_BASE}/produtos`
+  ];
+
+  for (const endpoint of endpoints) {
+    for (const body of payloads) {
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${oauth.accessToken}`,
+            Accept: 'application/json',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(body)
+        });
+
+        const raw = await res.text();
+        let data = {};
+        try { data = JSON.parse(raw); } catch { data = { raw }; }
+
+        if (!res.ok) {
+          const mensagem = data?.message || data?.error || data?.errors || raw || `Falha ao enviar produto para o Bling em ${endpoint}`;
+          if (res.status === 401 || res.status === 403) {
+            return { ok: false, motivo: 'Credenciais do Bling inválidas ou expiradas.' };
+          }
+          if (res.status === 404) continue;
+          return { ok: false, motivo: mensagem };
+        }
+
+        const blingId = data?.id || data?.data?.id || data?.produto?.id || data?.produtoId || data?.result?.id || null;
+        return { ok: true, data, blingId };
+      } catch (err) {
+        continue;
+      }
+    }
+  }
+
+  return { ok: false, motivo: 'Não foi possível enviar o produto ao Bling com o formato atual da API.' };
+}
+
+async function consultarProdutosBling() {
+  const oauth = await getBlingOauthConfig();
+  if (!oauth.accessToken) {
+    return { ok: false, error: 'Token do Bling ausente. Faça login via OAuth primeiro.' };
+  }
+
+  const endpoints = [
+    `${BLING_API_BASE}/produtos?pagina=1&limite=100`,
+    `${BLING_API_BASE}/produtos`,
+    `${BLING_API_BASE}/produto?pagina=1&limite=100`,
+    `${BLING_API_BASE}/produto`
+  ];
+
+  for (const endpoint of endpoints) {
+    try {
+      const res = await fetch(endpoint, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${oauth.accessToken}`,
+          Accept: 'application/json',
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const raw = await res.text();
+      let data = {};
+      try { data = JSON.parse(raw); } catch { data = { raw }; }
+
+      if (!res.ok) {
+        const mensagem = data?.message || data?.error || raw || `Erro ao buscar produtos do Bling em ${endpoint}`;
+        if (res.status === 401 || res.status === 403) {
+          return { ok: false, error: 'Credenciais do Bling inválidas ou expiradas.' };
+        }
+        continue;
+      }
+
+      const lista = extrairListaProdutosBling(data);
+      if (lista.length > 0 || Object.keys(data || {}).length > 0) {
+        return { ok: true, data: lista.length > 0 ? lista : data };
+      }
+    } catch (err) {
+      continue;
+    }
+  }
+
+  return { ok: false, error: 'Nenhum produto foi retornado pelo Bling ou a API não respondeu com a estrutura esperada.' };
+}
+
 function formatarPedido(pedido) {
   return {
     ...pedido,
@@ -580,14 +743,17 @@ async function findPedidoByReference(reference) {
 async function enviarPedidoParaBling(pedido) {
   try {
     const cfg = await getConfigChave('bling_config', {});
-    if (!cfg || !cfg.ativo || !cfg.apiKey || !cfg.apiToken) {
-      return { ok: false, motivo: 'Bling não configurado' };
+    const oauth = await getBlingOauthConfig();
+    const urlBase = (cfg.url || 'https://www.bling.com.br/Api/v3').replace(/\/$/, '');
+    const authMethod = oauth.accessToken ? 'oauth' : (cfg.apiKey && cfg.apiToken ? 'basic' : 'none');
+
+    if (authMethod === 'none') {
+      return { ok: false, motivo: 'Bling não configurado. Conecte o OAuth ou preencha API Key e API Token.' };
     }
 
     const clienteJson = parseJsonArray(pedido.cliente, {});
     const itensJson = parseJsonArray(pedido.itens, []);
     const enderecoJson = parseJsonArray(pedido.endereco, {});
-    const base = (cfg.url || 'https://bling.com.br/Api/v3').replace(/\/$/, '');
 
     const payload = {
       data: new Date().toISOString().slice(0, 10),
@@ -608,12 +774,20 @@ async function enviarPedidoParaBling(pedido) {
       observacoes: 'Pedido gerado pelo site MIO'
     };
 
-    const resApi = await fetch(base + '/pedido', {
+    const headers = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    };
+
+    if (authMethod === 'oauth') {
+      headers.Authorization = `Bearer ${oauth.accessToken}`;
+    } else {
+      headers.Authorization = 'Basic ' + Buffer.from(cfg.apiKey + ':' + cfg.apiToken).toString('base64');
+    }
+
+    const resApi = await fetch(urlBase + '/pedido', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Basic ' + Buffer.from(cfg.apiKey + ':' + cfg.apiToken).toString('base64')
-      },
+      headers,
       body: JSON.stringify(payload)
     });
 
@@ -2001,7 +2175,13 @@ app.post('/api/produtos', exigirAdmin, async (req, res) => {
     });
     const { data, error } = await supabaseAdmin.from('produtos').insert(produto).select('id').single();
     if (error) throw error;
-    res.json({ ok: true, id: data.id });
+
+    const sync = await enviarProdutoParaBling({ ...produto, id: data.id, codigo: `site-${data.id}` });
+    if (sync.ok && sync.blingId) {
+      await supabaseAdmin.from('produtos').update({ bling_id: String(sync.blingId) }).eq('id', data.id).select('id');
+    }
+
+    res.json({ ok: true, id: data.id, sync: sync.ok ? 'enviado-para-bling' : 'sem-sync-bling' });
   } catch (err) {
     res.status(500).json({ error: "Erro ao criar produto." });
   }
@@ -2031,9 +2211,97 @@ app.put('/api/produtos/:id', exigirAdmin, async (req, res) => {
     const { data, error } = await supabaseAdmin.from('produtos').update(produto).eq('id', req.params.id).select('id').maybeSingle();
     if (error) throw error;
     if (!data) return res.status(404).json({ error: "Produto não encontrado." });
-    res.json({ ok: true });
+
+    const sync = await enviarProdutoParaBling({ ...produto, id: data.id, codigo: `site-${data.id}` });
+    if (sync.ok && sync.blingId) {
+      await supabaseAdmin.from('produtos').update({ bling_id: String(sync.blingId) }).eq('id', data.id).select('id');
+    }
+
+    res.json({ ok: true, sync: sync.ok ? 'sincronizado-bling' : 'sem-sync-bling' });
   } catch (err) {
     res.status(500).json({ error: "Erro ao atualizar produto." });
+  }
+});
+
+app.get('/api/produtos/sync/bling', exigirAdmin, async (req, res) => {
+  try {
+    const resposta = await consultarProdutosBling();
+    if (!resposta.ok) {
+      return res.status(502).json({ ok: false, error: resposta.error || 'Erro ao consultar produtos do Bling.' });
+    }
+
+    const itens = extrairListaProdutosBling(resposta.data);
+    let importados = 0;
+    for (const item of itens) {
+      const mapped = mapearProdutoBlingParaSite(item);
+      const codigoBling = String(item.id || item.codigo || '').trim();
+      if (!codigoBling) continue;
+
+      const { data: existente, error: erroBusca } = await supabaseAdmin
+        .from('produtos')
+        .select('id')
+        .eq('bling_id', codigoBling)
+        .maybeSingle();
+
+      if (erroBusca) throw erroBusca;
+
+      const registro = prepararProduto({
+        nome: mapped.nome,
+        preco: mapped.preco,
+        precoOriginal: mapped.precoOriginal || null,
+        estaEmPromocao: mapped.estaEmPromocao,
+        textoDestaquePromo: mapped.textoDestaquePromo || '',
+        cronometro: mapped.cronometro || null,
+        categoria: mapped.categoria,
+        genero: mapped.genero || '',
+        imagem: mapped.imagem || '',
+        fotos: mapped.fotos || (mapped.imagem ? [mapped.imagem] : []),
+        cores: mapped.cores || [],
+        tamanhos: mapped.tamanhos || [],
+        descricao: mapped.descricao || '',
+        estoque: mapped.estoque || 0,
+        relevancia: mapped.relevancia || 0,
+        data: mapped.data || new Date().toISOString().slice(0, 10),
+        bling_id: codigoBling,
+        data_cadastro: new Date().toISOString()
+      });
+
+      if (existente) {
+        const { error: erroUpdate } = await supabaseAdmin.from('produtos').update(registro).eq('id', existente.id);
+        if (erroUpdate) throw erroUpdate;
+      } else {
+        const { error: erroInsert } = await supabaseAdmin.from('produtos').insert(registro);
+        if (erroInsert) throw erroInsert;
+      }
+
+      importados += 1;
+    }
+
+    res.json({ ok: true, importados, total: itens.length });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: 'Erro ao sincronizar produtos do Bling para o site: ' + err.message });
+  }
+});
+
+app.post('/api/produtos/:id/sync/bling', exigirAdmin, async (req, res) => {
+  try {
+    const { data: produto, error } = await supabaseAdmin.from('produtos').select('*').eq('id', req.params.id).maybeSingle();
+    if (error) throw error;
+    if (!produto) return res.status(404).json({ ok: false, error: 'Produto não encontrado.' });
+
+    const sync = await enviarProdutoParaBling({ ...produto, codigo: produto.bling_id || `site-${produto.id}` });
+    if (!sync.ok) {
+      return res.status(502).json({ ok: false, error: sync.motivo || 'Erro ao sincronizar produto com o Bling.' });
+    }
+
+    const blingId = String(sync.blingId || produto.bling_id || '').trim();
+    if (blingId) {
+      await supabaseAdmin.from('produtos').update({ bling_id: blingId }).eq('id', produto.id);
+    }
+
+    res.json({ ok: true, blingId: blingId || null, mensagem: 'Produto sincronizado com o Bling.' });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: 'Erro ao sincronizar produto com o Bling: ' + err.message });
   }
 });
 
