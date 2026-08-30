@@ -1211,8 +1211,48 @@ app.get('/api/bling/sync/pedidos', exigirAdmin, async (req, res) => {
   try {
     const data = await consultarBlingApi('pedidos');
     if (!data.ok) return res.status(502).json({ ok: false, error: data.error || 'Erro ao buscar pedidos do Bling.' });
-    await setConfigChave('bling_sync_pedidos_last', { data: data.data, sincronizadoEm: new Date().toISOString() });
-    res.json({ ok: true, pedidos: data.data });
+    
+    // Sincroniza pedidos do Bling PARA O SITE, atualizando status e rastreamento
+    const lista = extrairListaProdutosBling(data.data);
+    let atualizados = 0;
+    
+    for (const item of lista) {
+      const numeroBlng = String(item.numero || item.order_number || item.numero_pedido || '').trim();
+      const status = String(item.status || item.situacao || 'Enviado').trim();
+      const rastreio = String(item.tracking_number || item.codigo_rastreio || item.rastreio || '').trim();
+      
+      if (!numeroBlng) continue;
+      
+      const statusMap = { 
+        pending: 'Em Preparação', 
+        processing: 'Em Preparação', 
+        shipped: 'Enviado', 
+        delivered: 'Entregue', 
+        cancelled: 'Cancelado', 
+        sent: 'Enviado',
+        'em preparação': 'Em Preparação',
+        'enviado': 'Enviado',
+        'entregue': 'Entregue',
+        'cancelado': 'Cancelado'
+      };
+      const statusMio = statusMap[status.toLowerCase()] || status || 'Enviado';
+      
+      const updateData = { 
+        bling_status: status, 
+        status: statusMio,
+        data_bling_sync: new Date().toISOString()
+      };
+      if (rastreio) updateData.codigo_rastreamento = rastreio;
+      
+      const { error } = await supabaseAdmin.from('pedidos')
+        .update(updateData)
+        .eq('numero', numeroBlng);
+      
+      if (!error) atualizados += 1;
+    }
+    
+    await setConfigChave('bling_sync_pedidos_last', { data: data.data, sincronizadoEm: new Date().toISOString(), atualizados });
+    res.json({ ok: true, pedidos: lista, atualizados, total: lista.length });
   } catch (err) {
     res.status(500).json({ ok: false, error: 'Erro ao sincronizar pedidos com Bling: ' + err.message });
   }
@@ -1659,10 +1699,15 @@ app.post('/api/webhooks/pagseguro', async (req, res) => {
     const pago = orderStatus === 'PAID' || chargeStatus === 'PAID' || orderStatus === '3';
 
     if (pago && reference) {
-      await atualizarPedidoPorNumero(reference, { status: 'PAGO' });
+      await atualizarPedidoPorNumero(reference, { status: 'PAGO', data_bling_sync: new Date().toISOString() });
       const pedidoPago = await findPedidoByReference(reference);
-      if (pedidoPago) await enviarPedidoParaUpseller(pedidoPago);
-      return res.json({ ok: true, pago: true, reference, status: 'PAGO' });
+      if (pedidoPago) {
+        const envio = await enviarPedidoParaUpseller(pedidoPago);
+        if (envio.ok && envio.blingId) {
+          await atualizarPedidoPorNumero(reference, { bling_id: envio.blingId });
+        }
+      }
+      return res.json({ ok: true, pago: true, reference, status: 'PAGO', bling_sync: true });
     }
 
     return res.json({ ok: true, pago: false, reference, status: orderStatus || chargeStatus || 'PENDING' });
@@ -1903,9 +1948,54 @@ app.post('/api/bling/reenviar/:numeroPedido', exigirAdmin, async (req, res) => {
     if (!pedido) return res.status(404).json({ error: 'Pedido não encontrado.' });
     const resultado = await enviarPedidoParaBling(pedido);
     if (!resultado.ok) return res.status(502).json({ error: resultado.motivo || 'Erro ao enviar ao Bling.' });
-    return res.json({ ok: true, message: 'Pedido reenviado ao Bling com sucesso!', bling: resultado.data });
+    
+    const blingId = String(resultado.blingId || pedido.bling_id || '').trim();
+    if (blingId) {
+      await atualizarPedidoPorNumero(numeroPedido, { bling_id: blingId, data_bling_sync: new Date().toISOString() });
+    }
+    
+    return res.json({ ok: true, message: 'Pedido reenviado ao Bling com sucesso!', bling: resultado.data, blingId });
   } catch (err) {
     res.status(500).json({ error: 'Erro ao reenviar: ' + err.message });
+  }
+});
+
+app.get('/api/bling/test', exigirAdmin, async (req, res) => {
+  try {
+    const oauth = await getBlingOauthConfig();
+    const testResults = {
+      oauth_conectado: !!oauth.connected && !!oauth.accessToken,
+      token_valido: !!oauth.accessToken,
+      token_expira_em: oauth.expiresAt ? new Date(oauth.expiresAt).toISOString() : null
+    };
+    
+    if (!oauth.accessToken) {
+      return res.json({ ok: false, erro: 'Token do Bling não encontrado. Faça login OAuth primeiro.', diagnosticos: testResults });
+    }
+    
+    // Testa consulta de produtos
+    const produtosTest = await consultarProdutosBling();
+    testResults.produtos_api = produtosTest.ok ? 'OK' : produtosTest.error;
+    
+    // Testa consulta de pedidos
+    const pedidosTest = await consultarBlingApi('pedidos');
+    testResults.pedidos_api = pedidosTest.ok ? 'OK' : pedidosTest.error;
+    
+    // Testa consulta de estoque
+    const estoqueTest = await consultarBlingApi('estoque');
+    testResults.estoque_api = estoqueTest.ok ? 'OK' : estoqueTest.error;
+    
+    res.json({ 
+      ok: produtosTest.ok && pedidosTest.ok && estoqueTest.ok,
+      mensagem: produtosTest.ok && pedidosTest.ok && estoqueTest.ok ? 'Bling conectado e respondendo corretamente' : 'Alguns endpoints do Bling falharam',
+      diagnosticos: testResults,
+      detalhes: {
+        produtos_encontrados: produtosTest.ok ? extrairListaProdutosBling(produtosTest.data).length : 0,
+        pedidos_encontrados: pedidosTest.ok ? extrairListaProdutosBling(pedidosTest.data).length : 0
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, erro: 'Erro ao testar Bling: ' + err.message });
   }
 });
 
