@@ -740,6 +740,88 @@ async function findPedidoByReference(reference) {
   return buscarPedidoPorId(Number(reference));
 }
 
+async function upsertProdutoBling(dadosProduto, blingId) {
+  if (!blingId) throw new Error('blingId é obrigatório');
+  const agora = new Date().toISOString();
+  const dataUpsert = {
+    ...dadosProduto,
+    bling_id: String(blingId).trim(),
+    data_last_sync: agora,
+    sync_status: 'sucesso',
+    data_cadastro: dadosProduto.data_cadastro || agora
+  };
+  const { data: existente, error: erroQuery } = await supabaseAdmin
+    .from('produtos')
+    .select('id')
+    .eq('bling_id', String(blingId).trim())
+    .maybeSingle();
+  if (erroQuery) throw erroQuery;
+
+  if (existente) {
+    const { data: updated, error: erroUpdate } = await supabaseAdmin
+      .from('produtos')
+      .update(dataUpsert)
+      .eq('id', existente.id)
+      .select('id, bling_id, nome')
+      .single();
+    if (erroUpdate) throw erroUpdate;
+    return { operacao: 'update', id: updated.id, bling_id: updated.bling_id };
+  }
+
+  const { data: criado, error: erroInsert } = await supabaseAdmin
+    .from('produtos')
+    .insert(dataUpsert)
+    .select('id, bling_id, nome')
+    .single();
+  if (erroInsert) throw erroInsert;
+  return { operacao: 'insert', id: criado.id, bling_id: criado.bling_id };
+}
+
+async function sincronizarProdutoBlingParaSite(dadosBling) {
+  const blingId = String(dadosBling.id || dadosBling.codigo || '').trim();
+  if (!blingId) throw new Error('Bling product ID não encontrado');
+  const dadosMapeados = mapearProdutoBlingParaSite(dadosBling);
+  const dadosSupabase = prepararProduto({
+    nome: dadosMapeados.nome,
+    preco: dadosMapeados.preco,
+    precoOriginal: dadosMapeados.precoOriginal,
+    estaEmPromocao: dadosMapeados.estaEmPromocao,
+    textoDestaquePromo: dadosMapeados.textoDestaquePromo,
+    cronometro: dadosMapeados.cronometro,
+    categoria: dadosMapeados.categoria,
+    genero: dadosMapeados.genero,
+    imagem: dadosMapeados.imagem,
+    fotos: dadosMapeados.fotos,
+    cores: dadosMapeados.cores,
+    tamanhos: dadosMapeados.tamanhos,
+    descricao: dadosMapeados.descricao,
+    estoque: dadosMapeados.estoque,
+    relevancia: dadosMapeados.relevancia,
+    data: dadosMapeados.data
+  });
+  const resultado = await upsertProdutoBling(dadosSupabase, blingId);
+  return { ok: true, operacao: resultado.operacao, id: resultado.id, bling_id: resultado.bling_id, nome: dadosMapeados.nome };
+}
+
+async function registrarTentativaSyncProduto(produtoId, status, mensagem = '') {
+  try {
+    const { data: produto } = await supabaseAdmin
+      .from('produtos')
+      .select('sync_tentativas')
+      .eq('id', produtoId)
+      .maybeSingle();
+    const tentativas = (produto?.sync_tentativas || 0) + 1;
+    await supabaseAdmin.from('produtos').update({
+      sync_status: status,
+      sync_tentativas: tentativas,
+      sync_erro: mensagem || null,
+      data_last_sync: new Date().toISOString()
+    }).eq('id', produtoId);
+  } catch (err) {
+    console.error('Erro ao registrar sync:', err);
+  }
+}
+
 async function enviarPedidoParaBling(pedido) {
   try {
     const cfg = await getConfigChave('bling_config', {});
@@ -775,46 +857,6 @@ async function enviarPedidoParaBling(pedido) {
     };
 
     const headers = {
-      // ========== FUNÇÕES DE SINCRONIZAÇÃO BIDIRECIONAL PRODUTOS ==========
-
-      /**
-       * Upsert de produto com bling_id como chave única
-       */
-      async function upsertProdutoBling(dadosProduto, blingId) {
-        if (!blingId) throw new Error('blingId é obrigatório');
-        const agora = new Date().toISOString();
-        const dataUpsert = { ...dadosProduto, bling_id: String(blingId).trim(), data_last_sync: agora, sync_status: 'sucesso', data_cadastro: dadosProduto.data_cadastro || agora };
-        const { data: existente, error: erroQuery } = await supabaseAdmin.from('produtos').select('id').eq('bling_id', String(blingId)).maybeSingle();
-        if (erroQuery) throw erroQuery;
-        if (existente) {
-          const { data: updated, error: erroUpdate } = await supabaseAdmin.from('produtos').update(dataUpsert).eq('id', existente.id).select('id, bling_id, nome').single();
-          if (erroUpdate) throw erroUpdate;
-          return { operacao: 'update', id: updated.id, bling_id: updated.bling_id };
-        } else {
-          const { data: criado, error: erroInsert } = await supabaseAdmin.from('produtos').insert(dataUpsert).select('id, bling_id, nome').single();
-          if (erroInsert) throw erroInsert;
-          return { operacao: 'insert', id: criado.id, bling_id: criado.bling_id };
-        }
-      }
-
-      /**
-       * Sincroniza um produto do Bling para Supabase via webhook
-       */
-      async function sincronizarProdutoBlingParaSite(dadosBling) {
-        const blingId = String(dadosBling.id || dadosBling.codigo || '').trim();
-        if (!blingId) throw new Error('Bling product ID não encontrado');
-        const dadosMapeados = mapearProdutoBlingParaSite(dadosBling);
-        const dadosSupabase = prepararProduto({ nome: dadosMapeados.nome, preco: dadosMapeados.preco, precoOriginal: dadosMapeados.precoOriginal, estaEmPromocao: dadosMapeados.estaEmPromocao, textoDestaquePromo: dadosMapeados.textoDestaquePromo, cronometro: dadosMapeados.cronometro, categoria: dadosMapeados.categoria, genero: dadosMapeados.genero, imagem: dadosMapeados.imagem, fotos: dadosMapeados.fotos, cores: dadosMapeados.cores, tamanhos: dadosMapeados.tamanhos, descricao: dadosMapeados.descricao, estoque: dadosMapeados.estoque, relevancia: dadosMapeados.relevancia, data: dadosMapeados.data });
-        const resultado = await upsertProdutoBling(dadosSupabase, blingId);
-        return { ok: true, operacao: resultado.operacao, id: resultado.id, bling_id: resultado.bling_id, nome: dadosMapeados.nome };
-      }
-
-      /**
-       * Registra tentativa de sincronização (auditoria)
-       */
-      async function registrarTentativaSyncProduto(produtoId, status, mensagem = '') {
-        try { const { data: produto } = await supabaseAdmin.from('produtos').select('sync_tentativas').eq('id', produtoId).maybeSingle(); const tentativas = (produto?.sync_tentativas || 0) + 1; const agora = new Date().toISOString(); await supabaseAdmin.from('produtos').update({ sync_status: status, sync_tentativas: tentativas, sync_erro: mensagem || null, data_last_sync: agora }).eq('id', produtoId); } catch (err) { console.error('Erro ao registrar sync:', err); }
-      }
       'Content-Type': 'application/json',
       'Accept': 'application/json'
     };
@@ -2162,63 +2204,6 @@ app.put('/api/admin/conta', exigirAdmin, async (req, res) => {
     }
 
     if (senhaAtual || novaSenha) {
-  /**
-   * WEBHOOK: Recebe atualizações de produtos do Bling
-   * Bling envia POST quando produto é criado/atualizado/deletado no ERP
-   * Formatos suportados:
-   * - { id: "123", codigo: "SKU-001", nome: "Produto", ... }
-   * - { evento: "produto.criado", dados: { id: "123", ... } }
-   * - { produto: { id: "123", ... } }
-   */
-  app.post('/api/webhooks/bling-produto', async (req, res) => {
-    try {
-      const body = req.body || {};
-      const evento = body.evento || body.tipo || 'produto.atualizado';
-
-      // Extrair dados do produto de múltiplos formatos possíveis
-      const dadosProduto = body.dados || body.produto || body.data || body;
-
-      // Validar se há dados do produto
-      const produtoId = String(dadosProduto.id || dadosProduto.codigo || '').trim();
-      if (!produtoId) {
-        return res.status(400).json({ ok: false, error: 'Produto ID ou código obrigatório no webhook' });
-      }
-
-      // Logar webhook recebido
-      console.log(`[Bling Webhook] Evento: ${evento}, Produto: ${produtoId}, Nome: ${dadosProduto.nome || 'N/A'}`);
-
-      // Tratamento por tipo de evento
-      if (evento.includes('deletad') || evento.includes('remov')) {
-        // Deletar produto do Supabase
-        const { error } = await supabaseAdmin
-          .from('produtos')
-          .delete()
-          .eq('bling_id', produtoId);
-
-        if (error) {
-          console.error('Erro ao deletar produto do Supabase:', error);
-          return res.status(500).json({ ok: false, error: 'Erro ao processar deleção' });
-        }
-
-        return res.json({ ok: true, evento, operacao: 'delete', bling_id: produtoId });
-      }
-
-      // Para criação/atualização: fazer upsert
-      const resultado = await sincronizarProdutoBlingParaSite(dadosProduto);
-
-      res.json({
-        ok: true,
-        evento,
-        operacao: resultado.operacao,
-        produto_id: resultado.id,
-        bling_id: resultado.bling_id,
-        nome: resultado.nome
-      });
-    } catch (err) {
-      console.error('Erro ao processar webhook Bling produto:', err);
-      res.status(500).json({ ok: false, error: err.message });
-    }
-  });
       const senhaOk = await compararSenha(String(senhaAtual || ''), admin.senha_hash);
       if (!senhaOk) {
         return res.status(401).json({ error: 'Senha atual incorreta.' });
@@ -2258,6 +2243,40 @@ app.put('/api/admin/conta', exigirAdmin, async (req, res) => {
     return res.json({ ok: true, message: 'Dados do administrador atualizados.', email: adminAtualizado.email });
   } catch (err) {
     res.status(500).json({ error: 'Erro ao alterar dados do administrador.' });
+  }
+});
+
+app.post('/api/webhooks/bling-produto', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const evento = body.evento || body.tipo || 'produto.atualizado';
+    const dadosProduto = body.dados || body.produto || body.data || body;
+    const produtoId = String(dadosProduto.id || dadosProduto.codigo || '').trim();
+
+    if (!produtoId) {
+      return res.status(400).json({ ok: false, error: 'Produto ID ou código obrigatório no webhook' });
+    }
+
+    console.log(`[Bling Webhook] Evento: ${evento}, Produto: ${produtoId}, Nome: ${dadosProduto.nome || 'N/A'}`);
+
+    if (evento.includes('deletad') || evento.includes('remov')) {
+      const { error } = await supabaseAdmin.from('produtos').delete().eq('bling_id', produtoId);
+      if (error) throw error;
+      return res.json({ ok: true, evento, operacao: 'delete', bling_id: produtoId });
+    }
+
+    const resultado = await sincronizarProdutoBlingParaSite(dadosProduto);
+    return res.json({
+      ok: true,
+      evento,
+      operacao: resultado.operacao,
+      produto_id: resultado.id,
+      bling_id: resultado.bling_id,
+      nome: resultado.nome
+    });
+  } catch (err) {
+    console.error('Erro ao processar webhook Bling produto:', err);
+    return res.status(500).json({ ok: false, error: err.message });
   }
 });
 
@@ -2703,75 +2722,6 @@ app.get('/api/cupons', exigirAdmin, async (req, res) => {
   }
 });
 
-app.post('/api/cupons', exigirAdmin, async (req, res) => {
-  const c = req.body;
-  try {
-      /**
-       * SINCRONIZAÇÃO: Bling → Supabase
-       * Importa todos os produtos do Bling e faz upsert no banco
-       * Usa bling_id como chave única para evitar duplicatas
-       */
-      app.get('/api/produtos/sync/bling', exigirAdmin, async (req, res) => {
-        try {
-          const resposta = await consultarProdutosBling();
-          if (!resposta.ok) {
-            return res.status(502).json({ ok: false, error: resposta.error || 'Erro ao consultar produtos do Bling.' });
-          }
-
-          const itens = extrairListaProdutosBling(resposta.data);
-          let importados = 0;
-          let erros = [];
-
-          for (const item of itens) {
-            try {
-              const codigoBling = String(item.id || item.codigo || '').trim();
-              if (!codigoBling) {
-                erros.push({ item: JSON.stringify(item).substring(0, 50), erro: 'Sem ID/código' });
-                continue;
-              }
-
-              // Usar nova função upsert com bling_id como chave
-              const mapped = mapearProdutoBlingParaSite(item);
-              const dadosSupabase = prepararProduto({
-                nome: mapped.nome,
-                preco: mapped.preco,
-                precoOriginal: mapped.precoOriginal || null,
-                estaEmPromocao: mapped.estaEmPromocao,
-                textoDestaquePromo: mapped.textoDestaquePromo || '',
-                cronometro: mapped.cronometro || null,
-                categoria: mapped.categoria,
-                genero: mapped.genero || '',
-                imagem: mapped.imagem || '',
-                fotos: mapped.fotos || (mapped.imagem ? [mapped.imagem] : []),
-                cores: mapped.cores || [],
-                tamanhos: mapped.tamanhos || [],
-                descricao: mapped.descricao || '',
-                estoque: mapped.estoque || 0,
-                relevancia: mapped.relevancia || 0,
-                data: mapped.data || new Date().toISOString().slice(0, 10),
-                data_cadastro: new Date().toISOString()
-              });
-
-              const resultado = await upsertProdutoBling(dadosSupabase, codigoBling);
-              importados += 1;
-              console.log(`[Sync Bling→Site] ${resultado.operacao}: ${resultado.bling_id} - ${mapped.nome}`);
-            } catch (err) {
-              erros.push({ item: item.nome || item.codigo || 'unknown', erro: err.message });
-              console.error('Erro ao sincronizar produto individual:', err);
-            }
-          }
-
-          res.json({
-            ok: true,
-            importados,
-            total: itens.length,
-            erros: erros.length > 0 ? erros : undefined
-          });
-        } catch (err) {
-          console.error('Erro crítico em sync Bling:', err);
-          res.status(500).json({ ok: false, error: 'Erro ao sincronizar produtos do Bling para o site: ' + err.message });
-        }
-      });
 // ---------- API: AVALIAÇÕES (votação/aprovação de produtos) ----------
 // As avaliações são salvas no banco e só aparecem publicamente quando aprovadas.
 app.get('/api/avaliacoes', async (req, res) => {

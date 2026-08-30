@@ -20,6 +20,14 @@ create table if not exists public.produtos (
   data_cadastro timestamptz not null default now()
 );
 
+-- Garante a coluna também quando a tabela produtos já existia.
+alter table if exists public.produtos
+  add column if not exists bling_id text;
+
+create unique index if not exists uq_produtos_bling_id
+  on public.produtos(bling_id)
+  where bling_id is not null;
+
   -- Adicionar coluna de comentário para rastrear mudanças
   comment on column public.produtos.bling_id is 'ID do produto no Bling (chave única para sincronização)';
 
