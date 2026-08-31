@@ -378,7 +378,12 @@
                             </div>
                             <div>
                                 <label class="block text-[10px] font-mono uppercase text-zinc-400 mb-1">BLING_CLIENT_SECRET</label>
-                                <input type="password" id="bling-client-secret" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2.5 text-sm focus:outline-none focus:border-amber-400">
+                                <div class="relative">
+                                    <input type="password" id="bling-client-secret" autocomplete="off" class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2.5 pr-11 text-sm focus:outline-none focus:border-amber-400">
+                                    <button type="button" id="btn-toggle-bling-secret" onclick="alternarVisibilidadeBlingSecret()" aria-label="Mostrar Client Secret do Bling" title="Mostrar Client Secret" class="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-white transition">
+                                        <i data-lucide="eye" class="w-4 h-4"></i>
+                                    </button>
+                                </div>
                             </div>
                             <div class="flex items-center justify-between gap-3 rounded-lg border border-zinc-800 bg-zinc-950/80 px-3 py-2">
                                 <span class="text-[10px] font-mono uppercase text-zinc-400">Status OAuth</span>
@@ -1518,6 +1523,19 @@ config.logo = {
         }
 
 // =============== INTEGRAÇÕES (PAGAMENTO / ENVIO) ===============
+    function alternarVisibilidadeBlingSecret() {
+        const campo = document.getElementById('bling-client-secret');
+        const botao = document.getElementById('btn-toggle-bling-secret');
+        if (!campo || !botao) return;
+
+        const mostrar = campo.type === 'password';
+        campo.type = mostrar ? 'text' : 'password';
+        botao.setAttribute('aria-label', mostrar ? 'Ocultar Client Secret do Bling' : 'Mostrar Client Secret do Bling');
+        botao.title = mostrar ? 'Ocultar Client Secret' : 'Mostrar Client Secret';
+        botao.innerHTML = `<i data-lucide="${mostrar ? 'eye-off' : 'eye'}" class="w-4 h-4"></i>`;
+        if (window.lucide) lucide.createIcons();
+    }
+
         function atualizarStatusBling(ativo) {
             const el = document.getElementById('bling-status');
             if (!el) return;
