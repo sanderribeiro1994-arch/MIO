@@ -1186,20 +1186,75 @@ app.get('/api/bling/callback', async (req, res) => {
 app.post('/api/webhooks/bling', async (req, res) => {
   try {
     const evento = req.body || {};
+    const table = evento.table || evento?.record?.table || null;
+    const type = evento.type || evento?.eventType || null;
+    const record = evento.record || evento.data || evento.payload || null;
 
-    if (evento.type === 'INSERT' && evento.table === 'produtos') {
-      const produto = evento.record;
-      if (produto) {
+    if (record && table === 'produtos') {
+      const produto = record;
+      if (produto && (type === 'INSERT' || !type)) {
         await enviarProdutoParaBling(produto);
       }
     }
 
-    return res.status(200).json({ success: true });
+    const order_number = evento.order_number || evento.numero || evento.numeroPedido || evento.orderNumber || record?.numero || record?.order_number;
+    const tracking_number = evento.tracking_number || evento.codigoRastreio || evento.trackingNumber || evento.rastreio || record?.codigo_rastreamento || record?.tracking_number;
+    const status = evento.status || evento.estado || record?.status || 'Enviado';
+
+    if (order_number && (table === 'pedidos' || !table || eventHasPedidoData(evento, record))) {
+      const pedido = await buscarPedidoPorNumero(order_number);
+      if (pedido) {
+        const statusMap = {
+          pending: 'Em Preparação',
+          processing: 'Em Preparação',
+          shipped: 'Enviado',
+          delivered: 'Entregue',
+          cancelled: 'Cancelado',
+          sent: 'Enviado'
+        };
+
+        const statusMio = statusMap[String(status).toLowerCase()] || String(status || 'Enviado');
+
+        await atualizarPedidoPorNumero(order_number, {
+          bling_status: String(status),
+          bling_tracking: tracking_number || null,
+          data_bling_sync: new Date().toISOString(),
+          status: statusMio,
+          data_envio: evento.data_envio || record?.data_envio || null
+        });
+
+        if (tracking_number && !pedido.codigo_rastreamento) {
+          await atualizarPedidoPorNumero(order_number, { codigo_rastreamento: tracking_number });
+        }
+      }
+    }
+
+    return res.status(200).json({ success: true, table: table || 'unknown', type: type || 'unknown' });
   } catch (error) {
     console.error('Erro no webhook do Bling:', error);
     return res.status(500).json({ error: error.message });
   }
 });
+
+function eventHasPedidoData(evento, record) {
+  return Boolean(
+    evento.order_number ||
+    evento.numero ||
+    evento.numeroPedido ||
+    evento.orderNumber ||
+    evento.status ||
+    evento.estado ||
+    evento.tracking_number ||
+    evento.codigoRastreio ||
+    evento.trackingNumber ||
+    evento.rastreio ||
+    record?.numero ||
+    record?.order_number ||
+    record?.status ||
+    record?.tracking_number ||
+    record?.codigo_rastreamento
+  );
+}
 
 app.get('/api/bling/debug', exigirAdmin, async (req, res) => {
   try {
