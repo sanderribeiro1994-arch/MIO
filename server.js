@@ -1183,6 +1183,24 @@ app.get('/api/bling/callback', async (req, res) => {
   return res.redirect(302, '/auth/callback?' + new URLSearchParams(req.query).toString());
 });
 
+app.post('/api/webhooks/bling', async (req, res) => {
+  try {
+    const evento = req.body || {};
+
+    if (evento.type === 'INSERT' && evento.table === 'produtos') {
+      const produto = evento.record;
+      if (produto) {
+        await enviarProdutoParaBling(produto);
+      }
+    }
+
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Erro no webhook do Bling:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 app.get('/api/bling/debug', exigirAdmin, async (req, res) => {
   try {
     const oauth = await getBlingOauthConfig();
