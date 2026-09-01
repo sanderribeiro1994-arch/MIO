@@ -2099,35 +2099,6 @@ app.get('/api/bling/test', exigirAdmin, async (req, res) => {
   }
 });
 
-app.post('/api/webhooks/bling', async (req, res) => {
-  try {
-    const body = req.body || {};
-    const order_number = body.order_number || body.numero || body.numeroPedido || body.orderNumber;
-    const tracking_number = body.tracking_number || body.codigoRastreio || body.trackingNumber || body.rastreio;
-    const status = body.status || body.estado || 'Enviado';
-    if (!order_number) return res.status(400).json({ ok: false, error: 'order_number obrigatório' });
-
-    const pedido = await buscarPedidoPorNumero(order_number);
-    if (!pedido) return res.status(404).json({ ok: false, error: 'Pedido não encontrado' });
-
-    const statusMap = { pending: 'Em Preparação', processing: 'Em Preparação', shipped: 'Enviado', delivered: 'Entregue', cancelled: 'Cancelado', sent: 'Enviado' };
-    const statusMio = statusMap[String(status).toLowerCase()] || String(status || 'Enviado');
-    await atualizarPedidoPorNumero(order_number, {
-      bling_status: String(status), bling_tracking: tracking_number || null,
-      data_bling_sync: new Date().toISOString(), status: statusMio, data_envio: body.data_envio || null
-    });
-
-    if (tracking_number && !pedido.codigo_rastreamento) {
-      await atualizarPedidoPorNumero(order_number, { codigo_rastreamento: tracking_number });
-    }
-
-    res.json({ ok: true, message: 'Webhook Bling recebido e processado' });
-  } catch (err) {
-    console.error('Erro ao processar webhook Bling:', err);
-    res.status(500).json({ ok: false, error: err.message });
-  }
-});
-
 app.get('/api/bling/expeditions', exigirAdmin, async (req, res) => {
   try {
     const { data: pedidos, error } = await supabaseAdmin.from('pedidos')
