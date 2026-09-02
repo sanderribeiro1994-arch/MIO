@@ -1110,10 +1110,12 @@ app.get('/api/bling/auth', async (req, res) => {
       });
     }
 
+    const redirectUri = (cfg.redirectUri && cfg.redirectUri.trim()) || `${obterBaseUrl(req)}/auth/callback` || BLING_CALLBACK_URL;
+
     const params = new URLSearchParams({
       response_type: 'code',
       client_id: clientId,
-      redirect_uri: cfg.redirectUri || BLING_CALLBACK_URL,
+      redirect_uri: redirectUri,
       scope: cfg.scope || 'pedido:read pedido:write produto:read produto:write estoque:read estoque:write',
       state: crypto.randomBytes(16).toString('hex')
     });
@@ -1139,10 +1141,11 @@ app.get('/auth/callback', async (req, res) => {
     const cfg = await getBlingOauthConfig();
     const clientId = cfg.clientId || BLING_CLIENT_ID;
     const clientSecret = cfg.clientSecret || BLING_CLIENT_SECRET;
+    const redirectUri = (cfg.redirectUri && cfg.redirectUri.trim()) || `${obterBaseUrl(req)}/auth/callback` || BLING_CALLBACK_URL;
     const body = new URLSearchParams({
       grant_type: 'authorization_code',
       code,
-      redirect_uri: cfg.redirectUri || BLING_CALLBACK_URL,
+      redirect_uri: redirectUri,
       client_id: clientId,
       client_secret: clientSecret
     });

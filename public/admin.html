@@ -1556,9 +1556,11 @@ config.logo = {
                     return;
                 }
 
+                const redirectUri = `${window.location.origin}/auth/callback`;
+
                 await API('/api/integracoes', { method: 'PUT', body: JSON.stringify({
                     bling: { ativo: true, url: 'https://www.bling.com.br/Api/v3' },
-                    blingOauth: { clientId, clientSecret, redirectUri: 'https://usemio.com.br/auth/callback', connected: false }
+                    blingOauth: { clientId, clientSecret, redirectUri, connected: false }
                 }) });
 
                 window.location.href = '/api/bling/auth';
