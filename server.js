@@ -2403,6 +2403,9 @@ app.get('/api/produto/:id', async (req, res) => {
 
 app.post('/api/produtos', exigirAdmin, async (req, res) => {
   const p = req.body;
+
+  let produtoSalvo = null;
+
   try {
     const produto = prepararProduto({
       nome: p.nome,
@@ -2423,15 +2426,34 @@ app.post('/api/produtos', exigirAdmin, async (req, res) => {
       data: p.data || new Date().toISOString().slice(0, 10),
       data_cadastro: new Date().toISOString()
     });
+
     const { data, error } = await supabaseAdmin.from('produtos').insert(produto).select('id').single();
     if (error) throw error;
 
-    const sync = await enviarProdutoParaBling({ ...produto, id: data.id, codigo: `site-${data.id}` });
-    if (sync.ok && sync.blingId) {
-      await supabaseAdmin.from('produtos').update({ bling_id: String(sync.blingId) }).eq('id', data.id).select('id');
-    }
+    produtoSalvo = { ...produto, id: data.id, codigo: `site-${data.id}` };
 
-    res.json({ ok: true, id: data.id, sync: sync.ok ? 'enviado-para-bling' : 'sem-sync-bling' });
+    try {
+      const sync = await enviarProdutoParaBling(produtoSalvo);
+      if (sync.ok && sync.blingId) {
+        await supabaseAdmin.from('produtos').update({ bling_id: String(sync.blingId) }).eq('id', data.id).select('id');
+      }
+
+      return res.json({
+        ok: true,
+        id: data.id,
+        sync: sync.ok ? 'enviado-para-bling' : 'sem-sync-bling',
+        message: sync.ok ? 'Produto salvo e enviado ao Bling com sucesso.' : 'Produto salvo no site, mas não foi possível sincronizar com o Bling.'
+      });
+    } catch (syncError) {
+      console.error('Erro ao sincronizar produto com o Bling:', syncError);
+      return res.json({
+        ok: true,
+        id: data.id,
+        sync: 'erro-sync-bling',
+        message: 'Produto salvo no site com sucesso. Falha ao sincronizar com o Bling.',
+        warning: syncError.message
+      });
+    }
   } catch (err) {
     res.status(500).json({ error: "Erro ao criar produto." });
   }
