@@ -8,6 +8,7 @@ import rateLimit from 'express-rate-limit';
 import { supabase, supabaseAdmin } from './supabase.js';
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const IS_PROD = NODE_ENV === 'production';
@@ -1282,6 +1283,29 @@ app.get('/api/bling/debug', exigirAdmin, async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.get('/api/bling/debug-token', async (req, res) => {
+  try {
+    const host = (req.headers.host || '').toLowerCase();
+    const isLocal = host.includes('localhost') || host.includes('127.0.0.1');
+    if (!isLocal && process.env.NODE_ENV !== 'development') {
+      return res.status(403).json({ ok: false, error: 'Endpoint de debug do Bling bloqueado fora do ambiente local.' });
+    }
+
+    const oauth = await getBlingOauthConfig();
+    return res.json({
+      ok: true,
+      accessToken: oauth.accessToken || null,
+      refreshToken: oauth.refreshToken || null,
+      tokenType: oauth.tokenType || 'Bearer',
+      connected: !!oauth.connected,
+      expiresAt: oauth.expiresAt || null,
+      clientId: oauth.clientId || null
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
   }
 });
 
