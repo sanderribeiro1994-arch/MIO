@@ -1130,83 +1130,40 @@ app.get('/api/bling/auth', async (req, res) => {
 });
 
 app.get('/auth/callback', async (req, res) => {
-  try {
-    const { code, state, error, error_description } = req.query || {};
-    if (error) {
-      const msg = encodeURIComponent(error_description || error || 'Autorização cancelada pelo Bling.');
-      return res.redirect('/admin.html?bling_error=1&message=' + msg);
-    }
-    if (!code) {
-      return res.redirect('/admin.html?bling_error=missing_code&message=' + encodeURIComponent('Acesso ao callback do Bling sem code. Use a rota /api/bling/auth para iniciar o login.'));
-    }
+  const { code, error, error_description } = req.query || {};
+  const escapeHtml = (value) => String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 
-    const cfg = await getBlingOauthConfig();
-    const redirectSuccess = () => res.redirect('/admin.html?bling_status=connected&message=' + encodeURIComponent('Bling conectado com sucesso!'));
-
-    if (cfg.authCode === code && cfg.accessToken) {
-      return redirectSuccess();
-    }
-
-    if (blingCallbackInFlight.has(code)) {
-      await blingCallbackInFlight.get(code);
-      return redirectSuccess();
-    }
-
-    const clientId = cfg.clientId || BLING_CLIENT_ID;
-    const clientSecret = cfg.clientSecret || BLING_CLIENT_SECRET;
-    const redirectUri = (cfg.redirectUri && cfg.redirectUri.trim()) || `${obterBaseUrl(req)}/auth/callback` || BLING_CALLBACK_URL;
-    const processCallback = (async () => {
-      const body = new URLSearchParams({
-        grant_type: 'authorization_code',
-        code,
-        redirect_uri: redirectUri,
-        client_id: clientId,
-        client_secret: clientSecret
-      });
-
-      const tokenRes = await fetch(BLING_TOKEN_URL, {
-        method: 'POST',
-        headers: {
-          ...getBlingTokenHeaders({ clientId, clientSecret }),
-          'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        body: body.toString()
-      });
-
-      const tokens = await tokenRes.json().catch(() => ({}));
-      if (!tokenRes.ok || !tokens.access_token) {
-        throw new Error(tokens.error_description || tokens.error || 'Erro ao trocar código do Bling por token.');
-      }
-
-      await salvarBlingOauthConfig({
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token || cfg.refreshToken || '',
-        tokenType: tokens.token_type || 'Bearer',
-        expiresAt: Date.now() + ((Number(tokens.expires_in) || 3600) * 1000),
-        connected: true,
-        state: state || '',
-        authCode: code
-      });
-
-      const persisted = await getBlingOauthConfig();
-      if (persisted.authCode !== code || persisted.accessToken !== tokens.access_token) {
-        throw new Error('Os tokens do Bling não foram confirmados no banco de dados.');
-      }
-    })();
-
-    blingCallbackInFlight.set(code, processCallback);
-    try {
-      await processCallback;
-    } finally {
-      blingCallbackInFlight.delete(code);
-    }
-
-    return redirectSuccess();
-  } catch (err) {
-    const message = err.message || 'Erro ao processar callback do Bling.';
-    const msg = encodeURIComponent(message);
-    return res.redirect('/admin.html?bling_error=1&message=' + msg);
+  if (error) {
+    return res.status(400).send(`
+      <h1>Erro na autorização do Bling</h1>
+      <p>${escapeHtml(error_description || error)}</p>
+    `);
   }
+
+  if (!code) {
+    return res.status(400).send(`
+      <h1>Código não recebido</h1>
+      <p>O callback do Bling não recebeu req.query.code.</p>
+    `);
+  }
+
+  // Modo temporário de captura: não troca o code por tokens e não redireciona para o admin.
+  return res.send(`
+    <!doctype html>
+    <html lang="pt-BR">
+      <head><meta charset="utf-8"><title>Code OAuth do Bling</title></head>
+      <body>
+        <h1>Código de autorização do Bling</h1>
+        <p>Copie o valor abaixo e use-o imediatamente no Postman:</p>
+        <textarea rows="4" cols="100" readonly autofocus>${escapeHtml(code)}</textarea>
+      </body>
+    </html>
+  `);
 });
 
 app.get('/api/bling/callback', async (req, res) => {
