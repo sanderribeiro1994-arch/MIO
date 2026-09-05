@@ -295,57 +295,77 @@ function mapearProdutoBlingParaSite(item = {}) {
 }
 
 async function enviarProdutoParaBling(produto) {
-  const oauth = await getBlingOauthConfig();
-  if (!oauth.accessToken) {
-    return { ok: false, motivo: 'Token do Bling ausente. Faça login via OAuth primeiro.' };
+  let accessToken;
+  try {
+    accessToken = await getBlingAccessToken();
+  } catch (err) {
+    console.error('Erro ao obter/renovar token do Bling:', err.message);
+    return { ok: false, motivo: err.message };
   }
 
-  const payloadBase = mapearProdutoParaBling(produto);
-  const payloads = [
-    { produto: payloadBase },
-    payloadBase
-  ];
+  const endpoint = `${BLING_API_BASE}/produtos`;
+  const payload = mapearProdutoParaBling(produtos);
 
-  const endpoints = [
-    `${BLING_API_BASE}/produto`,
-    `${BLING_API_BASE}/produtos`
-  ];
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
 
-  for (const endpoint of endpoints) {
-    for (const body of payloads) {
-      try {
-        const res = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${oauth.accessToken}`,
-            Accept: 'application/json',
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(body)
-        });
+    const raw = await response.text();
+    let data = {};
+    try { data = JSON.parse(raw); } catch { data = { raw }; }
 
-        const raw = await res.text();
-        let data = {};
-        try { data = JSON.parse(raw); } catch { data = { raw }; }
+    if (!response.ok) {
+      const mensagem = data?.message || data?.error || data?.errors || raw || `Falha ao enviar produto para o Bling (${response.status}).`;
+      console.error('Erro ao enviar produto para o Bling:', {
+        status: response.status,
+        produtoId: produto.id || null,
+        mensagem
+      });
+      return {
+        ok: false,
+        motivo: response.status === 401 || response.status === 403
+          ? 'Credenciais do Bling inválidas ou expiradas.'
+          : mensagem
+      };
+    }
 
-        if (!res.ok) {
-          const mensagem = data?.message || data?.error || data?.errors || raw || `Falha ao enviar produto para o Bling em ${endpoint}`;
-          if (res.status === 401 || res.status === 403) {
-            return { ok: false, motivo: 'Credenciais do Bling inválidas ou expiradas.' };
-          }
-          if (res.status === 404) continue;
-          return { ok: false, motivo: mensagem };
-        }
+    const blingId = data?.id || data?.data?.id || data?.produto?.id || data?.produtoId || data?.result?.id || null;
+    if (!blingId) {
+      console.warn('Produto enviado ao Bling, mas a resposta não trouxe o ID:', data);
+      return { ok: true, data, blingId: null };
+    }
 
-        const blingId = data?.id || data?.data?.id || data?.produto?.id || data?.produtoId || data?.result?.id || null;
-        return { ok: true, data, blingId };
-      } catch (err) {
-        continue;
+    if (produto.id) {
+      const { error } = await supabaseAdmin
+        .from('produtos')
+        .update({ bling_id: String(blingId) })
+        .eq('id', produto.id);
+
+      if (error) {
+        console.error('Produto criado no Bling, mas não foi possível salvar o bling_id no Supabase:', error);
+        return { ok: true, data, blingId, aviso: error.message };
       }
     }
-  }
 
-  return { ok: false, motivo: 'Não foi possível enviar o produto ao Bling com o formato atual da API.' };
+    console.log('Produto enviado ao Bling com sucesso:', {
+      produtoId: produto.id || null,
+      blingId: String(blingId)
+    });
+    return { ok: true, data, blingId };
+  } catch (err) {
+    console.error('Erro de comunicação com a API de produtos do Bling:', {
+      produtoId: produto.id || null,
+      erro: err.message
+    });
+    return { ok: false, motivo: err.message };
+  }
 }
 
 async function consultarProdutosBling() {
@@ -530,8 +550,8 @@ const BLING_CLIENT_ID = process.env.BLING_CLIENT_ID || '';
 const BLING_CLIENT_SECRET = process.env.BLING_CLIENT_SECRET || '';
 const BLING_CALLBACK_URL = process.env.BLING_CALLBACK_URL || 'https://usemio.com.br/auth/callback';
 const BLING_AUTH_URL = process.env.BLING_AUTH_URL || 'https://www.bling.com.br/Api/v3/oauth/authorize';
-const BLING_TOKEN_URL = process.env.BLING_TOKEN_URL || 'https://www.bling.com.br/Api/v3/oauth/token';
-const BLING_API_BASE = process.env.BLING_API_BASE || 'https://www.bling.com.br/Api/v3';
+const BLING_TOKEN_URL = process.env.BLING_TOKEN_URL || 'https://api.bling.com.br/Api/v3/oauth/token';
+const BLING_API_BASE = process.env.BLING_API_BASE || 'https://api.bling.com.br/Api/v3';
 const blingCallbackInFlight = new Map();
 
 function getBlingClientCredentials(cfg = {}) {
@@ -1130,40 +1150,82 @@ app.get('/api/bling/auth', async (req, res) => {
 });
 
 app.get('/auth/callback', async (req, res) => {
-  const { code, error, error_description } = req.query || {};
-  const escapeHtml = (value) => String(value || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+  try {
+    const { code, state, error, error_description } = req.query || {};
+    if (error) {
+      const msg = encodeURIComponent(error_description || error || 'Autorização cancelada pelo Bling.');
+      return res.redirect('/admin.html?bling_error=1&message=' + msg);
+    }
+    if (!code) {
+      return res.redirect('/admin.html?bling_error=missing_code&message=' + encodeURIComponent('Acesso ao callback do Bling sem code. Use a rota /api/bling/auth para iniciar o login.'));
+    }
 
-  if (error) {
-    return res.status(400).send(`
-      <h1>Erro na autorização do Bling</h1>
-      <p>${escapeHtml(error_description || error)}</p>
-    `);
+    const cfg = await getBlingOauthConfig();
+    const redirectSuccess = () => res.redirect('/admin.html?bling_status=connected&message=' + encodeURIComponent('Bling conectado com sucesso!'));
+
+    if (cfg.authCode === code && cfg.accessToken) {
+      return redirectSuccess();
+    }
+
+    if (blingCallbackInFlight.has(code)) {
+      await blingCallbackInFlight.get(code);
+      return redirectSuccess();
+    }
+
+    const clientId = cfg.clientId || BLING_CLIENT_ID;
+    const clientSecret = cfg.clientSecret || BLING_CLIENT_SECRET;
+    const redirectUri = (cfg.redirectUri && cfg.redirectUri.trim()) || `${obterBaseUrl(req)}/auth/callback` || BLING_CALLBACK_URL;
+    const processCallback = (async () => {
+      const body = new URLSearchParams({
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: redirectUri,
+        client_id: clientId,
+        client_secret: clientSecret
+      });
+
+      const tokenRes = await fetch(BLING_TOKEN_URL, {
+        method: 'POST',
+        headers: {
+          ...getBlingTokenHeaders({ clientId, clientSecret }),
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: body.toString()
+      });
+
+      const tokens = await tokenRes.json().catch(() => ({}));
+      if (!tokenRes.ok || !tokens.access_token) {
+        throw new Error(tokens.error_description || tokens.error || 'Erro ao trocar código do Bling por token.');
+      }
+
+      await salvarBlingOauthConfig({
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token || cfg.refreshToken || '',
+        tokenType: tokens.token_type || 'Bearer',
+        expiresAt: Date.now() + ((Number(tokens.expires_in) || 3600) * 1000),
+        connected: true,
+        state: state || '',
+        authCode: code
+      });
+
+      const persisted = await getBlingOauthConfig();
+      if (persisted.authCode !== code || persisted.accessToken !== tokens.access_token) {
+        throw new Error('Os tokens do Bling não foram confirmados no banco de dados.');
+      }
+    })();
+
+    blingCallbackInFlight.set(code, processCallback);
+    try {
+      await processCallback;
+    } finally {
+      blingCallbackInFlight.delete(code);
+    }
+
+    return redirectSuccess();
+  } catch (err) {
+    const msg = encodeURIComponent('Erro ao processar callback do Bling: ' + err.message);
+    return res.redirect('/admin.html?bling_error=1&message=' + msg);
   }
-
-  if (!code) {
-    return res.status(400).send(`
-      <h1>Código não recebido</h1>
-      <p>O callback do Bling não recebeu req.query.code.</p>
-    `);
-  }
-
-  // Modo temporário de captura: não troca o code por tokens e não redireciona para o admin.
-  return res.send(`
-    <!doctype html>
-    <html lang="pt-BR">
-      <head><meta charset="utf-8"><title>Code OAuth do Bling</title></head>
-      <body>
-        <h1>Código de autorização do Bling</h1>
-        <p>Copie o valor abaixo e use-o imediatamente no Postman:</p>
-        <textarea rows="4" cols="100" readonly autofocus>${escapeHtml(code)}</textarea>
-      </body>
-    </html>
-  `);
 });
 
 app.get('/api/bling/callback', async (req, res) => {
