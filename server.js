@@ -532,6 +532,7 @@ const BLING_CALLBACK_URL = process.env.BLING_CALLBACK_URL || 'https://usemio.com
 const BLING_AUTH_URL = process.env.BLING_AUTH_URL || 'https://www.bling.com.br/Api/v3/oauth/authorize';
 const BLING_TOKEN_URL = process.env.BLING_TOKEN_URL || 'https://www.bling.com.br/Api/v3/oauth/token';
 const BLING_API_BASE = process.env.BLING_API_BASE || 'https://www.bling.com.br/Api/v3';
+const blingCallbackInFlight = new Map();
 
 function getBlingClientCredentials(cfg = {}) {
   const clientId = (cfg.clientId || process.env.BLING_CLIENT_ID || BLING_CLIENT_ID || '').trim();
@@ -1140,45 +1141,70 @@ app.get('/auth/callback', async (req, res) => {
     }
 
     const cfg = await getBlingOauthConfig();
+    const redirectSuccess = () => res.redirect('/admin.html?bling_status=connected&message=' + encodeURIComponent('Bling conectado com sucesso!'));
+
+    if (cfg.authCode === code && cfg.accessToken) {
+      return redirectSuccess();
+    }
+
+    if (blingCallbackInFlight.has(code)) {
+      await blingCallbackInFlight.get(code);
+      return redirectSuccess();
+    }
+
     const clientId = cfg.clientId || BLING_CLIENT_ID;
     const clientSecret = cfg.clientSecret || BLING_CLIENT_SECRET;
     const redirectUri = (cfg.redirectUri && cfg.redirectUri.trim()) || `${obterBaseUrl(req)}/auth/callback` || BLING_CALLBACK_URL;
-    const body = new URLSearchParams({
-      grant_type: 'authorization_code',
-      code,
-      redirect_uri: redirectUri,
-      client_id: clientId,
-      client_secret: clientSecret
-    });
+    const processCallback = (async () => {
+      const body = new URLSearchParams({
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: redirectUri,
+        client_id: clientId,
+        client_secret: clientSecret
+      });
 
-    const tokenRes = await fetch(BLING_TOKEN_URL, {
-      method: 'POST',
-      headers: {
-        ...getBlingTokenHeaders({ clientId, clientSecret }),
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: body.toString()
-    });
+      const tokenRes = await fetch(BLING_TOKEN_URL, {
+        method: 'POST',
+        headers: {
+          ...getBlingTokenHeaders({ clientId, clientSecret }),
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: body.toString()
+      });
 
-    const tokenData = await tokenRes.json().catch(() => ({}));
-    if (!tokenRes.ok || !tokenData.access_token) {
-      const msg = encodeURIComponent(tokenData.error_description || tokenData.error || 'Erro ao trocar código do Bling por token.');
-      return res.redirect('/admin.html?bling_error=1&message=' + msg);
+      const tokens = await tokenRes.json().catch(() => ({}));
+      if (!tokenRes.ok || !tokens.access_token) {
+        throw new Error(tokens.error_description || tokens.error || 'Erro ao trocar código do Bling por token.');
+      }
+
+      await salvarBlingOauthConfig({
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token || cfg.refreshToken || '',
+        tokenType: tokens.token_type || 'Bearer',
+        expiresAt: Date.now() + ((Number(tokens.expires_in) || 3600) * 1000),
+        connected: true,
+        state: state || '',
+        authCode: code
+      });
+
+      const persisted = await getBlingOauthConfig();
+      if (persisted.authCode !== code || persisted.accessToken !== tokens.access_token) {
+        throw new Error('Os tokens do Bling não foram confirmados no banco de dados.');
+      }
+    })();
+
+    blingCallbackInFlight.set(code, processCallback);
+    try {
+      await processCallback;
+    } finally {
+      blingCallbackInFlight.delete(code);
     }
 
-    await salvarBlingOauthConfig({
-      accessToken: tokenData.access_token,
-      refreshToken: tokenData.refresh_token || '',
-      tokenType: tokenData.token_type || 'Bearer',
-      expiresAt: Date.now() + ((Number(tokenData.expires_in) || 3600) * 1000),
-      connected: true,
-      state: state || '',
-      authCode: code
-    });
-
-    return res.redirect('/admin.html?bling_status=connected&message=' + encodeURIComponent('Bling conectado com sucesso!'));
+    return redirectSuccess();
   } catch (err) {
-    const msg = encodeURIComponent('Erro ao processar callback do Bling: ' + err.message);
+    const message = err.message || 'Erro ao processar callback do Bling.';
+    const msg = encodeURIComponent(message);
     return res.redirect('/admin.html?bling_error=1&message=' + msg);
   }
 });
