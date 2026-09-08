@@ -304,7 +304,7 @@ async function enviarProdutoParaBling(produto) {
   }
 
   const endpoint = `${BLING_API_BASE}/produtos`;
-  const payload = mapearProdutoParaBling(produtos);
+  const payload = mapearProdutoParaBling(produto);
 
   try {
     const response = await fetch(endpoint, {
@@ -553,6 +553,7 @@ const BLING_AUTH_URL = process.env.BLING_AUTH_URL || 'https://www.bling.com.br/A
 const BLING_TOKEN_URL = process.env.BLING_TOKEN_URL || 'https://api.bling.com.br/Api/v3/oauth/token';
 const BLING_API_BASE = process.env.BLING_API_BASE || 'https://api.bling.com.br/Api/v3';
 const blingCallbackInFlight = new Map();
+let blingTokenRefreshInFlight = null;
 
 function getBlingClientCredentials(cfg = {}) {
   const clientId = (cfg.clientId || process.env.BLING_CLIENT_ID || BLING_CLIENT_ID || '').trim();
@@ -615,37 +616,60 @@ async function getBlingAccessToken() {
     return oauth.accessToken;
   }
 
-  if (oauth.refreshToken) {
-    const body = new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: oauth.refreshToken,
-      client_id: oauth.clientId || BLING_CLIENT_ID,
-      client_secret: oauth.clientSecret || BLING_CLIENT_SECRET
-    });
-
-    const res = await fetch(BLING_TOKEN_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: body.toString()
-    });
-
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.access_token) {
-      throw new Error(data.error_description || data.error || 'Falha ao renovar token do Bling.');
-    }
-
-    await salvarBlingOauthConfig({
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token || oauth.refreshToken,
-      tokenType: data.token_type || 'Bearer',
-      expiresAt: Date.now() + ((Number(data.expires_in) || 3600) * 1000),
-      connected: true
-    });
-
-    return data.access_token;
+  if (!oauth.refreshToken) {
+    throw new Error('Token do Bling não encontrado. Faça a autenticação do OAuth primeiro.');
   }
 
-  throw new Error('Token do Bling não encontrado. Faça a autenticação do OAuth primeiro.');
+  if (blingTokenRefreshInFlight) return blingTokenRefreshInFlight;
+
+  const clientId = oauth.clientId || BLING_CLIENT_ID;
+  const clientSecret = oauth.clientSecret || BLING_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
+    throw new Error('BLING_CLIENT_ID e BLING_CLIENT_SECRET precisam estar configurados.');
+  }
+
+  blingTokenRefreshInFlight = (async () => {
+    try {
+      const body = new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: oauth.refreshToken,
+        client_id: clientId,
+        client_secret: clientSecret
+      });
+
+      const res = await fetch(BLING_TOKEN_URL, {
+        method: 'POST',
+        headers: {
+          ...getBlingTokenHeaders({ clientId, clientSecret }),
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: body.toString()
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.access_token) {
+        throw new Error(data.error_description || data.error || 'Falha ao renovar token do Bling.');
+      }
+
+      const saved = await salvarBlingOauthConfig({
+        accessToken: data.access_token,
+        refreshToken: data.refresh_token || oauth.refreshToken,
+        tokenType: data.token_type || 'Bearer',
+        expiresAt: Date.now() + ((Number(data.expires_in) || 3600) * 1000),
+        connected: true
+      });
+
+      if (saved.accessToken !== data.access_token) {
+        throw new Error('O novo access_token não foi confirmado no Supabase.');
+      }
+
+      return data.access_token;
+    } finally {
+      blingTokenRefreshInFlight = null;
+    }
+  })();
+
+  return blingTokenRefreshInFlight;
 }
 
 async function consultarBlingApi(tipo, extraUrl = '') {
@@ -2362,11 +2386,11 @@ app.put('/api/admin/conta', exigirAdmin, async (req, res) => {
   }
 });
 
-app.post('/api/webhooks/bling-produto', async (req, res) => {
+async function receberWebhookProdutoBling(req, res) {
   try {
     const body = req.body || {};
     const evento = body.evento || body.tipo || 'produto.atualizado';
-    const dadosProduto = body.dados || body.produto || body.data || body;
+    const dadosProduto = body.dados || body.produto || body.data?.produto || body.data || body;
     const produtoId = String(dadosProduto.id || dadosProduto.codigo || '').trim();
 
     if (!produtoId) {
@@ -2394,7 +2418,10 @@ app.post('/api/webhooks/bling-produto', async (req, res) => {
     console.error('Erro ao processar webhook Bling produto:', err);
     return res.status(500).json({ ok: false, error: err.message });
   }
-});
+}
+
+app.post('/api/webhooks/bling-produto', receberWebhookProdutoBling);
+app.post('/webhook/bling', receberWebhookProdutoBling);
 
 app.put('/api/admin/senha', exigirAdmin, async (req, res) => {
   const { senhaAtual, novaSenha } = req.body || {};
