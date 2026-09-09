@@ -549,7 +549,7 @@ function obterBaseUrl(req) {
 const BLING_CLIENT_ID = process.env.BLING_CLIENT_ID || '';
 const BLING_CLIENT_SECRET = process.env.BLING_CLIENT_SECRET || '';
 const BLING_CALLBACK_URL = process.env.BLING_CALLBACK_URL || 'https://usemio.com.br/auth/callback';
-const BLING_AUTH_URL = process.env.BLING_AUTH_URL || 'https://www.bling.com.br/Api/v3/oauth/authorize';
+const BLING_AUTH_URL = process.env.BLING_AUTH_URL || 'https://api.bling.com.br/Api/v3/oauth/authorize';
 const BLING_TOKEN_URL = process.env.BLING_TOKEN_URL || 'https://api.bling.com.br/Api/v3/oauth/token';
 const BLING_API_BASE = process.env.BLING_API_BASE || 'https://api.bling.com.br/Api/v3';
 const blingCallbackInFlight = new Map();
@@ -872,7 +872,7 @@ async function enviarPedidoParaBling(pedido) {
   try {
     const cfg = await getConfigChave('bling_config', {});
     const oauth = await getBlingOauthConfig();
-    const urlBase = (cfg.url || 'https://www.bling.com.br/Api/v3').replace(/\/$/, '');
+    const urlBase = (cfg.url || 'https://api.bling.com.br/Api/v3').replace(/\/$/, '');
     const authMethod = oauth.accessToken ? 'oauth' : (cfg.apiKey && cfg.apiToken ? 'basic' : 'none');
 
     if (authMethod === 'none') {
@@ -1103,7 +1103,7 @@ app.get('/api/integracoes', exigirAdmin, async (req, res) => {
         token: '', cepOrigem: '', modo: 'sandbox', ativo: false
       }),
       getConfigChave('bling_config', {
-        apiKey: '', apiToken: '', url: 'https://www.bling.com.br/Api/v3', empresaId: '', ativo: false
+        apiKey: '', apiToken: '', url: 'https://api.bling.com.br/Api/v3', empresaId: '', ativo: false
       }),
       getBlingOauthConfig()
     ]);
