@@ -463,6 +463,75 @@ async function buscarClientePorEmail(email) {
   return data;
 }
 
+async function obterOuCriarContatoBling(clienteDados = {}, pedido = {}) {
+  const email = String(clienteDados.email || '').trim().toLowerCase();
+  const clienteId = clienteDados.id || pedido.cliente_id || pedido.clienteId || null;
+  let cliente = null;
+
+  if (clienteId) {
+    const { data, error } = await supabaseAdmin.from('clientes').select('*').eq('id', clienteId).maybeSingle();
+    if (error) throw error;
+    cliente = data;
+  }
+  if (!cliente && email) cliente = await buscarClientePorEmail(email);
+  if (!cliente?.id) {
+    throw new Error('Cliente não encontrado na tabela clientes; o contato do Bling não será criado.');
+  }
+
+  const dados = { ...(cliente || {}), ...clienteDados };
+  const contatoExistente = Number(dados.bling_id || dados.blingId || 0);
+  if (contatoExistente > 0) return contatoExistente;
+
+  const accessToken = await getBlingAccessToken();
+  const endereco = parseJsonArray(dados.endereco, {});
+  const contatoPayload = {
+    nome: String(dados.nome || 'Cliente'),
+    email,
+    telefone: String(dados.telefone || dados.whatsapp || ''),
+    numeroDocumento: String(dados.cpf || dados.cnpj || '').replace(/\D/g, ''),
+    tipoPessoa: dados.cnpj ? 'J' : 'F',
+    endereco: {
+      endereco: endereco.endereco || endereco.rua || '',
+      numero: String(endereco.numero || ''),
+      complemento: endereco.complemento || '',
+      bairro: endereco.bairro || '',
+      cep: String(endereco.cep || '').replace(/\D/g, ''),
+      municipio: endereco.municipio || endereco.cidade || '',
+      uf: endereco.uf || endereco.estado || ''
+    }
+  };
+
+  const response = await fetch('https://api.bling.com.br/Api/v3/contatos', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(contatoPayload)
+  });
+  const raw = await response.text();
+  let data = {};
+  try { data = JSON.parse(raw); } catch { data = { raw }; }
+  if (!response.ok) {
+    console.error('[Bling Contato] Erro ao cadastrar cliente:', {
+      status: response.status,
+      email,
+      resposta: data
+    });
+    throw new Error(data.message || data.error || data.description || raw || 'Falha ao cadastrar contato no Bling.');
+  }
+
+  const blingId = Number(data.id || data.data?.id || data.contato?.id || 0);
+  if (!blingId) throw new Error('A API de contatos do Bling não retornou um ID.');
+
+  if (cliente?.id) {
+    const { error } = await supabaseAdmin.from('clientes').update({ bling_id: String(blingId) }).eq('id', cliente.id);
+    if (error) throw error;
+  }
+  return blingId;
+}
+
 async function incrementarUsoCupom(codigo) {
   if (!codigo) return;
   const { data: cupom, error: buscarError } = await supabaseAdmin.from('cupons').select('usos').eq('codigo', codigo).maybeSingle();
@@ -882,25 +951,38 @@ async function enviarPedidoParaBling(pedido) {
     const clienteJson = parseJsonArray(pedido.cliente, {});
     const itensJson = parseJsonArray(pedido.itens, []);
     const enderecoJson = parseJsonArray(pedido.endereco, {});
+    const valorTotal = Number(pedido.total || 0);
+    const contatoId = await obterOuCriarContatoBling(clienteJson, pedido);
+    const formaPagamentoId = Number(
+      pedido.forma_pagamento_id ||
+      pedido.formaPagamentoId ||
+      pedido.pagamento?.formaPagamento?.id ||
+      process.env.BLING_FORMA_PAGAMENTO_ID ||
+      0
+    );
 
     const payload = {
       data: new Date().toISOString().slice(0, 10),
       numero: pedido.numero,
-      contato: {
-        id: clienteJson.id || clienteJson.bling_id || undefined,
-        nome: clienteJson.nome || 'Cliente',
-        email: clienteJson.email || '',
-        telefone: clienteJson.telefone || clienteJson.whatsapp || ''
-      },
+      ...(contatoId > 0 ? { contato: { id: contatoId } } : {}),
       enderecoEntrega: enderecoJson,
       itens: itensJson.map(i => ({
-        codigo: String(i.sku || i.codigo || i.bling_id || i.id || '').trim(),
+        codigo: String(i.sku || i.codigo || i.bling_id || i.blingId || (i.id ? `site-${i.id}` : '')).trim(),
         descricao: String(i.nome || i.descricao || 'Item do pedido'),
         unidade: i.unidade || 'UN',
         quantidade: Number(i.quantidade || 1),
-        valor: Number (i.preco || i.valor || 0)
+        valor: Number(i.preco || i.valor || 0),
+        ...(Number(i.bling_id || i.blingId || i.produto_id || i.produtoId || 0) > 0
+          ? { produto: { id: Number(i.bling_id || i.blingId || i.produto_id || i.produtoId) } }
+          : {})
       })),
-      total: Number(pedido.total || 0),
+      ...(formaPagamentoId > 0 ? {
+        parcelas: [{
+          dataVencimento: new Date().toISOString().slice(0, 10),
+          valor: valorTotal,
+          formaPagamento: { id: formaPagamentoId }
+        }]
+      } : {}),
       observacoes: 'Pedido gerado pelo site MIO'
     };
 
@@ -909,8 +991,19 @@ async function enviarPedidoParaBling(pedido) {
       endpoint: BLING_VENDAS_URL,
       cliente: payload.contato,
       itens: payload.itens,
-      total: payload.total
+      parcelas: payload.parcelas || [],
+      total: valorTotal,
+      contatoId,
+      formaPagamentoId
     });
+
+    if (contatoId <= 0) {
+      console.error('[Bling Pedido] Validação local falhou: cliente sem ID do Bling.', {
+        numero: pedido.numero || pedido.id || null,
+        cliente: clienteJson
+      });
+      return { ok: false, motivo: 'O cliente precisa ter um ID de contato do Bling.' };
+    }
 
     if (payload.itens.some(item => !item.codigo)) {
       console.error('[Bling Pedido] Validação local falhou: item sem código/SKU.', {
@@ -918,6 +1011,14 @@ async function enviarPedidoParaBling(pedido) {
         itens: payload.itens
       });
       return { ok: false, motivo: 'Todos os itens do pedido precisam ter SKU ou código para o Bling.' };
+    }
+
+    if (payload.itens.some(item => !item.produto?.id)) {
+      console.warn('[Bling Pedido] Itens sem produto.id do Bling; a API pode rejeitar o pedido:', payload.itens);
+    }
+
+    if (formaPagamentoId <= 0) {
+      console.warn('[Bling Pedido] BLING_FORMA_PAGAMENTO_ID não configurado; parcelas não serão enviadas.');
     }
 
     const headers = {
