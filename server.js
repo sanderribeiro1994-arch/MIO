@@ -558,6 +558,7 @@ const BLING_CALLBACK_URL = process.env.BLING_CALLBACK_URL || 'https://usemio.com
 const BLING_AUTH_URL = process.env.BLING_AUTH_URL || 'https://api.bling.com.br/Api/v3/oauth/authorize';
 const BLING_TOKEN_URL = process.env.BLING_TOKEN_URL || 'https://api.bling.com.br/Api/v3/oauth/token';
 const BLING_API_BASE = process.env.BLING_API_BASE || 'https://api.bling.com.br/Api/v3';
+const BLING_VENDAS_URL = 'https://api.bling.com.br/Api/v3/pedidos/vendas';
 const blingCallbackInFlight = new Map();
 let blingTokenRefreshInFlight = null;
 
@@ -905,7 +906,7 @@ async function enviarPedidoParaBling(pedido) {
 
     console.log('[Bling Pedido] Payload preparado:', {
       numero: pedido.numero || pedido.id || null,
-      endpoint: `${BLING_API_BASE}/pedidos/vendas`,
+      endpoint: BLING_VENDAS_URL,
       cliente: payload.contato,
       itens: payload.itens,
       total: payload.total
@@ -925,11 +926,22 @@ async function enviarPedidoParaBling(pedido) {
       Authorization: `Bearer ${accessToken}`
     };
 
-    const resApi = await fetch(`${BLING_API_BASE}/pedidos/vendas`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(payload)
-    });
+    let resApi;
+    try {
+      resApi = await fetch(BLING_VENDAS_URL, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload)
+      });
+    } catch (fetchError) {
+      console.error('[Bling Pedido] Erro de comunicação com a API:', {
+        endpoint: BLING_VENDAS_URL,
+        numero: pedido.numero || pedido.id || null,
+        mensagem: fetchError.message,
+        stack: fetchError.stack
+      });
+      throw fetchError;
+    }
 
     const raw = await resApi.text();
     let data = {};
@@ -941,8 +953,10 @@ async function enviarPedidoParaBling(pedido) {
       resposta: data
     });
     if (!resApi.ok) {
-      console.error('Erro ao enviar pedido ao Bling:', {
+      console.error('[Bling Pedido] API retornou status inválido:', {
+        endpoint: BLING_VENDAS_URL,
         status: resApi.status,
+        statusText: resApi.statusText,
         pedido: pedido.numero || pedido.id || null,
         resposta: data
       });
