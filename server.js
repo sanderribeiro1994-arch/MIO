@@ -898,7 +898,7 @@ async function enviarPedidoParaBling(pedido) {
         descricao: String(i.nome || i.descricao || 'Item do pedido'),
         unidade: i.unidade || 'UN',
         quantidade: Number(i.quantidade || 1),
-        valor: Number(i.preco || 0)
+        valor: Number (i.preco || i.valor || 0)
       })),
       total: Number(pedido.total || 0),
       observacoes: 'Pedido gerado pelo site MIO'
@@ -2535,6 +2535,11 @@ app.post('/api/webhooks/supabase-produto', async (req, res) => {
 });
 
 app.post('/api/webhooks/supabase-pedido', async (req, res) => {
+  console.log('[Supabase Pedido Webhook] Acesso recebido:', {
+    method: req.method,
+    path: req.originalUrl,
+    body: req.body
+  });
   const requestId = crypto.randomUUID();
   try {
     console.log('[Supabase Pedido Webhook] Recebido:', {
