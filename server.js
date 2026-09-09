@@ -876,14 +876,7 @@ async function registrarTentativaSyncProduto(produtoId, status, mensagem = '') {
 
 async function enviarPedidoParaBling(pedido) {
   try {
-    const cfg = await getConfigChave('bling_config', {});
-    const oauth = await getBlingOauthConfig();
-    const urlBase = (cfg.url || 'https://api.bling.com.br/Api/v3').replace(/\/$/, '');
-    const authMethod = oauth.accessToken ? 'oauth' : (cfg.apiKey && cfg.apiToken ? 'basic' : 'none');
-
-    if (authMethod === 'none') {
-      return { ok: false, motivo: 'Bling não configurado. Conecte o OAuth ou preencha API Key e API Token.' };
-    }
+    const accessToken = await getBlingAccessToken();
 
     const clienteJson = parseJsonArray(pedido.cliente, {});
     const itensJson = parseJsonArray(pedido.itens, []);
@@ -892,15 +885,17 @@ async function enviarPedidoParaBling(pedido) {
     const payload = {
       data: new Date().toISOString().slice(0, 10),
       numero: pedido.numero,
-      cliente: {
+      contato: {
+        id: clienteJson.id || clienteJson.bling_id || undefined,
         nome: clienteJson.nome || 'Cliente',
         email: clienteJson.email || '',
         telefone: clienteJson.telefone || clienteJson.whatsapp || ''
       },
-      endereco: enderecoJson,
+      enderecoEntrega: enderecoJson,
       itens: itensJson.map(i => ({
-        codigo: i.sku || i.nome,
-        descricao: i.nome,
+        codigo: String(i.sku || i.codigo || i.bling_id || i.id || '').trim(),
+        descricao: String(i.nome || i.descricao || 'Item do pedido'),
+        unidade: i.unidade || 'UN',
         quantidade: Number(i.quantidade || 1),
         valor: Number(i.preco || 0)
       })),
@@ -908,27 +903,35 @@ async function enviarPedidoParaBling(pedido) {
       observacoes: 'Pedido gerado pelo site MIO'
     };
 
-    const headers = {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json'
-    };
-
-    if (authMethod === 'oauth') {
-      headers.Authorization = `Bearer ${oauth.accessToken}`;
-    } else {
-      headers.Authorization = 'Basic ' + Buffer.from(cfg.apiKey + ':' + cfg.apiToken).toString('base64');
+    if (payload.itens.some(item => !item.codigo)) {
+      return { ok: false, motivo: 'Todos os itens do pedido precisam ter SKU ou código para o Bling.' };
     }
 
-    const resApi = await fetch(urlBase + '/pedido', {
+    const headers = {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      Authorization: `Bearer ${accessToken}`
+    };
+
+    const resApi = await fetch(`${BLING_API_BASE}/pedidos/vendas`, {
       method: 'POST',
       headers,
       body: JSON.stringify(payload)
     });
 
-    const data = await resApi.json().catch(() => ({}));
-    if (!resApi.ok) throw new Error(data.message || data.error || 'Falha ao enviar pedido ao Bling');
+    const raw = await resApi.text();
+    let data = {};
+    try { data = JSON.parse(raw); } catch { data = { raw }; }
+    if (!resApi.ok) {
+      console.error('Erro ao enviar pedido ao Bling:', {
+        status: resApi.status,
+        pedido: pedido.numero || pedido.id || null,
+        resposta: data
+      });
+      throw new Error(data.message || data.error || data.description || raw || 'Falha ao enviar pedido ao Bling');
+    }
 
-    const blingId = data.id || data.pedidoId || data.data?.id || data.numero;
+    const blingId = data.id || data.data?.id || data.pedidoId || data.numero;
     if (blingId) {
       await atualizarPedidoPorNumero(pedido.numero, { bling_id: String(blingId), bling_order_id: String(blingId), data_bling_sync: new Date().toISOString() }).catch(() => {});
     }
@@ -2468,6 +2471,57 @@ app.post('/api/webhooks/supabase-produto', async (req, res) => {
     });
   } catch (error) {
     console.error('Erro no webhook do Supabase:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/webhooks/supabase-pedido', async (req, res) => {
+  try {
+    const webhookSecret = req.get('x-webhook-secret');
+    if (!process.env.SUPABASE_WEBHOOK_SECRET || webhookSecret !== process.env.SUPABASE_WEBHOOK_SECRET) {
+      console.warn('Tentativa de acesso não autorizada ao webhook de pedidos do Supabase.');
+      return res.status(401).json({ error: 'Acesso negado' });
+    }
+
+    const payload = req.body || {};
+    const tipoEvento = String(payload.type || '').toUpperCase();
+    const pedido = payload.record;
+
+    if (!pedido || tipoEvento !== 'INSERT') {
+      return res.status(200).json({
+        success: true,
+        ignored: true,
+        reason: !pedido ? 'Registro de pedido ausente.' : `Evento ${tipoEvento || 'desconhecido'} não processado.`
+      });
+    }
+
+    if (!pedido.numero) {
+      return res.status(400).json({ success: false, error: 'O pedido precisa ter numero.' });
+    }
+
+    if (pedido.bling_id) {
+      return res.status(200).json({
+        success: true,
+        ignored: true,
+        reason: 'Pedido já possui bling_id.',
+        blingId: pedido.bling_id
+      });
+    }
+
+    console.log('Novo pedido do Supabase para enviar ao Bling:', pedido.numero);
+    const resultado = await enviarPedidoParaBling(pedido);
+    if (!resultado.ok) {
+      throw new Error(resultado.motivo || 'Falha ao enviar pedido ao Bling.');
+    }
+
+    return res.status(200).json({
+      success: true,
+      evento: tipoEvento,
+      numero: pedido.numero,
+      blingId: resultado.blingId || null
+    });
+  } catch (error) {
+    console.error('Erro no webhook de pedidos do Supabase:', error);
     return res.status(500).json({ success: false, error: error.message });
   }
 });
