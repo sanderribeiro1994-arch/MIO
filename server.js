@@ -2458,6 +2458,15 @@ app.post('/api/webhooks/supabase-produto', async (req, res) => {
       return res.status(200).json({ success: true, ignored: true, reason: 'UPDATE não reenviado ao Bling.' });
     }
 
+    if (produto.bling_id) {
+      return res.status(200).json({
+        success: true,
+        ignored: true,
+        reason: 'Produto já possui bling_id e não será reenviado ao Bling.',
+        blingId: produto.bling_id
+      });
+    }
+
     console.log('Produto novo para enviar ao Bling:', produto.nome || 'sem nome');
     const sync = await enviarProdutoParaBling(produto);
     if (!sync.ok) {
