@@ -2423,6 +2423,49 @@ async function receberWebhookProdutoBling(req, res) {
 app.post('/api/webhooks/bling-produto', receberWebhookProdutoBling);
 app.post('/webhook/bling', receberWebhookProdutoBling);
 
+app.post('/api/webhooks/supabase-produto', async (req, res) => {
+  try {
+    const webhookSecret = req.get('x-webhook-secret');
+    if (!process.env.SUPABASE_WEBHOOK_SECRET || webhookSecret !== process.env.SUPABASE_WEBHOOK_SECRET) {
+      console.warn('Tentativa de acesso não autorizada ao webhook do Supabase.');
+      return res.status(401).json({ error: 'Acesso negado' });
+    }
+
+    const payload = req.body || {};
+    const tipoEvento = String(payload.type || '').toUpperCase();
+    const produto = payload.record;
+
+    console.log(`Webhook seguro do Supabase recebido. Evento: ${tipoEvento || 'desconhecido'}`);
+
+    if (!produto || !['INSERT', 'UPDATE'].includes(tipoEvento)) {
+      return res.status(200).json({
+        success: true,
+        ignored: true,
+        reason: !produto ? 'Registro de produto ausente.' : `Evento ${tipoEvento || 'desconhecido'} não processado.`
+      });
+    }
+
+    if (tipoEvento === 'UPDATE') {
+      return res.status(200).json({ success: true, ignored: true, reason: 'UPDATE não reenviado ao Bling.' });
+    }
+
+    console.log('Produto novo para enviar ao Bling:', produto.nome || 'sem nome');
+    const sync = await enviarProdutoParaBling(produto);
+    if (!sync.ok) {
+      throw new Error(sync.motivo || 'Falha ao enviar produto ao Bling.');
+    }
+
+    return res.status(200).json({
+      success: true,
+      evento: tipoEvento,
+      blingId: sync.blingId || null
+    });
+  } catch (error) {
+    console.error('Erro no webhook do Supabase:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 app.put('/api/admin/senha', exigirAdmin, async (req, res) => {
   const { senhaAtual, novaSenha } = req.body || {};
   try {
