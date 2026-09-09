@@ -903,7 +903,19 @@ async function enviarPedidoParaBling(pedido) {
       observacoes: 'Pedido gerado pelo site MIO'
     };
 
+    console.log('[Bling Pedido] Payload preparado:', {
+      numero: pedido.numero || pedido.id || null,
+      endpoint: `${BLING_API_BASE}/pedidos/vendas`,
+      cliente: payload.contato,
+      itens: payload.itens,
+      total: payload.total
+    });
+
     if (payload.itens.some(item => !item.codigo)) {
+      console.error('[Bling Pedido] Validação local falhou: item sem código/SKU.', {
+        numero: pedido.numero || pedido.id || null,
+        itens: payload.itens
+      });
       return { ok: false, motivo: 'Todos os itens do pedido precisam ter SKU ou código para o Bling.' };
     }
 
@@ -922,6 +934,12 @@ async function enviarPedidoParaBling(pedido) {
     const raw = await resApi.text();
     let data = {};
     try { data = JSON.parse(raw); } catch { data = { raw }; }
+    console.log('[Bling Pedido] Resposta recebida:', {
+      numero: pedido.numero || pedido.id || null,
+      status: resApi.status,
+      ok: resApi.ok,
+      resposta: data
+    });
     if (!resApi.ok) {
       console.error('Erro ao enviar pedido ao Bling:', {
         status: resApi.status,
@@ -933,12 +951,30 @@ async function enviarPedidoParaBling(pedido) {
 
     const blingId = data.id || data.data?.id || data.pedidoId || data.numero;
     if (blingId) {
-      await atualizarPedidoPorNumero(pedido.numero, { bling_id: String(blingId), bling_order_id: String(blingId), data_bling_sync: new Date().toISOString() }).catch(() => {});
+      await atualizarPedidoPorNumero(
+        pedido.numero,
+        {
+          bling_id: String(blingId),
+          bling_order_id: String(blingId),
+          data_bling_sync: new Date().toISOString()
+        }
+      ).catch((updateError) => {
+        console.error('[Bling Pedido] Pedido criado no Bling, mas falha ao salvar o ID no Supabase:', {
+          numero: pedido.numero || pedido.id || null,
+          blingId: String(blingId),
+          mensagem: updateError.message,
+          stack: updateError.stack
+        });
+      });
     }
 
     return { ok: true, data };
   } catch (error) {
-    console.warn('Aviso: não foi possível enviar ao Bling', error);
+    console.error('[Bling Pedido] Falha inesperada no envio:', {
+      numero: pedido?.numero || pedido?.id || null,
+      mensagem: error.message,
+      stack: error.stack
+    });
     return { ok: false, motivo: error.message };
   }
 }
@@ -2485,53 +2521,88 @@ app.post('/api/webhooks/supabase-produto', async (req, res) => {
 });
 
 app.post('/api/webhooks/supabase-pedido', async (req, res) => {
+  const requestId = crypto.randomUUID();
   try {
+    console.log('[Supabase Pedido Webhook] Recebido:', {
+      requestId,
+      body: req.body,
+      hasSecretHeader: Boolean(req.get('x-webhook-secret')),
+      secretConfigured: Boolean(process.env.SUPABASE_WEBHOOK_SECRET),
+      contentType: req.get('content-type') || null
+    });
+
     const webhookSecret = req.get('x-webhook-secret');
     if (!process.env.SUPABASE_WEBHOOK_SECRET || webhookSecret !== process.env.SUPABASE_WEBHOOK_SECRET) {
-      console.warn('Tentativa de acesso não autorizada ao webhook de pedidos do Supabase.');
-      return res.status(401).json({ error: 'Acesso negado' });
+      console.error('[Supabase Pedido Webhook] Secret inválido ou ausente:', {
+        requestId,
+        hasSecretHeader: Boolean(webhookSecret),
+        secretConfigured: Boolean(process.env.SUPABASE_WEBHOOK_SECRET)
+      });
+      return res.status(401).json({ error: 'Acesso negado', requestId });
     }
 
     const payload = req.body || {};
     const tipoEvento = String(payload.type || '').toUpperCase();
     const pedido = payload.record;
 
+    console.log('[Supabase Pedido Webhook] Payload interpretado:', {
+      requestId,
+      tipoEvento,
+      pedidoId: pedido?.id || null,
+      numero: pedido?.numero || null,
+      hasRecord: Boolean(pedido),
+      hasBlingId: Boolean(pedido?.bling_id)
+    });
+
     if (!pedido || tipoEvento !== 'INSERT') {
+      console.log('[Supabase Pedido Webhook] Evento ignorado:', { requestId, tipoEvento, hasRecord: Boolean(pedido) });
       return res.status(200).json({
         success: true,
         ignored: true,
+        requestId,
         reason: !pedido ? 'Registro de pedido ausente.' : `Evento ${tipoEvento || 'desconhecido'} não processado.`
       });
     }
 
     if (!pedido.numero) {
-      return res.status(400).json({ success: false, error: 'O pedido precisa ter numero.' });
+      console.error('[Supabase Pedido Webhook] Pedido sem número:', { requestId, pedido });
+      return res.status(400).json({ success: false, error: 'O pedido precisa ter numero.', requestId });
     }
 
     if (pedido.bling_id) {
+      console.log('[Supabase Pedido Webhook] Pedido já sincronizado:', { requestId, numero: pedido.numero, blingId: pedido.bling_id });
       return res.status(200).json({
         success: true,
         ignored: true,
+        requestId,
         reason: 'Pedido já possui bling_id.',
         blingId: pedido.bling_id
       });
     }
 
-    console.log('Novo pedido do Supabase para enviar ao Bling:', pedido.numero);
+    console.log('[Supabase Pedido Webhook] Enviando pedido ao Bling:', { requestId, numero: pedido.numero });
     const resultado = await enviarPedidoParaBling(pedido);
     if (!resultado.ok) {
-      throw new Error(resultado.motivo || 'Falha ao enviar pedido ao Bling.');
+      console.error('[Supabase Pedido Webhook] Envio ao Bling retornou falha:', { requestId, numero: pedido.numero, resultado });
+      return res.status(502).json({ success: false, error: resultado.motivo || 'Falha ao enviar pedido ao Bling.', requestId });
     }
 
+    console.log('[Supabase Pedido Webhook] Pedido processado com sucesso:', { requestId, numero: pedido.numero, blingId: resultado.blingId || null });
     return res.status(200).json({
       success: true,
       evento: tipoEvento,
       numero: pedido.numero,
-      blingId: resultado.blingId || null
+      blingId: resultado.blingId || null,
+      requestId
     });
   } catch (error) {
-    console.error('Erro no webhook de pedidos do Supabase:', error);
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('[Supabase Pedido Webhook] Erro não tratado:', {
+      requestId,
+      mensagem: error.message,
+      stack: error.stack,
+      body: req.body
+    });
+    return res.status(500).json({ success: false, error: error.message, requestId });
   }
 });
 
