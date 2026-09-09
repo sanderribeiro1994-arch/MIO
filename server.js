@@ -328,6 +328,7 @@ async function enviarProdutoParaBling(produto) {
         produtoId: produto.id || null,
         mensagem
       });
+      console.error('Resposta detalhada da API do Bling:', JSON.stringify(data, null, 2));
       return {
         ok: false,
         motivo: response.status === 401 || response.status === 403
@@ -362,8 +363,12 @@ async function enviarProdutoParaBling(produto) {
   } catch (err) {
     console.error('Erro de comunicação com a API de produtos do Bling:', {
       produtoId: produto.id || null,
-      erro: err.message
+      erro: err.message,
+      resposta: err.response?.data || null
     });
+    if (err.response?.data) {
+      console.error('Resposta detalhada do erro do Bling:', JSON.stringify(err.response.data, null, 2));
+    }
     return { ok: false, motivo: err.message };
   }
 }
