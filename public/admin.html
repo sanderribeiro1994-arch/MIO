@@ -936,7 +936,7 @@ renderizarConteudo();
                 const totalItens = itens.reduce((a, i) => a + i.quantidade, 0);
                 const frete = {
                     modalidade: p.frete_modalidade || 'Padrão',
-                    valor: p.frete_valor || 0,
+                    valor: Number(p.frete_valor || 0),
                     prazo: p.frete_prazo || '—',
                     codigo: p.codigo_rastreamento || ''
                 };
@@ -1581,7 +1581,7 @@ config.logo = {
                 const redirectUri = `${window.location.origin}/auth/callback`;
 
                 await API('/api/integracoes', { method: 'PUT', body: JSON.stringify({
-                    bling: { ativo: true, url: 'https://www.bling.com.br/Api/v3' },
+                    bling: { ativo: true, url: 'https://api.bling.com.br/Api/v3' },
                     blingOauth: { clientId, clientSecret, redirectUri, connected: false }
                 }) });
 
@@ -1631,7 +1631,7 @@ config.logo = {
                     },
                     bling: {
                         ativo: true,
-                        url: 'https://www.bling.com.br/Api/v3'
+                        url: 'https://api.bling.com.br/Api/v3'
                     },
                     blingOauth: {
                         clientId: document.getElementById('bling-client-id').value.trim(),
@@ -1692,7 +1692,8 @@ config.logo = {
                     document.getElementById('bling-client-id').dataset.url = bl.url;
                 }
             } catch (err) {
-                // ignora se não carregou
+                console.error('[Painel] Falha ao carregar integrações:', err);
+                toast(err.message || 'Falha ao carregar integrações.', 'erro');
             }
         }
 

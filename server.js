@@ -749,17 +749,17 @@ async function getBlingAccessToken() {
 }
 
 async function consultarBlingApi(tipo, extraUrl = '') {
-  const oauth = await getBlingOauthConfig();
-  if (!oauth.accessToken) {
-    return { ok: false, error: 'Token do Bling ausente. Faça login via OAuth.' };
+  let accessToken;
+  try {
+    accessToken = await getBlingAccessToken();
+  } catch (error) {
+    return { ok: false, error: error.message };
   }
 
   const endpoints = {
     pedidos: [
-      `${BLING_API_BASE}/pedidos`,
-      `${BLING_API_BASE}/pedido`,
-      `${BLING_API_BASE}/pedidos?pagina=1&limite=100`,
-      `${BLING_API_BASE}/pedido?pagina=1&limite=100`
+      `${BLING_API_BASE}/pedidos/vendas?pagina=1&limite=100`,
+      `${BLING_API_BASE}/pedidos/vendas`
     ],
     estoque: [
       `${BLING_API_BASE}/produtos`,
@@ -778,7 +778,7 @@ async function consultarBlingApi(tipo, extraUrl = '') {
       const res = await fetch(endpoint, {
         method: 'GET',
         headers: {
-          Authorization: `Bearer ${oauth.accessToken}`,
+          Authorization: `Bearer ${accessToken}`,
           Accept: 'application/json',
           'Content-Type': 'application/json'
         }
@@ -1285,7 +1285,8 @@ app.get('/api/integracoes', exigirAdmin, async (req, res) => {
 
     res.json({ pagamento, envio, bling, upseller: bling, blingOauth });
   } catch (err) {
-    res.status(500).json({ error: "Erro ao buscar integrações." });
+    console.error('[Admin] Erro ao carregar integrações:', err);
+    res.status(500).json({ error: "Erro ao buscar integrações.", detail: err.message });
   }
 });
 
@@ -1296,10 +1297,20 @@ app.put('/api/integracoes', exigirAdmin, async (req, res) => {
     if (envio) await setConfigChave('melhorenvio_config', envio);
     if (bling) await setConfigChave('bling_config', bling);
     if (upseller) await setConfigChave('bling_config', upseller);
-    if (blingOauth) await setConfigChave('bling_oauth', blingOauth);
+    if (blingOauth) {
+      const oauthAtual = await getBlingOauthConfig();
+      await setConfigChave('bling_oauth', {
+        ...oauthAtual,
+        ...blingOauth,
+        accessToken: blingOauth.accessToken || oauthAtual.accessToken || '',
+        refreshToken: blingOauth.refreshToken || oauthAtual.refreshToken || '',
+        connected: blingOauth.connected ?? oauthAtual.connected ?? false
+      });
+    }
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: "Erro ao salvar integrações." });
+    console.error('[Admin] Erro ao salvar integrações:', err);
+    res.status(500).json({ error: "Erro ao salvar integrações.", detail: err.message });
   }
 });
 
@@ -1700,11 +1711,16 @@ app.post('/api/integracoes/testar', exigirAdmin, async (req, res) => {
       return res.json({ ok: true, mensagem: "✅ Credenciais Melhor Envio configuradas!" + (process.env.MELHOR_ENVIO_TOKEN ? " (Via variável de ambiente)" : "") });
     }
     if (tipo === 'upseller' || tipo === 'bling') {
-      const cfg = await getConfigChave('bling_config', {});
-      if (!cfg.apiKey || !cfg.apiToken) {
-        return res.json({ ok: false, mensagem: "API Key e API Token do Bling não preenchidos." });
+      const oauth = await getBlingOauthConfig();
+      if (!oauth.accessToken && !oauth.refreshToken) {
+        return res.json({ ok: false, mensagem: 'OAuth do Bling não conectado.' });
       }
-      return res.json({ ok: true, mensagem: "Credenciais Bling configuradas." });
+      try {
+        await getBlingAccessToken();
+        return res.json({ ok: true, mensagem: 'OAuth do Bling configurado e token válido.' });
+      } catch (error) {
+        return res.json({ ok: false, mensagem: error.message });
+      }
     }
     res.json({ ok: false, mensagem: "Tipo desconhecido." });
   } catch (err) {
