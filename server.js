@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import crypto from 'crypto';
@@ -485,11 +486,11 @@ async function obterOuCriarContatoBling(clienteDados = {}, pedido = {}) {
   const accessToken = await getBlingAccessToken();
   const endereco = parseJsonArray(dados.endereco, {});
   const contatoPayload = {
-    nome: String(dados.nome || 'Cliente'),
-    email,
+    nome: String(dados.nome || 'Cliente').trim(),
+    ...(email ? { email } : {}),
     telefone: String(dados.telefone || dados.whatsapp || ''),
-    numeroDocumento: String(dados.cpf || dados.cnpj || '').replace(/\D/g, ''),
-    tipoPessoa: dados.cnpj ? 'J' : 'F',
+    numeroDocumento: String(dados.cnpj || dados.cpf || '').replace(/\D/g, ''),
+    tipoPessoa: dados.tipo_pessoa === 'J' || dados.cnpj ? 'J' : 'F',
     endereco: {
       endereco: endereco.endereco || endereco.rua || '',
       numero: String(endereco.numero || ''),
@@ -500,6 +501,13 @@ async function obterOuCriarContatoBling(clienteDados = {}, pedido = {}) {
       uf: endereco.uf || endereco.estado || ''
     }
   };
+
+  const documentoValido = contatoPayload.tipoPessoa === 'J'
+    ? contatoPayload.numeroDocumento.length === 14
+    : [11, 14].includes(contatoPayload.numeroDocumento.length);
+  if (!contatoPayload.nome || !documentoValido) {
+    throw new Error('Cliente precisa ter nome e CPF/CNPJ para ser cadastrado no Bling.');
+  }
 
   const response = await fetch('https://api.bling.com.br/Api/v3/contatos', {
     method: 'POST',
@@ -528,8 +536,72 @@ async function obterOuCriarContatoBling(clienteDados = {}, pedido = {}) {
   if (cliente?.id) {
     const { error } = await supabaseAdmin.from('clientes').update({ bling_id: String(blingId) }).eq('id', cliente.id);
     if (error) throw error;
+    const { data: confirmado, error: erroConfirmacao } = await supabaseAdmin
+      .from('clientes')
+      .select('bling_id')
+      .eq('id', cliente.id)
+      .single();
+    if (erroConfirmacao) throw erroConfirmacao;
+    if (String(confirmado.bling_id) !== String(blingId)) {
+      throw new Error('O bling_id do cliente não foi confirmado no Supabase.');
+    }
   }
   return blingId;
+}
+
+async function processarWebhookClienteSupabase(req, res) {
+  const requestId = crypto.randomUUID();
+  try {
+    console.log('[Supabase Cliente Webhook] Recebido:', {
+      requestId,
+      body: req.body,
+      hasSecretHeader: Boolean(req.get('x-webhook-secret')),
+      secretConfigured: Boolean(process.env.SUPABASE_WEBHOOK_SECRET)
+    });
+
+    const webhookSecret = req.get('x-webhook-secret');
+    if (!process.env.SUPABASE_WEBHOOK_SECRET || webhookSecret !== process.env.SUPABASE_WEBHOOK_SECRET) {
+      console.error('[Supabase Cliente Webhook] Secret inválido ou ausente:', { requestId });
+      return res.status(401).json({ error: 'Acesso negado', requestId });
+    }
+
+    const payload = req.body || {};
+    const tipoEvento = String(payload.type || '').toUpperCase();
+    const cliente = payload.record;
+
+    if (!cliente || tipoEvento !== 'INSERT') {
+      return res.status(200).json({
+        success: true,
+        ignored: true,
+        requestId,
+        reason: !cliente ? 'Registro de cliente ausente.' : `Evento ${tipoEvento || 'desconhecido'} não processado.`
+      });
+    }
+
+    if (!cliente.id || !cliente.email) {
+      return res.status(400).json({ success: false, error: 'Cliente precisa ter id e email.', requestId });
+    }
+
+    if (cliente.bling_id) {
+      return res.status(200).json({ success: true, ignored: true, requestId, blingId: cliente.bling_id });
+    }
+
+    const blingId = await obterOuCriarContatoBling(cliente);
+    console.log('[Supabase Cliente Webhook] Cliente sincronizado:', {
+      requestId,
+      clienteId: cliente.id,
+      email: cliente.email,
+      blingId
+    });
+    return res.status(200).json({ success: true, evento: tipoEvento, blingId, requestId });
+  } catch (error) {
+    console.error('[Supabase Cliente Webhook] Erro:', {
+      requestId,
+      mensagem: error.message,
+      stack: error.stack
+    });
+    return res.status(500).json({ success: false, error: error.message, requestId });
+  }
 }
 
 async function incrementarUsoCupom(codigo) {
@@ -613,6 +685,39 @@ async function getConfigChave(chave, fallback = {}) {
 async function setConfigChave(chave, valor) {
   const { error } = await supabaseAdmin.from('config').upsert({ chave, valor }, { onConflict: 'chave' });
   if (error) throw error;
+}
+
+async function getMelhorEnvioConfig() {
+  const salvo = await getConfigChave('melhorenvio_config', {});
+  const token = String(
+    process.env.MELHOR_ENVIO_TOKEN ||
+    process.env.MELHOR_ENVIO_ACCESS_TOKEN ||
+    process.env.MELHOR_ENVIO_API_TOKEN ||
+    salvo.token ||
+    ''
+  ).trim();
+  const cepOrigem = String(
+    process.env.MELHOR_ENVIO_CEP ||
+    process.env.MELHOR_ENVIO_CEP_ORIGEM ||
+    salvo.cepOrigem ||
+    ''
+  ).replace(/\D/g, '');
+  const modo = String(
+    process.env.MELHOR_ENVIO_MODO ||
+    process.env.MELHOR_ENVIO_ENVIRONMENT ||
+    salvo.modo ||
+    'sandbox'
+  ).toLowerCase();
+
+  return {
+    ...salvo,
+    token,
+    cepOrigem,
+    modo: modo === 'production' ? 'produção' : modo,
+    ativo: process.env.MELHOR_ENVIO_ATIVO !== undefined
+      ? process.env.MELHOR_ENVIO_ATIVO === 'true'
+      : Boolean(salvo.ativo || token)
+  };
 }
 
 function obterBaseUrl(req) {
@@ -952,7 +1057,10 @@ async function enviarPedidoParaBling(pedido) {
     const itensJson = parseJsonArray(pedido.itens, []);
     const enderecoJson = parseJsonArray(pedido.endereco, {});
     const valorTotal = Number(pedido.total || 0);
-    const contatoId = await obterOuCriarContatoBling(clienteJson, pedido);
+    const contatoId = await obterOuCriarContatoBling({
+      ...clienteJson,
+      id: clienteJson.id || pedido.cliente_id || pedido.clienteId
+    }, pedido);
     const formaPagamentoId = Number(
       pedido.forma_pagamento_id ||
       pedido.formaPagamentoId ||
@@ -960,29 +1068,24 @@ async function enviarPedidoParaBling(pedido) {
       process.env.BLING_FORMA_PAGAMENTO_ID ||
       0
     );
+    const parcelasQuantidade = Math.max(1, Number(pedido.parcelas || 1));
 
     const payload = {
-      data: new Date().toISOString().slice(0, 10),
-      numero: pedido.numero,
-      ...(contatoId > 0 ? { contato: { id: contatoId } } : {}),
+      data: String(pedido.data || new Date().toISOString()).slice(0, 10),
+      numero: String(pedido.numero || '').trim(),
+      contato: { id: contatoId },
       enderecoEntrega: enderecoJson,
       itens: itensJson.map(i => ({
-        codigo: String(i.sku || i.codigo || i.bling_id || i.blingId || (i.id ? `site-${i.id}` : '')).trim(),
-        descricao: String(i.nome || i.descricao || 'Item do pedido'),
-        unidade: i.unidade || 'UN',
+        produto: { id: Number(i.bling_id || i.blingId || i.produto_bling_id || i.produtoBlingId || 0) },
         quantidade: Number(i.quantidade || 1),
-        valor: Number(i.preco || i.valor || 0),
-        ...(Number(i.bling_id || i.blingId || i.produto_id || i.produtoId || 0) > 0
-          ? { produto: { id: Number(i.bling_id || i.blingId || i.produto_id || i.produtoId) } }
-          : {})
+        valor: Number(i.preco || i.valor || 0)
       })),
-      ...(formaPagamentoId > 0 ? {
-        parcelas: [{
-          dataVencimento: new Date().toISOString().slice(0, 10),
-          valor: valorTotal,
-          formaPagamento: { id: formaPagamentoId }
-        }]
-      } : {}),
+      parcelas: [{
+        dataVencimento: String(pedido.dataVencimento || new Date().toISOString()).slice(0, 10),
+        valor: valorTotal,
+        formaPagamento: { id: formaPagamentoId },
+        observacoes: `Pagamento ${String(pedido.metodo || 'pix').toUpperCase()} - ${parcelasQuantidade} parcela(s)`
+      }],
       observacoes: 'Pedido gerado pelo site MIO'
     };
 
@@ -991,34 +1094,28 @@ async function enviarPedidoParaBling(pedido) {
       endpoint: BLING_VENDAS_URL,
       cliente: payload.contato,
       itens: payload.itens,
-      parcelas: payload.parcelas || [],
+      parcelas: payload.parcelas,
       total: valorTotal,
       contatoId,
       formaPagamentoId
     });
 
-    if (contatoId <= 0) {
-      console.error('[Bling Pedido] Validação local falhou: cliente sem ID do Bling.', {
+    if (!payload.numero || contatoId <= 0) {
+      console.error('[Bling Pedido] Validação local falhou: número ou contato inválido.', {
         numero: pedido.numero || pedido.id || null,
-        cliente: clienteJson
+        contatoId
       });
-      return { ok: false, motivo: 'O cliente precisa ter um ID de contato do Bling.' };
+      return { ok: false, motivo: 'O pedido precisa ter número e contato válido do Bling.' };
     }
 
-    if (payload.itens.some(item => !item.codigo)) {
-      console.error('[Bling Pedido] Validação local falhou: item sem código/SKU.', {
-        numero: pedido.numero || pedido.id || null,
-        itens: payload.itens
-      });
-      return { ok: false, motivo: 'Todos os itens do pedido precisam ter SKU ou código para o Bling.' };
-    }
-
-    if (payload.itens.some(item => !item.produto?.id)) {
-      console.warn('[Bling Pedido] Itens sem produto.id do Bling; a API pode rejeitar o pedido:', payload.itens);
+    if (!payload.itens.length || payload.itens.some(item => item.produto.id <= 0 || item.quantidade <= 0 || item.valor < 0)) {
+      console.error('[Bling Pedido] Validação local falhou: item sem produto.id, quantidade ou valor válido.', payload.itens);
+      return { ok: false, motivo: 'Todos os itens precisam ter produto.id do Bling, quantidade positiva e valor válido.' };
     }
 
     if (formaPagamentoId <= 0) {
-      console.warn('[Bling Pedido] BLING_FORMA_PAGAMENTO_ID não configurado; parcelas não serão enviadas.');
+      console.error('[Bling Pedido] Validação local falhou: forma de pagamento do Bling ausente.');
+      return { ok: false, motivo: 'Configure BLING_FORMA_PAGAMENTO_ID ou informe forma_pagamento_id no pedido.' };
     }
 
     const headers = {
@@ -1083,7 +1180,7 @@ async function enviarPedidoParaBling(pedido) {
       });
     }
 
-    return { ok: true, data };
+    return { ok: true, data, blingId: blingId ? String(blingId) : null };
   } catch (error) {
     console.error('[Bling Pedido] Falha inesperada no envio:', {
       numero: pedido?.numero || pedido?.id || null,
@@ -1093,11 +1190,6 @@ async function enviarPedidoParaBling(pedido) {
     return { ok: false, motivo: error.message };
   }
 }
-
-async function enviarPedidoParaUpseller(pedido) {
-  return enviarPedidoParaBling(pedido);
-}
-
 // ---------- API: UPLOAD DE IMAGENS ----------
 app.post('/api/upload', exigirAdmin, async (req, res) => {
   try {
@@ -1259,21 +1351,14 @@ app.get('/api/integracoes', exigirAdmin, async (req, res) => {
       getConfigChave('pagseguro_config', {
         modo: 'sandbox', email: '', token: '', appId: '', appKey: '', ativo: false
       }),
-      getConfigChave('melhorenvio_config', {
-        token: '', cepOrigem: '', modo: 'sandbox', ativo: false
-      }),
+      getMelhorEnvioConfig(),
       getConfigChave('bling_config', {
         apiKey: '', apiToken: '', url: 'https://api.bling.com.br/Api/v3', empresaId: '', ativo: false
       }),
       getBlingOauthConfig()
     ]);
 
-    if (!envio.token && process.env.MELHOR_ENVIO_TOKEN) {
-      envio.token = process.env.MELHOR_ENVIO_TOKEN;
-    }
-    if (!envio.cepOrigem && process.env.MELHOR_ENVIO_CEP) {
-      envio.cepOrigem = process.env.MELHOR_ENVIO_CEP;
-    }
+    envio.configurado = Boolean(envio.token && envio.cepOrigem);
 
     const blingOauth = {
       ...oauth,
@@ -1294,7 +1379,16 @@ app.put('/api/integracoes', exigirAdmin, async (req, res) => {
   const { pagamento, envio, bling, upseller, blingOauth } = req.body || {};
   try {
     if (pagamento) await setConfigChave('pagseguro_config', pagamento);
-    if (envio) await setConfigChave('melhorenvio_config', envio);
+    if (envio) {
+      const envioAtual = await getMelhorEnvioConfig();
+      await setConfigChave('melhorenvio_config', {
+        ...envioAtual,
+        ...envio,
+        token: envio.token || envioAtual.token || '',
+        cepOrigem: envio.cepOrigem || envioAtual.cepOrigem || '',
+        ativo: envio.ativo ?? envioAtual.ativo
+      });
+    }
     if (bling) await setConfigChave('bling_config', bling);
     if (upseller) await setConfigChave('bling_config', upseller);
     if (blingOauth) {
@@ -1702,13 +1796,21 @@ app.post('/api/integracoes/testar', exigirAdmin, async (req, res) => {
       return res.json({ ok: true, mensagem: "Token PagBank configurado. Para cartão, informe também a chave pública." });
     }
     if (tipo === 'envio') {
-      let cfg = await getConfigChave('melhorenvio_config', {});
-      let token = cfg.token || process.env.MELHOR_ENVIO_TOKEN || '';
-      let cepOrigem = cfg.cepOrigem || process.env.MELHOR_ENVIO_CEP || '';
+      const cfg = await getMelhorEnvioConfig();
+      const { token, cepOrigem } = cfg;
       if (!token || !cepOrigem) {
-        return res.json({ ok: false, mensagem: "Token e CEP de origem do Melhor Envio não preenchidos." });
+        return res.json({
+          ok: false,
+          mensagem: 'Token e CEP de origem do Melhor Envio não preenchidos.',
+          diagnostico: {
+            tokenConfigurado: Boolean(token),
+            cepConfigurado: Boolean(cepOrigem),
+            modo: cfg.modo,
+            variaveisAceitas: ['MELHOR_ENVIO_TOKEN', 'MELHOR_ENVIO_CEP', 'MELHOR_ENVIO_MODO']
+          }
+        });
       }
-      return res.json({ ok: true, mensagem: "✅ Credenciais Melhor Envio configuradas!" + (process.env.MELHOR_ENVIO_TOKEN ? " (Via variável de ambiente)" : "") });
+      return res.json({ ok: true, mensagem: 'Credenciais Melhor Envio configuradas.', modo: cfg.modo });
     }
     if (tipo === 'upseller' || tipo === 'bling') {
       const oauth = await getBlingOauthConfig();
@@ -1883,14 +1985,19 @@ app.post('/api/checkout', async (req, res) => {
       freteSelecionado
     };
 
+    const clienteCadastro = await buscarClientePorEmail(String(payload.cliente.email || '').trim().toLowerCase()).catch(() => null);
+
     const { error: pedidoError } = await supabaseAdmin.from('pedidos').insert({
       numero: pedidoMio.numero,
+      cliente_id: clienteCadastro?.id || null,
       data: pedidoMio.data,
       cliente: pedidoMio.cliente,
       endereco: pedidoMio.endereco,
       itens: pedidoMio.itens,
       cupom: pedidoMio.cupom,
       metodo: pedidoMio.metodo,
+      forma_pagamento_id: payload.forma_pagamento_id || payload.formaPagamentoId || null,
+      parcelas: Math.max(1, Number(payload.parcelas || 1)),
       status: pedidoMio.status,
       total: pedidoMio.total,
       frete_modalidade: freteSelecionado.modalidade || freteSelecionado.nome || 'Entrega Padrão',
@@ -2064,7 +2171,7 @@ app.post('/api/pagamento/webhook', async (req, res) => {
 
     if (pedido && (status === 'PAID' || status === '3')) {
       await atualizarPedidoPorNumero(pedido.numero, { status: 'PAGO' });
-      const envio = await enviarPedidoParaUpseller(pedido);
+      const envio = await enviarPedidoParaBling(pedido);
       return res.json({ ok: true, pago: true, upseller: envio });
     }
 
@@ -2084,7 +2191,7 @@ app.post('/api/pagamento/webhook', async (req, res) => {
           await atualizarPedidoPorNumero(reference, { status: 'PAGO' });
           const pedidoPago = await findPedidoByReference(reference);
           if (pedidoPago) {
-            await enviarPedidoParaUpseller(pedidoPago);
+            await enviarPedidoParaBling(pedidoPago);
           }
           return res.json({ ok: true, pago: true, reference });
         }
@@ -2129,7 +2236,7 @@ app.post('/api/webhooks/pagseguro', async (req, res) => {
       await atualizarPedidoPorNumero(reference, { status: 'PAGO', data_bling_sync: new Date().toISOString() });
       const pedidoPago = await findPedidoByReference(reference);
       if (pedidoPago) {
-        const envio = await enviarPedidoParaUpseller(pedidoPago);
+        const envio = await enviarPedidoParaBling(pedidoPago);
         if (envio.ok && envio.blingId) {
           await atualizarPedidoPorNumero(reference, { bling_id: envio.blingId });
         }
@@ -2232,14 +2339,13 @@ app.post('/api/frete/calcular', async (req, res) => {
   if (!cepDestino) return res.status(400).json({ error: 'CEP de destino obrigatório.' });
 
   try {
-    let cfg = await getConfigChave('melhorenvio_config', {});
+    let cfg = await getMelhorEnvioConfig();
     
-    // Usa variáveis de ambiente se não houver configuração no banco
-    let token = cfg.token || process.env.MELHOR_ENVIO_TOKEN || '';
-    let modo = cfg.modo || process.env.MELHOR_ENVIO_MODO || 'sandbox';
+    let token = cfg.token;
+    let modo = cfg.modo;
     
     const adminPerfil = await buscarAdmin().catch(() => null);
-    let cepOrigem = (cfg.cepOrigem || process.env.MELHOR_ENVIO_CEP || '').replace(/\D/g, '');
+    let cepOrigem = cfg.cepOrigem;
     if (adminPerfil && adminPerfil.endereco) {
       const end = parseJsonArray(adminPerfil.endereco, {});
       const cepLoja = (end.cep || '').replace(/\D/g, '');
@@ -2295,16 +2401,15 @@ app.post('/api/envio/calcular', async (req, res) => {
   const { cepDestino, itens } = req.body || {};
   if (!cepDestino) return res.status(400).json({ error: "CEP de destino obrigatório." });
   try {
-    let cfg = await getConfigChave('melhorenvio_config', {});
+    let cfg = await getMelhorEnvioConfig();
 
-    // Usa variáveis de ambiente se não houver configuração no banco
-    let token = cfg.token || process.env.MELHOR_ENVIO_TOKEN || '';
-    let modo = cfg.modo || process.env.MELHOR_ENVIO_MODO || 'sandbox';
+    let token = cfg.token;
+    let modo = cfg.modo;
 
     // Fonte de origem do frete: prioriza o endereço da loja (perfil do admin).
     // Se o admin preencheu o endereço da loja, o CEP dele é usado como origem.
     const adminPerfil = await buscarAdmin().catch(() => null);
-    let cepOrigem = cfg.cepOrigem || process.env.MELHOR_ENVIO_CEP || '';
+    let cepOrigem = cfg.cepOrigem;
     if (adminPerfil && adminPerfil.endereco) {
       const end = parseJsonArray(adminPerfil.endereco, {});
       const cepLoja = (end.cep || '').replace(/\D/g, '');
@@ -2698,11 +2803,23 @@ app.post('/api/webhooks/supabase-pedido', async (req, res) => {
         requestId,
         reason: !pedido ? 'Registro de pedido ausente.' : `Evento ${tipoEvento || 'desconhecido'} não processado.`
       });
+
     }
 
     if (!pedido.numero) {
       console.error('[Supabase Pedido Webhook] Pedido sem número:', { requestId, pedido });
       return res.status(400).json({ success: false, error: 'O pedido precisa ter numero.', requestId });
+    }
+
+    const statusPedido = String(pedido.status || '').trim().toUpperCase();
+    const statusPermitidos = new Set(['PAGO', 'EM PREPARAÇÃO', 'ENVIADO']);
+    if (!statusPermitidos.has(statusPedido)) {
+      return res.status(200).json({
+        success: true,
+        ignored: true,
+        requestId,
+        reason: `Pedido ainda não está pago ou liberado para expedição: ${pedido.status || 'sem status'}.`
+      });
     }
 
     if (pedido.bling_id) {
@@ -2741,6 +2858,8 @@ app.post('/api/webhooks/supabase-pedido', async (req, res) => {
     return res.status(500).json({ success: false, error: error.message, requestId });
   }
 });
+
+app.post('/api/webhooks/supabase-cliente', processarWebhookClienteSupabase);
 
 app.put('/api/admin/senha', exigirAdmin, async (req, res) => {
   const { senhaAtual, novaSenha } = req.body || {};
@@ -3133,7 +3252,7 @@ app.post('/api/pedidos/meus', async (req, res) => {
 // ---------- API: CLIENTES ----------
 app.get('/api/clientes', exigirAdmin, async (req, res) => {
   try {
-    const { data: clientes, error } = await supabaseAdmin.from('clientes').select('id, nome, email, cpf, telefone, endereco, foto, whatsapp_ok, aceitou_termos, data_cadastro').order('id', { ascending: false });
+    const { data: clientes, error } = await supabaseAdmin.from('clientes').select('id, nome, email, cpf, cnpj, tipo_pessoa, telefone, endereco, foto, whatsapp_ok, aceitou_termos, bling_id, data_cadastro').order('id', { ascending: false });
     if (error) throw error;
     const formatados = (clientes || []).map(formatarCliente);
     console.log('[Admin] Clientes carregados:', formatados.length);
@@ -3153,12 +3272,28 @@ app.post('/api/clientes', async (req, res) => {
     const emailBusca = c.email.toLowerCase().trim();
     const existe = await buscarClientePorEmail(emailBusca);
     if (existe) {
-      const { error } = await supabaseAdmin.from('clientes').update({ nome: c.nome, cpf: c.cpf || '', telefone: c.telefone || '', endereco: c.endereco || {}, foto: c.foto || '', whatsapp_ok: !!c.whatsapp_ok, aceitou_termos: !!c.aceitou_termos }).eq('email', emailBusca);
+      const { error } = await supabaseAdmin.from('clientes').update({
+        nome: c.nome,
+        cpf: c.cpf || '',
+        cnpj: c.cnpj || '',
+        tipo_pessoa: c.tipo_pessoa || (c.cnpj ? 'J' : 'F'),
+        telefone: c.telefone || '',
+        endereco: c.endereco || {},
+        foto: c.foto || '',
+        whatsapp_ok: !!c.whatsapp_ok,
+        aceitou_termos: !!c.aceitou_termos
+      }).eq('email', emailBusca);
       if (error) throw error;
       return res.json({ ok: true, novo: false });
     }
     const { error } = await supabaseAdmin.from('clientes').insert({
-      nome: c.nome, email: emailBusca, cpf: c.cpf || '', telefone: c.telefone || '', senha: await hashSenha(c.senha),
+      nome: c.nome,
+      email: emailBusca,
+      cpf: c.cpf || '',
+      cnpj: c.cnpj || '',
+      tipo_pessoa: c.tipo_pessoa || (c.cnpj ? 'J' : 'F'),
+      telefone: c.telefone || '',
+      senha: await hashSenha(c.senha),
       endereco: c.endereco || {}, foto: c.foto || '', whatsapp_ok: !!c.whatsapp_ok, aceitou_termos: !!c.aceitou_termos
     });
     if (error) throw error;

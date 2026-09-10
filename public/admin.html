@@ -1682,7 +1682,7 @@ config.logo = {
                 if (pg.appId) document.getElementById('pg-appId').value = pg.appId;
                 if (pg.appKey) document.getElementById('pg-appKey').value = pg.appKey;
 
-                document.getElementById('me-ativo').checked = !!me.ativo;
+                document.getElementById('me-ativo').checked = !!me.ativo || !!me.configurado;
                 if (me.modo) document.getElementById('me-modo').value = me.modo;
                 if (me.token) document.getElementById('me-token').value = me.token;
                 if (me.cepOrigem) document.getElementById('me-cepOrigem').value = me.cepOrigem;
