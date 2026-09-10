@@ -704,7 +704,7 @@ conteudo: ['Conteúdo do Site', 'Edite banners, carrossel e destaques'],
         // =============== BUSCA GLOBAL ===============
         async function carregarTudo() {
             try {
-                const [stats, prods, peds, clis, cups, cfg] = await Promise.all([
+                const resultados = await Promise.allSettled([
                     API('/api/estatisticas'),
                     API('/api/produtos'),
                     API('/api/pedidos'),
@@ -712,14 +712,36 @@ conteudo: ['Conteúdo do Site', 'Edite banners, carrossel e destaques'],
                     API('/api/cupons'),
                     API('/api/config')
                 ]);
-                produtos = prods;
-                pedidos = peds;
-                clientes = clis;
-                cupons = cups;
-                config = cfg;
-                const perfil = await API('/api/admin/perfil');
+
+                const [statsResult, prodsResult, pedsResult, clisResult, cupsResult, cfgResult] = resultados;
+                const dados = resultados.map((resultado, indice) => {
+                    if (resultado.status === 'rejected') {
+                        console.error('[Painel] Falha ao carregar recurso', indice, resultado.reason);
+                        toast(resultado.reason.message || 'Falha ao carregar parte do painel.', 'erro');
+                        return null;
+                    }
+                    return resultado.value;
+                });
+
+                const [stats, prods, peds, clis, cups, cfg] = dados;
+                produtos = Array.isArray(prods) ? prods : [];
+                pedidos = Array.isArray(peds) ? peds : [];
+                clientes = Array.isArray(clis) ? clis : [];
+                cupons = Array.isArray(cups) ? cups : [];
+                config = cfg || {};
+                const perfil = await API('/api/admin/perfil').catch(err => {
+                    console.error('[Painel] Falha ao carregar perfil:', err);
+                    return { endereco: {} };
+                });
                 adminPerfil = perfil;
-                renderizarDashboard(stats);
+                renderizarDashboard(stats || {
+                    totalPedidos: pedidos.length,
+                    totalClientes: clientes.length,
+                    faturamento: 0,
+                    porProduto: {},
+                    porCategoria: {},
+                    porDia: {}
+                });
                 renderizarProdutos();
                 renderizarPedidos();
                 renderizarClientes();

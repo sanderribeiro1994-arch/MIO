@@ -2996,9 +2996,11 @@ app.get('/api/pedidos', exigirAdmin, async (req, res) => {
     const { data: pedidos, error } = await supabaseAdmin.from('pedidos').select('*').order('id', { ascending: false });
     if (error) throw error;
     const formatados = (pedidos || []).map(formatarPedido);
+    console.log('[Admin] Pedidos carregados:', formatados.length);
     res.json(formatados);
   } catch (err) {
-    res.status(500).json({ error: "Erro ao buscar pedidos." });
+    console.error('[Admin] Erro ao buscar pedidos no Supabase:', err);
+    res.status(500).json({ error: "Erro ao buscar pedidos.", detail: err.message });
   }
 });
 
@@ -3118,9 +3120,11 @@ app.get('/api/clientes', exigirAdmin, async (req, res) => {
     const { data: clientes, error } = await supabaseAdmin.from('clientes').select('id, nome, email, cpf, telefone, endereco, foto, whatsapp_ok, aceitou_termos, data_cadastro').order('id', { ascending: false });
     if (error) throw error;
     const formatados = (clientes || []).map(formatarCliente);
+    console.log('[Admin] Clientes carregados:', formatados.length);
     res.json(formatados);
   } catch (err) {
-    res.status(500).json({ error: "Erro ao buscar clientes." });
+    console.error('[Admin] Erro ao buscar clientes no Supabase:', err);
+    res.status(500).json({ error: "Erro ao buscar clientes.", detail: err.message });
   }
 });
 
