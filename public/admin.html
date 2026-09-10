@@ -697,6 +697,8 @@ conteudo: ['Conteúdo do Site', 'Edite banners, carrossel e destaques'],
                 document.getElementById('subtituloPagina').innerText = titulos[tab][1];
                 document.getElementById('btnNovoProduto').classList.toggle('hidden', tab !== 'produtos');
                 if (tab === 'produtos') renderizarProdutos();
+                if (tab === 'pedidos') renderizarPedidos();
+                if (tab === 'clientes') renderizarClientes();
                 if (tab === 'envio') carregarExpedicoes();
             });
         });
@@ -919,6 +921,7 @@ renderizarConteudo();
         // =============== PEDIDOS ===============
         function renderizarPedidos() {
             const cont = document.getElementById('listaPedidos');
+            if (!cont) return;
             if (pedidos.length === 0) {
                 cont.innerHTML = '<p class="text-xs font-mono text-zinc-500 text-center py-10">Nenhum pedido registrado.</p>';
                 return;
@@ -932,8 +935,8 @@ renderizarConteudo();
                 'Cancelado': 'bg-red-500/20 text-red-400'
             };
             cont.innerHTML = pedidos.map(p => {
-                const itens = p.itens || [];
-                const totalItens = itens.reduce((a, i) => a + i.quantidade, 0);
+                const itens = Array.isArray(p.itens) ? p.itens : [];
+                const totalItens = itens.reduce((a, i) => a + Number(i.quantidade || 0), 0);
                 const frete = {
                     modalidade: p.frete_modalidade || 'Padrão',
                     valor: Number(p.frete_valor || 0),
@@ -960,7 +963,7 @@ renderizarConteudo();
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
                         <div class="bg-zinc-950 border border-zinc-800 rounded-lg p-3">
                             <p class="text-[9px] font-mono uppercase text-zinc-500 mb-1">Resumo dos Itens</p>
-                            ${(itens).map(i => '<div class="flex justify-between text-[11px] py-0.5"><span class="text-zinc-300">' + i.quantidade + 'x ' + i.nome + '</span><span class="font-mono text-amber-400">R$ ' + (+(i.preco * i.quantidade)).toFixed(2).replace('.', ',') + '</span></div>').join('') || '<span class="text-[11px] text-zinc-500">Sem itens</span>'}
+                            ${(itens).map(i => '<div class="flex justify-between text-[11px] py-0.5"><span class="text-zinc-300">' + Number(i.quantidade || 0) + 'x ' + (i.nome || i.descricao || 'Item') + '</span><span class="font-mono text-amber-400">R$ ' + (Number(i.preco || i.valor || 0) * Number(i.quantidade || 0)).toFixed(2).replace('.', ',') + '</span></div>').join('') || '<span class="text-[11px] text-zinc-500">Sem itens</span>'}
                         </div>
                         <div class="bg-zinc-950 border border-zinc-800 rounded-lg p-3">
                             <p class="text-[9px] font-mono uppercase text-zinc-500 mb-1">Endereço de Entrega</p>
@@ -1119,6 +1122,7 @@ renderizarConteudo();
 
         function renderizarClientes() {
             const cont = document.getElementById('listaClientes');
+            if (!cont) return;
             if (clientes.length === 0) {
                 cont.innerHTML = '<p class="text-xs font-mono text-zinc-500 text-center py-10">Nenhum cliente cadastrado.</p>';
                 return;
