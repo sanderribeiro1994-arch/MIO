@@ -495,12 +495,14 @@ async function obterOuCriarContatoBling(clienteDados = {}, pedido = {}) {
     ...(endereco.municipio || endereco.cidade ? { municipio: endereco.municipio || endereco.cidade } : {}),
     ...(endereco.uf ? { uf: String(endereco.uf).trim().toUpperCase() } : {})
   };
+  const tipoPessoa = dados.tipo_pessoa === 'J' || dados.cnpj ? 'J' : 'F';
   const contatoPayload = {
     nome: String(dados.nome || 'Cliente').trim(),
+    tipo: tipoPessoa,
+    situacao: 'A',
     ...(email ? { email } : {}),
     ...(telefone ? { telefone } : {}),
     numeroDocumento: String(dados.cnpj || dados.cpf || '').replace(/\D/g, ''),
-    tipoPessoa: dados.tipo_pessoa === 'J' || dados.cnpj ? 'J' : 'F',
     ...(Object.keys(enderecoPayload).length ? { endereco: enderecoPayload } : {})
   };
 
