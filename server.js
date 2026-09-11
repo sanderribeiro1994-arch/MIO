@@ -502,11 +502,8 @@ async function obterOuCriarContatoBling(clienteDados = {}, pedido = {}) {
     }
   };
 
-  const documentoValido = contatoPayload.tipoPessoa === 'J'
-    ? contatoPayload.numeroDocumento.length === 14
-    : [11, 14].includes(contatoPayload.numeroDocumento.length);
-  if (!contatoPayload.nome || !documentoValido) {
-    throw new Error('Cliente precisa ter nome e CPF/CNPJ para ser cadastrado no Bling.');
+  if (!contatoPayload.nome || !documentoValido(contatoPayload.numeroDocumento)) {
+    throw new Error('Cliente precisa ter nome e CPF/CNPJ válido para ser cadastrado no Bling.');
   }
 
   const response = await fetch('https://api.bling.com.br/Api/v3/contatos', {
@@ -912,6 +909,39 @@ async function consultarBlingApi(tipo, extraUrl = '') {
 
 function normalizarCpf(valor) {
   return String(valor || '').replace(/\D/g, '');
+}
+
+function documentoValido(valor) {
+  const documento = normalizarCpf(valor);
+  if (documento.length === 11) {
+    if (/^(\d)\1{10}$/.test(documento)) return false;
+    let soma = 0;
+    for (let indice = 0; indice < 9; indice += 1) soma += Number(documento[indice]) * (10 - indice);
+    let digito = (soma * 10) % 11;
+    if (digito === 10) digito = 0;
+    if (digito !== Number(documento[9])) return false;
+    soma = 0;
+    for (let indice = 0; indice < 10; indice += 1) soma += Number(documento[indice]) * (11 - indice);
+    digito = (soma * 10) % 11;
+    if (digito === 10) digito = 0;
+    return digito === Number(documento[10]);
+  }
+  if (documento.length === 14) {
+    if (/^(\d)\1{13}$/.test(documento)) return false;
+    const calcularDigito = (tamanho) => {
+      let soma = 0;
+      let peso = tamanho - 7;
+      for (let indice = 0; indice < tamanho; indice += 1) {
+        soma += Number(documento[indice]) * peso;
+        peso -= 1;
+        if (peso < 2) peso = 9;
+      }
+      const resto = soma % 11;
+      return resto < 2 ? 0 : 11 - resto;
+    };
+    return calcularDigito(12) === Number(documento[12]) && calcularDigito(13) === Number(documento[13]);
+  }
+  return false;
 }
 
 function getPagSeguroBase(cfg = {}) {
@@ -3243,10 +3273,31 @@ app.get('/api/clientes', exigirAdmin, async (req, res) => {
   }
 });
 
+app.post('/api/clientes/:id/sync/bling', exigirAdmin, async (req, res) => {
+  try {
+    const { data: cliente, error } = await supabaseAdmin
+      .from('clientes')
+      .select('*')
+      .eq('id', req.params.id)
+      .maybeSingle();
+    if (error) throw error;
+    if (!cliente) return res.status(404).json({ ok: false, error: 'Cliente não encontrado.' });
+
+    const blingId = await obterOuCriarContatoBling(cliente);
+    return res.json({ ok: true, blingId: String(blingId), mensagem: 'Cliente sincronizado com o Bling.' });
+  } catch (err) {
+    return res.status(422).json({ ok: false, error: err.message });
+  }
+});
+
 app.post('/api/clientes', async (req, res) => {
   const c = req.body;
   if (!c || !c.email || !c.nome || !c.senha || c.senha.length < 6) {
     return res.status(400).json({ error: "Dados de cliente inválidos. Senha deve ter ao menos 6 caracteres." });
+  }
+  const documento = String(c.cnpj || c.cpf || '').replace(/\D/g, '');
+  if (!documentoValido(documento)) {
+    return res.status(400).json({ error: 'CPF ou CNPJ válido é obrigatório para cadastrar o cliente.' });
   }
   try {
     const emailBusca = c.email.toLowerCase().trim();
