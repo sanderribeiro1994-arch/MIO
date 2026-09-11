@@ -485,21 +485,23 @@ async function obterOuCriarContatoBling(clienteDados = {}, pedido = {}) {
 
   const accessToken = await getBlingAccessToken();
   const endereco = parseJsonArray(dados.endereco, {});
+  const telefone = normalizarCpf(dados.telefone || dados.whatsapp || '');
+  const enderecoPayload = {
+    ...(endereco.endereco || endereco.rua ? { endereco: endereco.endereco || endereco.rua } : {}),
+    ...(endereco.numero ? { numero: String(endereco.numero) } : {}),
+    ...(endereco.complemento ? { complemento: endereco.complemento } : {}),
+    ...(endereco.bairro ? { bairro: endereco.bairro } : {}),
+    ...(endereco.cep ? { cep: normalizarCpf(endereco.cep) } : {}),
+    ...(endereco.municipio || endereco.cidade ? { municipio: endereco.municipio || endereco.cidade } : {}),
+    ...(endereco.uf ? { uf: String(endereco.uf).trim().toUpperCase() } : {})
+  };
   const contatoPayload = {
     nome: String(dados.nome || 'Cliente').trim(),
     ...(email ? { email } : {}),
-    telefone: String(dados.telefone || dados.whatsapp || ''),
+    ...(telefone ? { telefone } : {}),
     numeroDocumento: String(dados.cnpj || dados.cpf || '').replace(/\D/g, ''),
     tipoPessoa: dados.tipo_pessoa === 'J' || dados.cnpj ? 'J' : 'F',
-    endereco: {
-      endereco: endereco.endereco || endereco.rua || '',
-      numero: String(endereco.numero || ''),
-      complemento: endereco.complemento || '',
-      bairro: endereco.bairro || '',
-      cep: String(endereco.cep || '').replace(/\D/g, ''),
-      municipio: endereco.municipio || endereco.cidade || '',
-      uf: endereco.uf || endereco.estado || ''
-    }
+    ...(Object.keys(enderecoPayload).length ? { endereco: enderecoPayload } : {})
   };
 
   if (!contatoPayload.nome || !documentoValido(contatoPayload.numeroDocumento)) {
@@ -522,9 +524,13 @@ async function obterOuCriarContatoBling(clienteDados = {}, pedido = {}) {
     console.error('[Bling Contato] Erro ao cadastrar cliente:', {
       status: response.status,
       email,
-      resposta: data
+      payload: { ...contatoPayload, numeroDocumento: '***' },
+      resposta: data,
+      campos: data?.error?.fields || data?.fields || null
     });
-    throw new Error(data.message || data.error || data.description || raw || 'Falha ao cadastrar contato no Bling.');
+    const campos = data?.error?.fields || data?.fields;
+    const detalheCampos = Array.isArray(campos) && campos.length ? ` Campos: ${JSON.stringify(campos)}` : '';
+    throw new Error((data.message || data.error || data.description || raw || 'Falha ao cadastrar contato no Bling.') + detalheCampos);
   }
 
   const blingId = Number(data.id || data.data?.id || data.contato?.id || 0);
