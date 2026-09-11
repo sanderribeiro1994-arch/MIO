@@ -415,7 +415,7 @@ if (!container || !wrapperDetalhes || !containerVitrine) return;
             <p class="text-xs text-amber-400 font-mono">ou R$ ${produto.preco.toFixed(2).replace('.', ',')} em ate <span class="text-white font-bold">3x de R$ ${valorParcela}</span> sem juros no cartao</p>
           </div>
           <div class="bg-zinc-950 border border-zinc-900 p-3.5 rounded-xl" id="secao-frete">
-            ${usuarioLogado && usuarioLogado.endereco ? `
+            ${usuarioLogado && formatarEnderecoString(usuarioLogado.endereco) ? `
               <div class="flex items-start gap-2.5">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 mt-0.5"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
                 <div class="text-xs w-full">
@@ -548,7 +548,7 @@ if (!container || !wrapperDetalhes || !containerVitrine) return;
         if (endereco.estado || endereco.uf) partes.push(endereco.estado || endereco.uf);
         if (endereco.cep) partes.push(endereco.cep);
         if (partes.length > 0) return partes.join(', ');
-        return JSON.stringify(endereco);
+        return '';
       }
       return String(endereco);
     }
