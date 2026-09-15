@@ -808,6 +808,7 @@ const BLING_AUTH_URL = process.env.BLING_AUTH_URL || 'https://api.bling.com.br/A
 const BLING_TOKEN_URL = process.env.BLING_TOKEN_URL || 'https://api.bling.com.br/Api/v3/oauth/token';
 const BLING_API_BASE = process.env.BLING_API_BASE || 'https://api.bling.com.br/Api/v3';
 const BLING_VENDAS_URL = 'https://api.bling.com.br/Api/v3/pedidos/vendas';
+const BLING_FORMA_PAGAMENTO_SANDBOX = 10879980;
 const blingCallbackInFlight = new Map();
 let blingTokenRefreshInFlight = null;
 
@@ -1205,7 +1206,7 @@ async function enviarPedidoParaBling(pedido) {
       pedido.formaPagamentoId ||
       pedido.pagamento?.formaPagamento?.id ||
       process.env.BLING_FORMA_PAGAMENTO_ID ||
-      0
+      BLING_FORMA_PAGAMENTO_SANDBOX
     );
     const parcelasQuantidade = Math.max(1, Number(pedido.parcelas || 1));
 
@@ -2317,7 +2318,7 @@ app.post('/api/checkout', async (req, res) => {
       itens: pedidoMio.itens,
       cupom: pedidoMio.cupom,
       metodo: pedidoMio.metodo,
-      forma_pagamento_id: payload.forma_pagamento_id || payload.formaPagamentoId || null,
+      forma_pagamento_id: payload.forma_pagamento_id || payload.formaPagamentoId || Number(process.env.BLING_FORMA_PAGAMENTO_ID || BLING_FORMA_PAGAMENTO_SANDBOX),
       parcelas: Math.max(1, Number(payload.parcelas || 1)),
       status: pedidoMio.status,
       total: pedidoMio.total,
