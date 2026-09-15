@@ -2079,9 +2079,12 @@ async function criarCheckoutPagBank(req, payload) {
   }
 
   const payLink = Array.isArray(data.links)
-    ? data.links.find(link => link.rel === 'PAY' || link.rel === 'pay')
+    ? data.links.find(link => String(link.rel || '').toUpperCase() === 'PAY' && link.href)
     : null;
-  const redirectUrl = data.redirect_url || data.checkout_url || payLink?.href || '';
+  const redirectUrl = payLink?.href
+    || data.checkout_url
+    || data.payment_url
+    || (data.redirect_url && !String(data.redirect_url).startsWith(baseUrl) ? data.redirect_url : '');
   if (!redirectUrl) {
     return { error: 'O PagBank criou o checkout, mas não retornou a URL de pagamento.', statusCode: 502, details: data };
   }
