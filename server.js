@@ -484,6 +484,46 @@ async function buscarClientePorEmail(email) {
   return data;
 }
 
+async function garantirClienteCheckout(clienteDados = {}, endereco = {}) {
+  const email = String(clienteDados.email || '').trim().toLowerCase();
+  if (!email) throw new Error('E-mail do cliente é obrigatório para o pedido.');
+
+  const dados = {
+    nome: String(clienteDados.nome || 'Cliente').trim(),
+    email,
+    cpf: String(clienteDados.cpf || '').trim(),
+    cnpj: String(clienteDados.cnpj || '').trim(),
+    tipo_pessoa: clienteDados.cnpj ? 'J' : 'F',
+    telefone: String(clienteDados.telefone || '').trim(),
+    endereco: endereco || clienteDados.endereco || {},
+    whatsapp_ok: Boolean(clienteDados.whatsapp_ok),
+    aceitou_termos: Boolean(clienteDados.aceitou_termos)
+  };
+  const existente = await buscarClientePorEmail(email);
+
+  if (existente) {
+    const { data, error } = await supabaseAdmin.from('clientes').update({
+      nome: dados.nome,
+      cpf: dados.cpf || existente.cpf || '',
+      cnpj: dados.cnpj || existente.cnpj || '',
+      tipo_pessoa: dados.tipo_pessoa,
+      telefone: dados.telefone || existente.telefone || '',
+      endereco: dados.endereco,
+      whatsapp_ok: dados.whatsapp_ok || existente.whatsapp_ok,
+      aceitou_termos: dados.aceitou_termos || existente.aceitou_termos
+    }).eq('id', existente.id).select('*').single();
+    if (error) throw error;
+    return data;
+  }
+
+  const { data, error } = await supabaseAdmin.from('clientes').insert({
+    ...dados,
+    senha: await hashSenha(crypto.randomUUID())
+  }).select('*').single();
+  if (error) throw error;
+  return data;
+}
+
 async function obterOuCriarContatoBling(clienteDados = {}, pedido = {}) {
   const email = String(clienteDados.email || '').trim().toLowerCase();
   const clienteId = clienteDados.id || pedido.cliente_id || pedido.clienteId || null;
@@ -1125,12 +1165,35 @@ async function registrarTentativaSyncProduto(produtoId, status, mensagem = '') {
   }
 }
 
+async function enriquecerItensComBlingId(itens = []) {
+  return Promise.all(itens.map(async (item) => {
+    const blingIdInformado = item.bling_id || item.blingId || item.produto_bling_id || item.produtoBlingId;
+    if (blingIdInformado) return { ...item, bling_id: String(blingIdInformado) };
+
+    let produto = null;
+    if (item.id) {
+      const resultado = await supabaseAdmin.from('produtos').select('id, nome, bling_id').eq('id', item.id).maybeSingle();
+      if (resultado.error) throw resultado.error;
+      produto = resultado.data;
+    }
+    if (!produto && item.nome) {
+      const resultado = await supabaseAdmin.from('produtos').select('id, nome, bling_id').eq('nome', item.nome).maybeSingle();
+      if (resultado.error) throw resultado.error;
+      produto = resultado.data;
+    }
+    if (!produto?.bling_id) {
+      throw new Error(`Produto "${item.nome || item.id || 'sem identificação'}" não possui bling_id no Supabase.`);
+    }
+    return { ...item, bling_id: String(produto.bling_id) };
+  }));
+}
+
 async function enviarPedidoParaBling(pedido) {
   try {
     const accessToken = await getBlingAccessToken();
 
     const clienteJson = parseJsonArray(pedido.cliente, {});
-    const itensJson = parseJsonArray(pedido.itens, []);
+    const itensJson = await enriquecerItensComBlingId(parseJsonArray(pedido.itens, []));
     const enderecoJson = parseJsonArray(pedido.endereco, {});
     const valorTotal = Number(pedido.total || 0);
     const contatoId = await obterOuCriarContatoBling({
@@ -1265,6 +1328,50 @@ async function enviarPedidoParaBling(pedido) {
     });
     return { ok: false, motivo: error.message };
   }
+}
+
+async function sincronizarPedidoPagoComBling(numeroPedido) {
+  const pedidoAtual = await buscarPedidoPorNumero(numeroPedido);
+  if (!pedidoAtual) {
+    return { ok: false, motivo: `Pedido ${numeroPedido} não encontrado no Supabase.` };
+  }
+
+  if (pedidoAtual.bling_id) {
+    return { ok: true, blingId: String(pedidoAtual.bling_id), jaSincronizado: true };
+  }
+
+  const resultado = await enviarPedidoParaBling(pedidoAtual);
+  if (!resultado.ok) return resultado;
+
+  const blingId = String(resultado.blingId || '').trim();
+  if (!blingId) {
+    return { ok: false, motivo: 'O Bling respondeu sem ID do pedido criado.' };
+  }
+
+  const { error } = await supabaseAdmin.from('pedidos').update({
+    bling_id: blingId,
+    bling_order_id: blingId,
+    data_bling_sync: new Date().toISOString()
+  }).eq('numero', numeroPedido);
+  if (error) throw error;
+
+  const clienteJson = parseJsonArray(pedidoAtual.cliente, {});
+  const cliente = pedidoAtual.cliente_id
+    ? await supabaseAdmin.from('clientes').select('bling_id').eq('id', pedidoAtual.cliente_id).maybeSingle()
+    : null;
+  const clienteBlingId = cliente?.data?.bling_id || clienteJson.bling_id || null;
+  if (clienteBlingId) {
+    await supabaseAdmin.from('pedidos').update({
+      cliente: { ...clienteJson, bling_id: String(clienteBlingId) }
+    }).eq('numero', numeroPedido);
+  }
+
+  return {
+    ok: true,
+    blingId,
+    clienteBlingId,
+    data: resultado.data
+  };
 }
 // ---------- API: UPLOAD DE IMAGENS ----------
 app.post('/api/upload', exigirAdmin, async (req, res) => {
@@ -2155,7 +2262,7 @@ app.post('/api/checkout', async (req, res) => {
       freteSelecionado
     };
 
-    const clienteCadastro = await buscarClientePorEmail(String(payload.cliente.email || '').trim().toLowerCase()).catch(() => null);
+    const clienteCadastro = await garantirClienteCheckout(payload.cliente, payload.endereco);
 
     const { error: pedidoError } = await supabaseAdmin.from('pedidos').insert({
       numero: pedidoMio.numero,
@@ -2452,17 +2559,28 @@ app.post('/api/webhooks/pagseguro', async (req, res) => {
         status: 'PAGO',
         pagbank_status: checkoutStatus || chargeStatus || paymentStatus || 'PAID'
       });
-      const pedidoPago = await findPedidoByReference(reference);
-      if (pedidoPago) {
-        const envio = await enviarPedidoParaBling(pedidoPago);
-        if (envio.ok && envio.blingId) {
-          await atualizarPedidoPorNumero(reference, {
-            bling_id: envio.blingId,
-            data_bling_sync: new Date().toISOString()
-          });
-        }
+      const envio = await sincronizarPedidoPagoComBling(reference);
+      if (!envio.ok) {
+        console.error('[PagBank Webhook] Pagamento confirmado, mas Bling não sincronizado:', {
+          reference,
+          motivo: envio.motivo
+        });
+        return res.status(502).json({
+          ok: false,
+          pago: true,
+          reference,
+          error: envio.motivo || 'Pagamento confirmado, mas falha ao criar pedido no Bling.'
+        });
       }
-      return res.json({ ok: true, pago: true, reference, status: 'PAGO', bling_sync: true });
+      return res.json({
+        ok: true,
+        pago: true,
+        reference,
+        status: 'PAGO',
+        bling_sync: true,
+        blingId: envio.blingId,
+        clienteBlingId: envio.clienteBlingId || null
+      });
     }
 
     return res.json({ ok: true, pago: false, reference, status: checkoutStatus || chargeStatus || paymentStatus || 'PENDING' });
@@ -3050,7 +3168,7 @@ app.post('/api/webhooks/supabase-pedido', async (req, res) => {
     // Se o pedido ainda não tem bling_id, mas já está pago ou em fluxo de expedição, o webhook precisa tentar enviar.
     if (statusImportante.has(statusPedido)) {
       console.log('[Supabase Pedido Webhook] Enviando pedido ao Bling:', { requestId, numero: pedido.numero, status: statusPedido });
-      const resultado = await enviarPedidoParaBling(pedido);
+      const resultado = await sincronizarPedidoPagoComBling(pedido.numero);
       if (!resultado.ok) {
         console.error('[Supabase Pedido Webhook] Envio ao Bling retornou falha:', { requestId, numero: pedido.numero, resultado });
         return res.status(502).json({ success: false, error: resultado.motivo || 'Falha ao enviar pedido ao Bling.', requestId });
