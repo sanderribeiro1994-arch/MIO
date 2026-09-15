@@ -2055,7 +2055,7 @@ async function criarCheckoutPagBank(req, payload) {
       quantity: 1,
       unit_amount: Math.round(valor * 100)
     }],
-    payment_methods: [{ type: 'PIX' }],
+    payment_methods: [{ type: payload.metodo === 'cartao' ? 'CREDIT_CARD' : 'PIX' }],
     notification_urls: [
       `${baseUrl}/api/webhooks/pagseguro`
     ],
@@ -2215,6 +2215,37 @@ app.post('/api/checkout', async (req, res) => {
     }
 
     if (metodo === 'cartao') {
+      const result = await criarCheckoutPagBank(req, {
+        valor: valorTotal,
+        numeroPedido,
+        cliente: payload.cliente,
+        itens: payload.itens,
+        metodo: 'cartao'
+      });
+
+      if (result.error) {
+        await atualizarPedidoPorNumero(numeroPedido, { status: 'Falhou' });
+        return res.status(result.statusCode || 502).json({ ok: false, error: result.error, details: result.details || null });
+      }
+
+      await atualizarPedidoPagBank(numeroPedido, {
+        status: 'Aguardando Pagamento',
+        pagbank_checkout_id: result.checkoutId,
+        pagbank_checkout_url: result.redirectUrl,
+        pagbank_status: 'CREATED'
+      });
+      return res.json({
+        ok: true,
+        numeroPedido,
+        status: 'Aguardando Pagamento',
+        metodo: 'cartao',
+        redirectUrl: result.redirectUrl,
+        checkoutId: result.checkoutId,
+        mensagem: 'Checkout de cartão PagBank criado com sucesso.'
+      });
+    }
+
+    if (metodo === 'cartao_proprio') {
       const { encryptedCard, parcelas, cartaoNome } = payload.pagamento || {};
       const parcelasPermitidas = getParcelamentoMaximo(valorTotal);
       const parcelasFinal = Math.max(1, Math.min(parcelasPermitidas, Number(parcelas || 1)));

@@ -125,9 +125,12 @@
           <div id="etapa3" class="space-y-4 hidden">
             <h3 class="text-xs font-mono uppercase text-zinc-400 border-b border-zinc-900 pb-2">Opções de Pagamento</h3>
             
-            <div class="grid grid-cols-1 gap-3 mb-4">
+            <div class="grid grid-cols-2 gap-3 mb-4">
               <button type="button" id="btnPix" onclick="selecionarMetodo('pix')" class="p-3 border border-amber-400 bg-amber-400/10 text-amber-400 font-bold rounded-lg text-xs uppercase transition">
                 ⚡ PIX
+              </button>
+              <button type="button" id="btnCartao" onclick="selecionarMetodo('cartao')" class="p-3 border border-zinc-800 bg-zinc-900 text-zinc-400 font-bold rounded-lg text-xs uppercase transition">
+                💳 Cartão
               </button>
             </div>
 
@@ -859,44 +862,16 @@
       }
 
       if (!pagSeguroConfig.cartaoDisponivel) {
-        alert('Pagamento por cartão ainda não está habilitado. Use PIX por enquanto. Quando tiver CNPJ, configure PAGBANK_PUBLIC_KEY, PAGBANK_APP_ID e PAGBANK_APP_KEY e o sistema ativa automaticamente.');
+        alert('Pagamento por cartão ainda não está habilitado no PagBank Sandbox.');
         return;
       }
 
       const msgCartao = document.getElementById('msgCartao');
-      const parcelas = document.getElementById('cartaoParcelas').value;
-      const total = Number(totais.total);
-      if (total < 30 && Number(parcelas) > 1) {
-        msgCartao.innerText = 'Para valores abaixo de R$ 30,00, o máximo permitido é 1x.';
-        msgCartao.className = 'text-[11px] font-mono pt-1 text-red-400';
-        msgCartao.classList.remove('hidden');
-        return;
-      }
-      if (total >= 30 && total < 60 && Number(parcelas) > 2) {
-        msgCartao.innerText = 'Para valores entre R$ 30,00 e R$ 59,99, o máximo permitido é 2x.';
-        msgCartao.className = 'text-[11px] font-mono pt-1 text-red-400';
-        msgCartao.classList.remove('hidden');
-        return;
-      }
-      if (total >= 60 && total < 90 && Number(parcelas) > 3) {
-        msgCartao.innerText = 'Para valores entre R$ 60,00 e R$ 89,99, o máximo permitido é 3x.';
-        msgCartao.className = 'text-[11px] font-mono pt-1 text-red-400';
-        msgCartao.classList.remove('hidden');
-        return;
-      }
-      if (total >= 90 && Number(parcelas) > 4) {
-        msgCartao.innerText = 'Para valores a partir de R$ 90,00, o máximo permitido é 4x.';
-        msgCartao.className = 'text-[11px] font-mono pt-1 text-red-400';
-        msgCartao.classList.remove('hidden');
-        return;
-      }
-
-      msgCartao.innerText = 'Criptografando cartão e processando pagamento...';
+      msgCartao.innerText = 'Redirecionando para o checkout seguro do PagBank...';
       msgCartao.className = 'text-[11px] font-mono pt-1 text-amber-400';
       msgCartao.classList.remove('hidden');
 
       try {
-        const encryptedCard = await gerarEncryptedCard();
         const res = await fetch('/api/checkout', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -911,12 +886,7 @@
             frete: totais.frete,
             desconto: totais.desconto,
             freteSelecionado: pedidoMio.freteSelecionado,
-            data: pedidoMio.data,
-            pagamento: {
-              encryptedCard,
-              parcelas: Number(parcelas),
-              cartaoNome: document.getElementById('cartaoNome').value.trim()
-            }
+            data: pedidoMio.data
           })
         });
         const data = await res.json();
@@ -928,20 +898,14 @@
           return;
         }
 
-        if (data.aprovado || data.status === 'PAGO') {
-          msgCartao.innerText = '✅ ' + (data.mensagem || 'Pagamento aprovado!');
-          msgCartao.className = 'text-[11px] font-mono pt-1 text-emerald-400';
+        if (!data.redirectUrl) {
+          msgCartao.innerText = 'O PagBank não retornou o endereço do checkout.';
+          msgCartao.className = 'text-[11px] font-mono pt-1 text-red-400';
           msgCartao.classList.remove('hidden');
-          localStorage.removeItem('mio_sacola_itens');
-          localStorage.removeItem('mio_cupom_ativo');
-          alert(`✅ Pedido ${numeroPedido} aprovado! Enviaremos a confirmação por e-mail.`);
-          window.location.href = `perfil.html?tab=acompanhar&pedido=${encodeURIComponent(numeroPedido)}`;
           return;
         }
 
-        msgCartao.innerText = '⚠️ ' + (data.mensagem || 'Pagamento pendente. Tente novamente.');
-        msgCartao.className = 'text-[11px] font-mono pt-1 text-amber-400';
-        msgCartao.classList.remove('hidden');
+        window.location.assign(data.redirectUrl);
       } catch (err) {
         console.error('Erro ao processar cartão', err);
         msgCartao.innerText = '❌ ' + (err.message || 'Não foi possível processar o pagamento. Tente novamente.');
