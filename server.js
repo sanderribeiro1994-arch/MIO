@@ -458,6 +458,26 @@ async function atualizarPedidoPorNumero(numero, campos) {
   return data;
 }
 
+async function atualizarPedidoPagBank(numero, campos) {
+  try {
+    return await atualizarPedidoPorNumero(numero, campos);
+  } catch (error) {
+    const mensagem = String(error?.message || '');
+    const usaColunaPagBank = Object.keys(campos || {}).some(campo => campo.startsWith('pagbank_'));
+    if (!usaColunaPagBank || !/schema cache|column .* does not exist/i.test(mensagem)) {
+      throw error;
+    }
+
+    console.warn('[PagBank] Colunas pagbank_* ainda não estão no schema do Supabase. O pedido seguirá sem rastreio local até a migração SQL.');
+    const fallback = Object.prototype.hasOwnProperty.call(campos, 'status')
+      ? { status: campos.status }
+      : {};
+    return Object.keys(fallback).length > 0
+      ? atualizarPedidoPorNumero(numero, fallback)
+      : null;
+  }
+}
+
 async function buscarClientePorEmail(email) {
   const { data, error } = await supabaseAdmin.from('clientes').select('*').eq('email', email).maybeSingle();
   if (error) throw error;
@@ -2174,7 +2194,7 @@ app.post('/api/checkout', async (req, res) => {
         return res.status(result.statusCode || 502).json({ ok: false, error: result.error, details: result.details || null });
       }
 
-      await atualizarPedidoPorNumero(numeroPedido, {
+      await atualizarPedidoPagBank(numeroPedido, {
         status: 'Aguardando Pagamento',
         pagbank_checkout_id: result.checkoutId,
         pagbank_checkout_url: result.redirectUrl,
@@ -2394,7 +2414,7 @@ app.post('/api/webhooks/pagseguro', async (req, res) => {
       || checkoutStatus === '3';
 
     if (pago && reference) {
-      await atualizarPedidoPorNumero(reference, {
+      await atualizarPedidoPagBank(reference, {
         status: 'PAGO',
         pagbank_status: checkoutStatus || chargeStatus || paymentStatus || 'PAID'
       });
