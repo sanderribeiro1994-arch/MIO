@@ -735,8 +735,9 @@ async function getMelhorEnvioConfig() {
 }
 
 function obterBaseUrl(req) {
-  const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
-  const host = req.get('host') || 'localhost:3000';
+  const headers = req?.headers || {};
+  const proto = headers['x-forwarded-proto'] || req?.protocol || 'http';
+  const host = typeof req?.get === 'function' ? req.get('host') : headers.host || 'localhost:3000';
   return `${proto}://${host}`;
 }
 
@@ -995,7 +996,9 @@ async function buscarConfigPagSeguro() {
     appId: '',
     appKey: ''
   });
-  const token = String(process.env.PAGBANK_TOKEN || cfg.token || '').trim();
+  const token = String(process.env.PAGBANK_TOKEN || '')
+    .trim()
+    .replace(/^Bearer\s+/i, '');
   const publicKey = String(process.env.PAGBANK_PUBLIC_KEY || cfg.publicKey || '').trim();
   const appId = String(process.env.PAGBANK_APP_ID || cfg.appId || '').trim();
   const appKey = String(process.env.PAGBANK_APP_KEY || cfg.appKey || '').trim();
@@ -1953,14 +1956,10 @@ async function criarCargaPagSeguro(req, payload) {
   };
 
   if (payload.metodo === 'pix') {
-    body.charges = [{
-      reference_id: numeroPedido,
-      description: 'Pagamento PIX MIO',
-      amount: { value: Math.round(valor * 100), currency: 'BRL' },
-      payment_method: {
-        type: 'PIX',
-        capture: true
-      }
+    delete body.amount;
+    body.qr_codes = [{
+      amount: { value: Math.round(valor * 100) },
+      expiration_date: new Date(Date.now() + 30 * 60 * 1000).toISOString()
     }];
   }
 
@@ -1984,7 +1983,8 @@ async function criarCargaPagSeguro(req, payload) {
     }];
   }
 
-  const resApi = await fetch(base + '/charges', {
+  const endpoint = payload.metodo === 'pix' ? '/orders' : '/charges';
+  const resApi = await fetch(base + endpoint, {
     method: 'POST',
     headers: authHeaders,
     body: JSON.stringify(body)
@@ -1992,8 +1992,18 @@ async function criarCargaPagSeguro(req, payload) {
 
   const data = await resApi.json().catch(() => ({}));
   if (!resApi.ok) {
-    const mensagem = data.message || data.error_messages?.map(m => m.description).join(', ') || 'Erro ao processar o pagamento no PagSeguro.';
-    return { error: mensagem, statusCode: resApi.status };
+    const erros = Array.isArray(data.error_messages)
+      ? data.error_messages.map(m => m.description || m.message || m.code).filter(Boolean).join(', ')
+      : '';
+    const mensagem = erros || data.message || data.error || `Erro ${resApi.status} ao processar o pagamento no PagBank.`;
+    console.error('[PagBank] Falha ao criar pagamento:', {
+      endpoint,
+      status: resApi.status,
+      mensagem,
+      code: data.code || null,
+      parameter: data.parameter || null
+    });
+    return { error: mensagem, statusCode: resApi.status, details: data };
   }
 
   return { ok: true, data };
@@ -2101,7 +2111,7 @@ app.post('/api/checkout', async (req, res) => {
 
       if (result.error) {
         await atualizarPedidoPorNumero(numeroPedido, { status: 'Falhou' });
-        return res.status(result.statusCode || 502).json({ ok: false, error: result.error });
+        return res.status(result.statusCode || 502).json({ ok: false, error: result.error, details: result.details || null });
       }
 
       const data = result.data || {};
@@ -2175,8 +2185,8 @@ app.post('/api/pagamento/pix', async (req, res) => {
   if (!valor || !cliente) return res.status(400).json({ error: 'Valor e cliente obrigatórios.' });
   try {
     const cfg = await buscarConfigPagSeguro();
-    if (!cfg.ativo) {
-      return res.status(403).json({ ok: false, error: 'Pagamento via PagSeguro está desativado no painel administrativo.' });
+    if (!cfg.token) {
+      return res.status(503).json({ ok: false, error: 'PIX indisponível: PAGBANK_TOKEN não está configurado.' });
     }
     const result = await criarCargaPagSeguro({ get: () => 'http://localhost' }, {
       valor,
@@ -2186,7 +2196,7 @@ app.post('/api/pagamento/pix', async (req, res) => {
       metodo: 'pix'
     });
 
-    if (result.error) return res.status(502).json({ ok: false, error: result.error });
+    if (result.error) return res.status(result.statusCode || 502).json({ ok: false, error: result.error, details: result.details || null });
 
     const data = result.data || {};
     const qrCodes = data.qr_codes || data.payment_response?.qr_codes || [];
