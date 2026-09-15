@@ -1196,7 +1196,12 @@ async function enviarPedidoParaBling(pedido) {
     const clienteJson = parseJsonArray(pedido.cliente, {});
     const itensJson = await enriquecerItensComBlingId(parseJsonArray(pedido.itens, []));
     const enderecoJson = parseJsonArray(pedido.endereco, {});
-    const valorTotal = Number(pedido.total || 0);
+    const descontoValor = Number(pedido.desconto || 0);
+    const valorItens = itensJson.reduce((total, item) => (
+      total + Number(item.preco || item.valor || 0) * Number(item.quantidade || 1)
+    ), 0);
+    const valorTotal = Math.max(0, Number(Number(pedido.total || 0).toFixed(2)));
+    const freteValor = Math.max(0, Number((valorTotal - valorItens + descontoValor).toFixed(2)));
     const contatoId = await obterOuCriarContatoBling({
       ...clienteJson,
       id: clienteJson.id || pedido.cliente_id || pedido.clienteId
@@ -1214,6 +1219,9 @@ async function enviarPedidoParaBling(pedido) {
       numero: String(pedido.numero || '').trim(),
       contato: { id: contatoId },
       enderecoEntrega: enderecoJson,
+      transporte: {
+        frete: freteValor
+      },
       itens: itensJson.map(i => ({
         produto: { id: Number(i.bling_id || i.blingId || i.produto_bling_id || i.produtoBlingId || 0) },
         quantidade: Number(i.quantidade || 1),
@@ -1235,6 +1243,9 @@ async function enviarPedidoParaBling(pedido) {
       itens: payload.itens,
       parcelas: payload.parcelas,
       total: valorTotal,
+      valorItens,
+      freteValor,
+      descontoValor,
       contatoId,
       formaPagamentoId
     });

@@ -59,15 +59,15 @@
 
         <!-- BOTÕES DAS ABAS PRINCIPAIS -->
         <div class="w-full space-y-2 border-t border-zinc-800/80 pt-4">
-          <button id="btnAbaDados" onclick="trocarAbaPrincipal('dados')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition bg-amber-400 text-black shadow-lg">
+          <button type="button" id="btnAbaDados" onclick="event.preventDefault(); trocarAbaPrincipal('dados')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition bg-amber-400 text-black shadow-lg">
             <i data-lucide="user" class="w-4 h-4"></i> Dados Cadastrais
           </button>
 
-          <button id="btnAbaHistorico" onclick="trocarAbaPrincipal('historico')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition text-zinc-400 hover:text-white hover:bg-zinc-800/60">
+          <button type="button" id="btnAbaHistorico" onclick="event.preventDefault(); trocarAbaPrincipal('historico')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition text-zinc-400 hover:text-white hover:bg-zinc-800/60">
             <i data-lucide="shopping-bag" class="w-4 h-4"></i> Histórico de Compras
           </button>
 
-          <button id="btnAbaAcompanhar" onclick="trocarAbaPrincipal('acompanhar')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition text-zinc-400 hover:text-white hover:bg-zinc-800/60">
+          <button type="button" id="btnAbaAcompanhar" onclick="event.preventDefault(); trocarAbaPrincipal('acompanhar')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition text-zinc-400 hover:text-white hover:bg-zinc-800/60">
             <i data-lucide="truck" class="w-4 h-4"></i> Acompanhar Pedidos
           </button>
         </div>
