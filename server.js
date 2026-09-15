@@ -2150,7 +2150,6 @@ async function criarCheckoutPagBank(req, payload) {
   const dataExpiracao = new Date(Date.now() + 30 * 60 * 1000).toISOString();
   const body = {
     reference_id: numeroPedido,
-    expiration_date: dataExpiracao,
     customer: {
       name: cliente.nome || 'Cliente MIO',
       email: cliente.email || 'cliente@miostreetwear.com.br',
@@ -2162,14 +2161,24 @@ async function criarCheckoutPagBank(req, payload) {
       quantity: 1,
       unit_amount: Math.round(valor * 100)
     }],
-    payment_methods: [{ type: payload.metodo === 'cartao' ? 'CREDIT_CARD' : 'PIX' }],
     notification_urls: [
       `${baseUrl}/api/webhooks/pagseguro`
-    ],
-    redirect_url: `${baseUrl}/checkout.html?pagbank=retorno&pedido=${encodeURIComponent(numeroPedido)}`
+    ]
   };
 
-  const resApi = await fetch(`${getPagSeguroBase(cfg)}/checkouts`, {
+  if (payload.metodo === 'pix') {
+    body.qr_codes = [{
+      amount: { value: Math.round(valor * 100) },
+      expiration_date: dataExpiracao
+    }];
+  } else {
+    body.expiration_date = dataExpiracao;
+    body.payment_methods = [{ type: 'CREDIT_CARD' }];
+    body.redirect_url = `${baseUrl}/checkout.html?pagbank=retorno&pedido=${encodeURIComponent(numeroPedido)}`;
+  }
+
+  const endpoint = payload.metodo === 'pix' ? '/orders' : '/checkouts';
+  const resApi = await fetch(`${getPagSeguroBase(cfg)}${endpoint}`, {
     method: 'POST',
     headers: getPagSeguroHeaders(cfg, { 'x-idempotency-key': numeroPedido }),
     body: JSON.stringify(body)
@@ -2180,9 +2189,27 @@ async function criarCheckoutPagBank(req, payload) {
     const erros = Array.isArray(data.error_messages)
       ? data.error_messages.map(m => m.description || m.message || m.code).filter(Boolean).join(', ')
       : '';
-    const mensagem = erros || data.message || data.error || `Erro ${resApi.status} ao criar checkout PagBank.`;
-    console.error('[PagBank Checkout] Falha:', { status: resApi.status, mensagem, code: data.code || null });
+    const mensagem = erros || data.message || data.error || `Erro ${resApi.status} ao criar pagamento PagBank.`;
+    console.error('[PagBank Checkout] Falha:', { endpoint, status: resApi.status, mensagem, code: data.code || null });
     return { error: mensagem, statusCode: resApi.status, details: data };
+  }
+
+  if (payload.metodo === 'pix') {
+    const charge = data.charges?.[0] || {};
+    const qrCodeText = charge.qr_code?.text || '';
+    const imageLink = charge.links?.find(link => String(link.rel || '').toUpperCase() === 'QRCODE.PNG');
+    const qrCodeImage = imageLink?.href || '';
+    if (!qrCodeText) {
+      return { error: 'O PagBank criou o pedido, mas não retornou o código PIX.', statusCode: 502, details: data };
+    }
+    return {
+      ok: true,
+      data,
+      checkoutId: data.id || null,
+      qrCodeText,
+      copiaECola: qrCodeText,
+      qrCodeImage
+    };
   }
 
   const payLink = Array.isArray(data.links)
@@ -2307,7 +2334,7 @@ app.post('/api/checkout', async (req, res) => {
       await atualizarPedidoPagBank(numeroPedido, {
         status: 'Aguardando Pagamento',
         pagbank_checkout_id: result.checkoutId,
-        pagbank_checkout_url: result.redirectUrl,
+        pagbank_checkout_url: result.redirectUrl || null,
         pagbank_status: 'CREATED'
       });
       return res.json({
@@ -2315,9 +2342,11 @@ app.post('/api/checkout', async (req, res) => {
         numeroPedido,
         status: 'Aguardando Pagamento',
         metodo: 'pix',
-        redirectUrl: result.redirectUrl,
+        qrCodeImage: result.qrCodeImage,
+        qrCodeText: result.qrCodeText,
+        copiaECola: result.copiaECola,
         checkoutId: result.checkoutId,
-        mensagem: 'Checkout PIX PagBank criado com sucesso.'
+        mensagem: 'Cobrança PIX PagBank criada com sucesso.'
       });
     }
 

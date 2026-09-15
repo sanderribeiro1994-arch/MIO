@@ -848,12 +848,19 @@
             return;
           }
 
-          if (!data.redirectUrl) {
-            alert('O PagBank não retornou o endereço do checkout. Tente novamente.');
+          codigoPixAtual = data.copiaECola || data.qrCodeText || '';
+          if (!codigoPixAtual) {
+            alert('O PagBank não retornou o código PIX. Tente novamente.');
             return;
           }
 
-          window.location.assign(data.redirectUrl);
+          document.getElementById('boxResultadoPix').classList.remove('hidden');
+          const qrFallback = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(codigoPixAtual)}`;
+          const qrImagem = document.getElementById('qrCodePixImg');
+          qrImagem.onerror = () => { qrImagem.onerror = null; qrImagem.src = qrFallback; };
+          qrImagem.src = data.qrCodeImage || qrFallback;
+          iniciarPollingPedido(numeroPedido);
+          alert(`Pedido ${numeroPedido} criado. Escaneie o QR Code ou copie o código PIX.`);
         } catch (err) {
           console.error('Erro ao gerar PIX', err);
           alert('Não foi possível gerar o QR Code PIX no momento. Tente novamente.');
