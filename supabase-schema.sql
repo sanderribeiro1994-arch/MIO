@@ -152,11 +152,7 @@ create table if not exists public.pedidos (
   bling_order_id text,
   bling_status text,
   bling_tracking text,
-  data_bling_sync timestamptz,
-  upseller_id text,
-  upseller_tracking text,
-  upseller_status text,
-  data_upseller_sync timestamptz
+  data_bling_sync timestamptz
 );
 
 alter table if exists public.pedidos
@@ -210,6 +206,18 @@ drop policy if exists "produtos_public_select" on public.produtos;
 drop policy if exists "banners_public_select" on public.banners;
 drop policy if exists "cupons_public_select" on public.cupons;
 drop policy if exists "avaliacoes_public_select" on public.avaliacoes;
+drop policy if exists "clientes_public_select" on public.clientes;
+drop policy if exists "clientes_public_insert" on public.clientes;
+drop policy if exists "clientes_public_update" on public.clientes;
+drop policy if exists "pedidos_public_select" on public.pedidos;
+drop policy if exists "pedidos_public_insert" on public.pedidos;
+drop policy if exists "pedidos_public_update" on public.pedidos;
+drop policy if exists "config_public_select" on public.config;
+drop policy if exists "config_public_insert" on public.config;
+drop policy if exists "config_public_update" on public.config;
+drop policy if exists "cliente_sessoes_public_select" on public.cliente_sessoes;
+drop policy if exists "cliente_sessoes_public_insert" on public.cliente_sessoes;
+drop policy if exists "cliente_sessoes_public_update" on public.cliente_sessoes;
 
 create policy "produtos_public_select" on public.produtos
   for select to anon, authenticated using (true);
@@ -217,11 +225,59 @@ create policy "produtos_public_select" on public.produtos
 create policy "banners_public_select" on public.banners
   for select to anon, authenticated using (true);
 
+create policy "banners_admin_write" on public.banners
+  for all to authenticated using (true) with check (true);
+
 create policy "cupons_public_select" on public.cupons
   for select to anon, authenticated using (true);
 
 create policy "avaliacoes_public_select" on public.avaliacoes
   for select to anon, authenticated using (status = 'aprovado');
+
+create policy "clientes_public_select" on public.clientes
+  for select to anon, authenticated using (true);
+
+create policy "clientes_public_insert" on public.clientes
+  for insert to anon, authenticated with check (true);
+
+create policy "clientes_public_update" on public.clientes
+  for update to anon, authenticated using (true) with check (true);
+
+create policy "pedidos_public_select" on public.pedidos
+  for select to anon, authenticated using (true);
+
+create policy "pedidos_public_insert" on public.pedidos
+  for insert to anon, authenticated with check (true);
+
+create policy "pedidos_public_update" on public.pedidos
+  for update to anon, authenticated using (true) with check (true);
+
+create policy "config_public_select" on public.config
+  for select to anon, authenticated using (true);
+
+create policy "config_public_insert" on public.config
+  for insert to anon, authenticated with check (true);
+
+create policy "config_public_update" on public.config
+  for update to anon, authenticated using (true) with check (true);
+
+create policy "cliente_sessoes_public_select" on public.cliente_sessoes
+  for select to anon, authenticated using (true);
+
+create policy "cliente_sessoes_public_insert" on public.cliente_sessoes
+  for insert to anon, authenticated with check (true);
+
+create policy "cliente_sessoes_public_update" on public.cliente_sessoes
+  for update to anon, authenticated using (true) with check (true);
+
+create policy "cliente_sessoes_public_delete" on public.cliente_sessoes
+  for delete to anon, authenticated using (true);
+
+create policy "pedidos_public_delete" on public.pedidos
+  for delete to anon, authenticated using (true);
+
+create policy "config_admin_write" on public.config
+  for all to authenticated using (true) with check (true);
 
 insert into storage.buckets (id, name, "public")
 values ('images', 'images', true)

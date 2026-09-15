@@ -574,7 +574,7 @@ async function processarWebhookClienteSupabase(req, res) {
     const tipoEvento = String(payload.type || '').toUpperCase();
     const cliente = payload.record;
 
-    if (!cliente || tipoEvento !== 'INSERT') {
+    if (!cliente || !['INSERT', 'UPDATE'].includes(tipoEvento)) {
       return res.status(200).json({
         success: true,
         ignored: true,
@@ -587,8 +587,15 @@ async function processarWebhookClienteSupabase(req, res) {
       return res.status(400).json({ success: false, error: 'Cliente precisa ter id e email.', requestId });
     }
 
+    // Cliente já sincronizado com o Bling: não repetir processo, apenas confirmar o evento.
     if (cliente.bling_id) {
-      return res.status(200).json({ success: true, ignored: true, requestId, blingId: cliente.bling_id });
+      return res.status(200).json({
+        success: true,
+        ignored: true,
+        requestId,
+        blingId: cliente.bling_id,
+        reason: 'Cliente já sincronizado com o Bling.'
+      });
     }
 
     const blingId = await obterOuCriarContatoBling(cliente);
@@ -660,7 +667,9 @@ function converterBannersParaLinhas(config) {
 }
 
 async function salvarBanners(config) {
-  const { error: deleteError } = await supabase.from('banners').delete().not('id', 'is', null);
+  // O cliente anon tem RLS restritivo e não pode escrever em banners.
+  // A escrita real do app precisa ocorrer via service role/admin.
+  const { error: deleteError } = await supabaseAdmin.from('banners').delete().not('id', 'is', null);
   if (deleteError) throw deleteError;
   const linhas = converterBannersParaLinhas(config);
   if (!linhas.length) return;
@@ -963,8 +972,8 @@ function getPagSeguroHeaders(cfg = {}, extra = {}) {
   };
   const token = cfg.token || '';
   if (token) headers.Authorization = `Bearer ${token}`;
+  if (cfg.appId) headers['x-api-id'] = String(cfg.appId);
   if (cfg.appKey) headers['x-api-key'] = cfg.appKey;
-  if (cfg.appId) headers['x-idempotency-key'] = String(cfg.appId);
   return headers;
 }
 
@@ -986,15 +995,23 @@ async function buscarConfigPagSeguro() {
     appId: '',
     appKey: ''
   });
+  const token = String(process.env.PAGBANK_TOKEN || cfg.token || '').trim();
+  const publicKey = String(process.env.PAGBANK_PUBLIC_KEY || cfg.publicKey || '').trim();
+  const appId = String(process.env.PAGBANK_APP_ID || cfg.appId || '').trim();
+  const appKey = String(process.env.PAGBANK_APP_KEY || cfg.appKey || '').trim();
+  const ativoEnv = process.env.PAGBANK_ATIVO !== undefined ? process.env.PAGBANK_ATIVO === 'true' : !!cfg.ativo;
+
   return {
     ...cfg,
-    ativo: process.env.PAGBANK_ATIVO !== undefined ? process.env.PAGBANK_ATIVO === 'true' : !!cfg.ativo,
+    ativo: ativoEnv || Boolean(token),
     modo: process.env.PAGBANK_MODO || cfg.modo || 'sandbox',
     email: process.env.PAGBANK_EMAIL || cfg.email || '',
-    token: process.env.PAGBANK_TOKEN || cfg.token || '',
-    publicKey: process.env.PAGBANK_PUBLIC_KEY || cfg.publicKey || '',
-    appId: process.env.PAGBANK_APP_ID || cfg.appId || '',
-    appKey: process.env.PAGBANK_APP_KEY || cfg.appKey || ''
+    token,
+    publicKey,
+    appId,
+    appKey,
+    pixDisponivel: Boolean(token),
+    cartaoDisponivel: Boolean(token && publicKey && appId && appKey)
   };
 }
 
@@ -1873,9 +1890,11 @@ app.get('/api/pagseguro/public-config', async (req, res) => {
     const cfg = await buscarConfigPagSeguro();
     res.json({
       ok: true,
-      ativo: !!cfg.ativo,
+      ativo: !!cfg.ativo || !!cfg.token,
       modo: cfg.modo || 'sandbox',
       configurado: Boolean(cfg.token),
+      pixDisponivel: Boolean(cfg.token),
+      cartaoDisponivel: Boolean(cfg.token && cfg.publicKey && cfg.appId && cfg.appKey),
       publicKey: cfg.publicKey || ''
     });
   } catch (error) {
@@ -1886,9 +1905,19 @@ app.get('/api/pagseguro/public-config', async (req, res) => {
 // ---------- API: PAGAMENTO (PagSeguro) ----------
 async function criarCargaPagSeguro(req, payload) {
   const cfg = await buscarConfigPagSeguro();
-  const ativo = !!cfg.ativo;
-  if (!ativo) {
-    return { error: 'Pagamento via PagSeguro está desativado no painel administrativo. Ative a integração para concluir o checkout.' };
+  const token = String(cfg.token || '').trim();
+  if (!token) {
+    return {
+      error: 'Token do PagBank não configurado. Defina PAGBANK_TOKEN no Render para liberar o pagamento via PIX.',
+      statusCode: 503
+    };
+  }
+
+  if (payload.metodo === 'cartao' && !cfg.cartaoDisponivel) {
+    return {
+      error: 'Cartão ainda não está habilitado para o PagBank. Configure PAGBANK_PUBLIC_KEY, PAGBANK_APP_ID e PAGBANK_APP_KEY para ativar o pagamento por cartão.',
+      statusCode: 501
+    };
   }
 
   const valor = Number(payload.valor || 0);
@@ -1995,8 +2024,18 @@ app.post('/api/checkout', async (req, res) => {
     }
 
     const cfg = await buscarConfigPagSeguro();
-    if (!cfg.ativo) {
-      return res.status(403).json({ ok: false, error: 'Pagamento via PagSeguro está desativado no painel administrativo.' });
+    const pixDisponivel = Boolean(cfg.token);
+    const cartaoDisponivel = Boolean(cfg.token && cfg.publicKey && cfg.appId && cfg.appKey);
+
+    if (metodo === 'pix' && !pixDisponivel) {
+      return res.status(503).json({ ok: false, error: 'PIX indisponível: configure PAGBANK_TOKEN no Render antes de finalizar o pedido.' });
+    }
+
+    if (metodo === 'cartao' && !cartaoDisponivel) {
+      return res.status(501).json({
+        ok: false,
+        error: 'Pagamento por cartão ainda não está habilitado. Use PIX por enquanto e configure PAGBANK_PUBLIC_KEY, PAGBANK_APP_ID e PAGBANK_APP_KEY quando tiver o CNPJ.'
+      });
     }
 
     const numeroPedido = payload.numeroPedido || `MIO-${Date.now()}`;
@@ -2833,7 +2872,7 @@ app.post('/api/webhooks/supabase-pedido', async (req, res) => {
       hasBlingId: Boolean(pedido?.bling_id)
     });
 
-    if (!pedido || tipoEvento !== 'INSERT') {
+    if (!pedido || !['INSERT', 'UPDATE'].includes(tipoEvento)) {
       console.log('[Supabase Pedido Webhook] Evento ignorado:', { requestId, tipoEvento, hasRecord: Boolean(pedido) });
       return res.status(200).json({
         success: true,
@@ -2841,7 +2880,6 @@ app.post('/api/webhooks/supabase-pedido', async (req, res) => {
         requestId,
         reason: !pedido ? 'Registro de pedido ausente.' : `Evento ${tipoEvento || 'desconhecido'} não processado.`
       });
-
     }
 
     if (!pedido.numero) {
@@ -2850,16 +2888,9 @@ app.post('/api/webhooks/supabase-pedido', async (req, res) => {
     }
 
     const statusPedido = String(pedido.status || '').trim().toUpperCase();
-    const statusPermitidos = new Set(['PAGO', 'EM PREPARAÇÃO', 'ENVIADO']);
-    if (!statusPermitidos.has(statusPedido)) {
-      return res.status(200).json({
-        success: true,
-        ignored: true,
-        requestId,
-        reason: `Pedido ainda não está pago ou liberado para expedição: ${pedido.status || 'sem status'}.`
-      });
-    }
+    const statusImportante = new Set(['PAGO', 'EM PREPARAÇÃO', 'ENVIADO', 'ENTREGUE', 'DEVOLVIDO']);
 
+    // Se o pedido já tiver bling_id, não precisa reenviar ao Bling; apenas confirmar o evento.
     if (pedido.bling_id) {
       console.log('[Supabase Pedido Webhook] Pedido já sincronizado:', { requestId, numero: pedido.numero, blingId: pedido.bling_id });
       return res.status(200).json({
@@ -2867,24 +2898,37 @@ app.post('/api/webhooks/supabase-pedido', async (req, res) => {
         ignored: true,
         requestId,
         reason: 'Pedido já possui bling_id.',
-        blingId: pedido.bling_id
+        blingId: pedido.bling_id,
+        status: statusPedido || 'sem status'
       });
     }
 
-    console.log('[Supabase Pedido Webhook] Enviando pedido ao Bling:', { requestId, numero: pedido.numero });
-    const resultado = await enviarPedidoParaBling(pedido);
-    if (!resultado.ok) {
-      console.error('[Supabase Pedido Webhook] Envio ao Bling retornou falha:', { requestId, numero: pedido.numero, resultado });
-      return res.status(502).json({ success: false, error: resultado.motivo || 'Falha ao enviar pedido ao Bling.', requestId });
+    // Se o pedido ainda não tem bling_id, mas já está pago ou em fluxo de expedição, o webhook precisa tentar enviar.
+    if (statusImportante.has(statusPedido)) {
+      console.log('[Supabase Pedido Webhook] Enviando pedido ao Bling:', { requestId, numero: pedido.numero, status: statusPedido });
+      const resultado = await enviarPedidoParaBling(pedido);
+      if (!resultado.ok) {
+        console.error('[Supabase Pedido Webhook] Envio ao Bling retornou falha:', { requestId, numero: pedido.numero, resultado });
+        return res.status(502).json({ success: false, error: resultado.motivo || 'Falha ao enviar pedido ao Bling.', requestId });
+      }
+
+      console.log('[Supabase Pedido Webhook] Pedido processado com sucesso:', { requestId, numero: pedido.numero, blingId: resultado.blingId || null });
+      return res.status(200).json({
+        success: true,
+        evento: tipoEvento,
+        numero: pedido.numero,
+        blingId: resultado.blingId || null,
+        requestId
+      });
     }
 
-    console.log('[Supabase Pedido Webhook] Pedido processado com sucesso:', { requestId, numero: pedido.numero, blingId: resultado.blingId || null });
     return res.status(200).json({
       success: true,
-      evento: tipoEvento,
-      numero: pedido.numero,
-      blingId: resultado.blingId || null,
-      requestId
+      accepted: true,
+      ignored: true,
+      requestId,
+      reason: `Pedido sem bling_id aguardando atualização do status de pagamento: ${pedido.status || 'sem status'}.`,
+      numero: pedido.numero
     });
   } catch (error) {
     console.error('[Supabase Pedido Webhook] Erro não tratado:', {

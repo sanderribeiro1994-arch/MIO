@@ -282,10 +282,12 @@
     }
 
     async function prepararPagSeguro() {
-      if (!pagSeguroConfig.ativo || !pagSeguroConfig.publicKey) {
-        throw new Error('O PagSeguro está desativado no painel administrativo. Ative a integração para aceitar pagamentos.');
+      if (!(pagSeguroConfig?.pixDisponivel || pagSeguroConfig?.publicKey)) {
+        throw new Error('O PagSeguro ainda não está pronto para cartão. Use PIX por enquanto e configure as chaves de cartão quando tiver o CNPJ.');
       }
-      await adicionarScriptPagSeguro();
+      if (pagSeguroConfig.publicKey) {
+        await adicionarScriptPagSeguro();
+      }
       return true;
     }
 
@@ -349,6 +351,9 @@
 
     document.addEventListener('DOMContentLoaded', async () => {
       await carregarConfiguracaoPagSeguro();
+      if (!pagSeguroConfig.pixDisponivel) {
+        console.warn('[PagBank] Token PIX ausente; o checkout continuará com PIX apenas quando o token for configurado.');
+      }
       selecionarMetodo('pix');
       carregarItensCheckout();
       preencherDadosUsuarioLogado();
@@ -751,8 +756,8 @@
       }
 
       await carregarConfiguracaoPagSeguro();
-      if (!pagSeguroConfig.ativo) {
-        alert('O PagSeguro está desativado no painel administrativo. Ative a integração para concluir o checkout.');
+      if (!pagSeguroConfig.pixDisponivel) {
+        alert('PIX ainda não está habilitado: configure PAGBANK_TOKEN no Render para concluir o pedido.');
         return;
       }
 
@@ -829,6 +834,11 @@
           console.error('Erro ao gerar PIX', err);
           alert('Não foi possível gerar o QR Code PIX no momento. Tente novamente.');
         }
+        return;
+      }
+
+      if (!pagSeguroConfig.cartaoDisponivel) {
+        alert('Pagamento por cartão ainda não está habilitado. Use PIX por enquanto. Quando tiver CNPJ, configure PAGBANK_PUBLIC_KEY, PAGBANK_APP_ID e PAGBANK_APP_KEY e o sistema ativa automaticamente.');
         return;
       }
 
