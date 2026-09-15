@@ -1201,13 +1201,12 @@ async function enviarPedidoParaBling(pedido) {
       ...clienteJson,
       id: clienteJson.id || pedido.cliente_id || pedido.clienteId
     }, pedido);
-    const formaPagamentoId = Number(
-      pedido.forma_pagamento_id ||
-      pedido.formaPagamentoId ||
-      pedido.pagamento?.formaPagamento?.id ||
-      process.env.BLING_FORMA_PAGAMENTO_ID ||
-      BLING_FORMA_PAGAMENTO_SANDBOX
-    );
+    const formaPagamentoConfigurada = pedido.metodo === 'cartao'
+      ? process.env.BLING_FORMA_PAGAMENTO_CARTAO_ID
+      : process.env.BLING_FORMA_PAGAMENTO_ID;
+    const formaPagamentoId = Number(pedido.metodo === 'cartao'
+      ? (formaPagamentoConfigurada || pedido.forma_pagamento_id || pedido.formaPagamentoId || 0)
+      : (pedido.forma_pagamento_id || pedido.formaPagamentoId || pedido.pagamento?.formaPagamento?.id || formaPagamentoConfigurada || BLING_FORMA_PAGAMENTO_SANDBOX));
     const parcelasQuantidade = Math.max(1, Number(pedido.parcelas || 1));
 
     const payload = {
@@ -1288,7 +1287,8 @@ async function enviarPedidoParaBling(pedido) {
       numero: pedido.numero || pedido.id || null,
       status: resApi.status,
       ok: resApi.ok,
-      resposta: data
+      resposta: data,
+      campos: data?.error?.fields || data?.fields || null
     });
     if (!resApi.ok) {
       console.error('[Bling Pedido] API retornou status inválido:', {
@@ -1298,7 +1298,9 @@ async function enviarPedidoParaBling(pedido) {
         pedido: pedido.numero || pedido.id || null,
         resposta: data
       });
-      throw new Error(data.message || data.error || data.description || raw || 'Falha ao enviar pedido ao Bling');
+      const campos = data?.error?.fields || data?.fields;
+      const detalhesCampos = Array.isArray(campos) && campos.length ? ` Campos: ${JSON.stringify(campos)}` : '';
+      throw new Error((data.message || data.error?.message || data.description || raw || 'Falha ao enviar pedido ao Bling') + detalhesCampos);
     }
 
     const blingId = data.id || data.data?.id || data.pedidoId || data.numero;
@@ -2318,7 +2320,11 @@ app.post('/api/checkout', async (req, res) => {
       itens: pedidoMio.itens,
       cupom: pedidoMio.cupom,
       metodo: pedidoMio.metodo,
-      forma_pagamento_id: payload.forma_pagamento_id || payload.formaPagamentoId || Number(process.env.BLING_FORMA_PAGAMENTO_ID || BLING_FORMA_PAGAMENTO_SANDBOX),
+      forma_pagamento_id: payload.forma_pagamento_id || payload.formaPagamentoId || Number(
+        metodo === 'cartao'
+          ? (process.env.BLING_FORMA_PAGAMENTO_CARTAO_ID || 0)
+          : (process.env.BLING_FORMA_PAGAMENTO_ID || BLING_FORMA_PAGAMENTO_SANDBOX)
+      ),
       parcelas: Math.max(1, Number(payload.parcelas || 1)),
       status: pedidoMio.status,
       total: pedidoMio.total,
@@ -3534,7 +3540,16 @@ app.get('/api/pedidos/:id/status', async (req, res) => {
   try {
     const pedido = await buscarPedidoPorNumero(req.params.id) || await buscarPedidoPorId(Number(req.params.id));
     if (!pedido) return res.status(404).json({ ok: false, error: 'Pedido não encontrado.' });
-    res.json({ ok: true, status: pedido.status || 'Aguardando Pagamento', numero: pedido.numero, total: pedido.total });
+    res.json({
+      ok: true,
+      status: pedido.status || 'Aguardando Pagamento',
+      numero: pedido.numero,
+      total: pedido.total,
+      codigo_rastreamento: pedido.codigo_rastreamento || null,
+      url_rastreamento: pedido.url_rastreamento || null,
+      data_envio: pedido.data_envio || null,
+      data_entrega: pedido.data_entrega || null
+    });
   } catch (error) {
     res.status(500).json({ ok: false, error: 'Erro ao consultar status do pedido.' });
   }
@@ -3601,9 +3616,11 @@ app.post('/api/pedidos/meus', async (req, res) => {
     if (error) throw error;
     const emailBusca = String(email).toLowerCase().trim();
     if (sessao.email !== emailBusca) return res.status(403).json({ error: "Acesso não autorizado." });
+    const clienteAtual = await buscarClientePorEmail(emailBusca);
     const meus = pedidos.filter(pd => {
       const cli = parseJsonArray(pd.cliente, {});
-      return String(cli.email || '').toLowerCase().trim() === emailBusca;
+      return (clienteAtual?.id && Number(pd.cliente_id) === Number(clienteAtual.id))
+        || String(cli.email || '').toLowerCase().trim() === emailBusca;
     });
     const formatados = meus.map(pd => ({
       numero: pd.numero,
@@ -3612,7 +3629,11 @@ app.post('/api/pedidos/meus', async (req, res) => {
       metodo: pd.metodo,
       total: pd.total,
       itens: parseJsonArray(pd.itens, []),
-      cupom: parseJsonArray(pd.cupom, null)
+      cupom: parseJsonArray(pd.cupom, null),
+      codigo_rastreamento: pd.codigo_rastreamento || null,
+      url_rastreamento: pd.url_rastreamento || null,
+      data_envio: pd.data_envio || null,
+      data_entrega: pd.data_entrega || null
     }));
     res.json({ ok: true, pedidos: formatados, email: emailBusca });
   } catch (err) {

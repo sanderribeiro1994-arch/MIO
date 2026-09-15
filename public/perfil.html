@@ -896,7 +896,7 @@
         <div class="bg-zinc-950 border border-zinc-800 rounded-lg p-4">
           <div class="flex justify-between items-center mb-2">
             <span class="text-xs font-black text-white font-mono">${p.numero}</span>
-            <span class="text-[10px] ${p.status === 'Pago' ? 'text-emerald-400' : 'text-amber-400'} font-bold uppercase">${p.status}</span>
+            <span class="text-[10px] ${['Pago', 'PAGO', 'PAID'].includes(p.status) ? 'text-emerald-400' : 'text-amber-400'} font-bold uppercase">${p.status}</span>
           </div>
           <p class="text-[11px] text-zinc-500 font-mono">${new Date(p.data).toLocaleDateString('pt-BR')} • ${p.itens.length} item(ns)</p>
           <p class="text-xs font-bold text-amber-400 font-mono mt-1">R$ ${Number(p.total || 0).toFixed(2).replace('.', ',')}</p>
@@ -905,21 +905,51 @@
     }
 
     // ===== ACOMPANHAR PEDIDO ATUAL =====
-    function carregarAcompanhamento() {
+    async function carregarAcompanhamento() {
       const container = document.getElementById('listaAcompanhamento');
-      const ultimoPedido = JSON.parse(localStorage.getItem('mio_ultimo_pedido') || 'null');
+      const ultimoPedidoLocal = JSON.parse(localStorage.getItem('mio_ultimo_pedido') || 'null');
+      let ultimoPedido = ultimoPedidoLocal;
+
+      try {
+        const resposta = await fetch('/api/pedidos/meus', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-client-token': usuarioToken },
+          body: JSON.stringify({ email: usuarioAtual.email })
+        });
+        const dados = await resposta.json().catch(() => ({}));
+        if (resposta.ok && Array.isArray(dados.pedidos) && dados.pedidos.length) {
+          const pedidoServidor = ultimoPedidoLocal?.numero
+            ? dados.pedidos.find(pedido => pedido.numero === ultimoPedidoLocal.numero)
+            : dados.pedidos[0];
+          ultimoPedido = pedidoServidor || dados.pedidos[0];
+          if (ultimoPedidoLocal && ultimoPedido) {
+            ultimoPedido = { ...ultimoPedidoLocal, ...ultimoPedido };
+            localStorage.setItem('mio_ultimo_pedido', JSON.stringify(ultimoPedido));
+          }
+        }
+      } catch (error) {
+        console.warn('Não foi possível atualizar o acompanhamento:', error.message);
+      }
 
       if (!ultimoPedido || (ultimoPedido.cliente && ultimoPedido.cliente.email !== usuarioAtual.email)) {
         container.innerHTML = '<p class="text-xs text-zinc-500 italic text-center py-8">Nenhum pedido em andamento no momento.</p>';
         return;
       }
 
-      const status = ultimoPedido.status || 'Aguardando Pagamento';
+      const statusOriginal = ultimoPedido.status || 'Aguardando Pagamento';
+      const status = {
+        PAGO: 'Pago',
+        PAID: 'Pago',
+        'EM PREPARAÇÃO': 'Em Separação',
+        'EM SEPARAÇÃO': 'Em Separação',
+        SHIPPED: 'Enviado',
+        DELIVERED: 'Entregue'
+      }[String(statusOriginal).toUpperCase()] || statusOriginal;
       const passos = ['Aguardando Pagamento', 'Pago', 'Em Separação', 'Enviado', 'Entregue'];
       const idxAtual = Math.max(0, passos.indexOf(status));
       
       const freteSelecionado = ultimoPedido.freteSelecionado || {};
-      const temRastreamento = ultimoPedido.codigo_rastreamento ? true : false;
+      const temRastreamento = Boolean(ultimoPedido.codigo_rastreamento);
 
       let rastreamentoHTML = '';
       if (temRastreamento) {
