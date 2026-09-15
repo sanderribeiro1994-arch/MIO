@@ -973,8 +973,6 @@ function getPagSeguroHeaders(cfg = {}, extra = {}) {
   };
   const token = cfg.token || '';
   if (token) headers.Authorization = `Bearer ${token}`;
-  if (cfg.appId) headers['x-api-id'] = String(cfg.appId);
-  if (cfg.appKey) headers['x-api-key'] = cfg.appKey;
   return headers;
 }
 
@@ -996,7 +994,7 @@ async function buscarConfigPagSeguro() {
     appId: '',
     appKey: ''
   });
-  const token = String(process.env.PAGBANK_TOKEN || '')
+  const token = String(process.env.PAGBANK_TOKEN || cfg.token || '')
     .trim()
     .replace(/^Bearer\s+/i, '');
   const publicKey = String(process.env.PAGBANK_PUBLIC_KEY || cfg.publicKey || '').trim();
@@ -2041,13 +2039,12 @@ async function criarCheckoutPagBank(req, payload) {
     notification_urls: [
       `${baseUrl}/api/webhooks/pagseguro`
     ],
-    redirect_url: `${baseUrl}/checkout.html?pagbank=retorno&pedido=${encodeURIComponent(numeroPedido)}`,
-    return_url: `${baseUrl}/checkout.html?pagbank=retorno&pedido=${encodeURIComponent(numeroPedido)}`
+    redirect_url: `${baseUrl}/checkout.html?pagbank=retorno&pedido=${encodeURIComponent(numeroPedido)}`
   };
 
   const resApi = await fetch(`${getPagSeguroBase(cfg)}/checkouts`, {
     method: 'POST',
-    headers: getPagSeguroHeaders(cfg),
+    headers: getPagSeguroHeaders(cfg, { 'x-idempotency-key': numeroPedido }),
     body: JSON.stringify(body)
   });
   const data = await resApi.json().catch(() => ({}));
