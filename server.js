@@ -2196,10 +2196,27 @@ async function criarCheckoutPagBank(req, payload) {
 
   if (payload.metodo === 'pix') {
     const charge = data.charges?.[0] || {};
-    const qrCodeText = charge.qr_code?.text || '';
-    const imageLink = charge.links?.find(link => String(link.rel || '').toUpperCase() === 'QRCODE.PNG');
+    const qrCode = charge.qr_code || data.qr_code || data.payment_response?.qr_code || {};
+    const qrCodes = Array.isArray(data.qr_codes) ? data.qr_codes : [];
+    const qrCodeText = qrCode.text
+      || qrCodes[0]?.text
+      || qrCodes[0]?.code
+      || charge.text
+      || data.copy_and_paste
+      || '';
+    const links = [
+      ...(Array.isArray(charge.links) ? charge.links : []),
+      ...(Array.isArray(data.links) ? data.links : [])
+    ];
+    const imageLink = links.find(link => String(link.rel || '').toUpperCase() === 'QRCODE.PNG');
     const qrCodeImage = imageLink?.href || '';
     if (!qrCodeText) {
+      console.error('[PagBank PIX] Resposta sem QR Code:', {
+        pedido: numeroPedido,
+        hasCharges: Array.isArray(data.charges),
+        chargeKeys: Object.keys(charge),
+        dataKeys: Object.keys(data)
+      });
       return { error: 'O PagBank criou o pedido, mas não retornou o código PIX.', statusCode: 502, details: data };
     }
     return {
