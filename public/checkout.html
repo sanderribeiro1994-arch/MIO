@@ -330,15 +330,23 @@
 
     function iniciarPollingPedido(numeroPedido) {
       if (pollingPix) clearInterval(pollingPix);
+      let tentativas = 0;
       pollingPix = setInterval(async () => {
         try {
+          tentativas += 1;
           const res = await fetch(`/api/pedidos/${encodeURIComponent(numeroPedido)}/status`);
           const data = await res.json().catch(() => ({}));
           const status = String(data.status || '').toUpperCase();
           if (status === 'PAGO' || status === 'PAID') {
             clearInterval(pollingPix);
             pollingPix = null;
-            window.location.href = `perfil.html?tab=acompanhar&pedido=${encodeURIComponent(numeroPedido)}`;
+            window.location.replace(`perfil.html?tab=acompanhar&pedido=${encodeURIComponent(numeroPedido)}`);
+            return;
+          }
+          if (tentativas >= 20) {
+            clearInterval(pollingPix);
+            pollingPix = null;
+            window.location.replace(`perfil.html?tab=acompanhar&pedido=${encodeURIComponent(numeroPedido)}&pagbank=pendente`);
           }
         } catch (err) {
           console.warn('Polling do PIX falhou:', err);
@@ -358,8 +366,17 @@
       const params = new URLSearchParams(window.location.search);
       const pedidoRetornado = params.get('pedido');
       if (params.get('pagbank') === 'retorno' && pedidoRetornado) {
+        document.title = `Pedido ${pedidoRetornado} | MIO`;
         iniciarPollingPedido(pedidoRetornado);
-        alert(`Pedido ${pedidoRetornado} recebido. Estamos confirmando o pagamento com o PagBank.`);
+        document.getElementById('etapa1').classList.add('hidden');
+        document.getElementById('etapa2').classList.add('hidden');
+        document.getElementById('etapa3').classList.add('hidden');
+        document.getElementById('boxResultadoPix').classList.remove('hidden');
+        document.getElementById('boxResultadoPix').innerHTML = `
+          <h4 class="text-amber-400 font-bold uppercase text-xs mb-2">Pagamento em confirmação</h4>
+          <p class="text-xs text-zinc-300">Pedido <strong>${pedidoRetornado}</strong> recebido. Estamos aguardando a confirmação do PagBank.</p>
+          <p class="text-[11px] text-zinc-500 mt-2">Você será levado ao acompanhamento do pedido assim que o pagamento for confirmado.</p>
+        `;
       }
     });
 
