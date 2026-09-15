@@ -125,12 +125,9 @@
           <div id="etapa3" class="space-y-4 hidden">
             <h3 class="text-xs font-mono uppercase text-zinc-400 border-b border-zinc-900 pb-2">Opções de Pagamento</h3>
             
-            <div class="grid grid-cols-2 gap-3 mb-4">
+            <div class="grid grid-cols-1 gap-3 mb-4">
               <button type="button" id="btnPix" onclick="selecionarMetodo('pix')" class="p-3 border border-amber-400 bg-amber-400/10 text-amber-400 font-bold rounded-lg text-xs uppercase transition">
                 ⚡ PIX
-              </button>
-              <button type="button" id="btnCartao" onclick="selecionarMetodo('cartao')" class="p-3 border border-zinc-800 bg-zinc-900 text-zinc-400 font-bold rounded-lg text-xs uppercase transition">
-                💳 Cartão
               </button>
             </div>
 
@@ -357,6 +354,13 @@
       selecionarMetodo('pix');
       carregarItensCheckout();
       preencherDadosUsuarioLogado();
+
+      const params = new URLSearchParams(window.location.search);
+      const pedidoRetornado = params.get('pedido');
+      if (params.get('pagbank') === 'retorno' && pedidoRetornado) {
+        iniciarPollingPedido(pedidoRetornado);
+        alert(`Pedido ${pedidoRetornado} recebido. Estamos confirmando o pagamento com o PagBank.`);
+      }
     });
 
     // Navegação em Etapas com validação simples
@@ -707,13 +711,13 @@
       const boxCartao = document.getElementById('boxCartao');
 
       if (metodo === 'pix') {
-        btnPix.className = "p-3 border border-amber-400 bg-amber-400/10 text-amber-400 font-bold rounded-lg text-xs uppercase transition";
-        btnCartao.className = "p-3 border border-zinc-800 bg-zinc-900 text-zinc-400 font-bold rounded-lg text-xs uppercase transition";
-        boxCartao.classList.add('hidden');
+        if (btnPix) btnPix.className = "p-3 border border-amber-400 bg-amber-400/10 text-amber-400 font-bold rounded-lg text-xs uppercase transition";
+        if (btnCartao) btnCartao.className = "p-3 border border-zinc-800 bg-zinc-900 text-zinc-400 font-bold rounded-lg text-xs uppercase transition";
+        if (boxCartao) boxCartao.classList.add('hidden');
       } else {
-        btnCartao.className = "p-3 border border-amber-400 bg-amber-400/10 text-amber-400 font-bold rounded-lg text-xs uppercase transition";
-        btnPix.className = "p-3 border border-zinc-800 bg-zinc-900 text-zinc-400 font-bold rounded-lg text-xs uppercase transition";
-        boxCartao.classList.remove('hidden');
+        if (btnCartao) btnCartao.className = "p-3 border border-amber-400 bg-amber-400/10 text-amber-400 font-bold rounded-lg text-xs uppercase transition";
+        if (btnPix) btnPix.className = "p-3 border border-zinc-800 bg-zinc-900 text-zinc-400 font-bold rounded-lg text-xs uppercase transition";
+        if (boxCartao) boxCartao.classList.remove('hidden');
       }
     }
 
@@ -824,12 +828,12 @@
             return;
           }
 
-          codigoPixAtual = data.copiaECola || data.qrCodeText || `MIO_PIX_${numeroPedido}`;
-          document.getElementById('boxResultadoPix').classList.remove('hidden');
-          document.getElementById('qrCodePixImg').src = data.qrCodeImage || `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(codigoPixAtual)}`;
+          if (!data.redirectUrl) {
+            alert('O PagBank não retornou o endereço do checkout. Tente novamente.');
+            return;
+          }
 
-          iniciarPollingPedido(numeroPedido);
-          alert(`🔥 Pedido ${numeroPedido} gerado! Faça o pagamento no QR Code.`);
+          window.location.assign(data.redirectUrl);
         } catch (err) {
           console.error('Erro ao gerar PIX', err);
           alert('Não foi possível gerar o QR Code PIX no momento. Tente novamente.');

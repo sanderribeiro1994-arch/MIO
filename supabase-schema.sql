@@ -152,7 +152,10 @@ create table if not exists public.pedidos (
   bling_order_id text,
   bling_status text,
   bling_tracking text,
-  data_bling_sync timestamptz
+  data_bling_sync timestamptz,
+  pagbank_checkout_id text,
+  pagbank_checkout_url text,
+  pagbank_status text
 );
 
 alter table if exists public.pedidos
@@ -163,6 +166,19 @@ alter table if exists public.pedidos
 
 alter table if exists public.pedidos
   add column if not exists parcelas integer not null default 1;
+
+alter table if exists public.pedidos
+  add column if not exists pagbank_checkout_id text;
+
+alter table if exists public.pedidos
+  add column if not exists pagbank_checkout_url text;
+
+alter table if exists public.pedidos
+  add column if not exists pagbank_status text;
+
+create index if not exists idx_pedidos_pagbank_checkout_id
+  on public.pedidos(pagbank_checkout_id)
+  where pagbank_checkout_id is not null;
 
 create table if not exists public.config (
   chave text primary key,

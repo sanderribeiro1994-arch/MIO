@@ -2009,6 +2009,69 @@ async function criarCargaPagSeguro(req, payload) {
   return { ok: true, data };
 }
 
+async function criarCheckoutPagBank(req, payload) {
+  const cfg = await buscarConfigPagSeguro();
+  if (!cfg.token) {
+    return {
+      error: 'Token do PagBank não configurado. Defina PAGBANK_TOKEN no Render.',
+      statusCode: 503
+    };
+  }
+
+  const valor = Number(payload.valor || 0);
+  const numeroPedido = String(payload.numeroPedido || `MIO-${Date.now()}`);
+  const cliente = payload.cliente || {};
+  const baseUrl = obterBaseUrl(req);
+  const dataExpiracao = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+  const body = {
+    reference_id: numeroPedido,
+    expiration_date: dataExpiracao,
+    customer: {
+      name: cliente.nome || 'Cliente MIO',
+      email: cliente.email || 'cliente@miostreetwear.com.br',
+      tax_id: normalizarCpf(cliente.cpf || '')
+    },
+    items: [{
+      reference_id: numeroPedido,
+      name: `Pedido MIO ${numeroPedido}`,
+      quantity: 1,
+      unit_amount: Math.round(valor * 100)
+    }],
+    payment_methods: [{ type: 'PIX' }],
+    notification_urls: [
+      `${baseUrl}/api/webhooks/pagseguro`
+    ],
+    redirect_url: `${baseUrl}/checkout.html?pagbank=retorno&pedido=${encodeURIComponent(numeroPedido)}`,
+    return_url: `${baseUrl}/checkout.html?pagbank=retorno&pedido=${encodeURIComponent(numeroPedido)}`
+  };
+
+  const resApi = await fetch(`${getPagSeguroBase(cfg)}/checkouts`, {
+    method: 'POST',
+    headers: getPagSeguroHeaders(cfg),
+    body: JSON.stringify(body)
+  });
+  const data = await resApi.json().catch(() => ({}));
+
+  if (!resApi.ok) {
+    const erros = Array.isArray(data.error_messages)
+      ? data.error_messages.map(m => m.description || m.message || m.code).filter(Boolean).join(', ')
+      : '';
+    const mensagem = erros || data.message || data.error || `Erro ${resApi.status} ao criar checkout PagBank.`;
+    console.error('[PagBank Checkout] Falha:', { status: resApi.status, mensagem, code: data.code || null });
+    return { error: mensagem, statusCode: resApi.status, details: data };
+  }
+
+  const payLink = Array.isArray(data.links)
+    ? data.links.find(link => link.rel === 'PAY' || link.rel === 'pay')
+    : null;
+  const redirectUrl = data.redirect_url || data.checkout_url || payLink?.href || '';
+  if (!redirectUrl) {
+    return { error: 'O PagBank criou o checkout, mas não retornou a URL de pagamento.', statusCode: 502, details: data };
+  }
+
+  return { ok: true, data, checkoutId: data.id || null, redirectUrl };
+}
+
 app.get('/api/pagseguro/session', async (req, res) => {
   try {
     const cfg = await buscarConfigPagSeguro();
@@ -2101,7 +2164,7 @@ app.post('/api/checkout', async (req, res) => {
     }
 
     if (metodo === 'pix') {
-      const result = await criarCargaPagSeguro(req, {
+      const result = await criarCheckoutPagBank(req, {
         valor: valorTotal,
         numeroPedido,
         cliente: payload.cliente,
@@ -2114,22 +2177,20 @@ app.post('/api/checkout', async (req, res) => {
         return res.status(result.statusCode || 502).json({ ok: false, error: result.error, details: result.details || null });
       }
 
-      const data = result.data || {};
-      const qrCodes = data.qr_codes || data.payment_response?.qr_codes || [];
-      const qr = qrCodes[0] || {};
-      const copiaCola = qr.text || qr.arrangement_information || data.copy_and_paste || '';
-      const qrCodeImage = qr.image || `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(copiaCola || `MIO_PIX_${numeroPedido}`)}`;
-
-      await atualizarPedidoPorNumero(numeroPedido, { status: 'Aguardando Pagamento' });
+      await atualizarPedidoPorNumero(numeroPedido, {
+        status: 'Aguardando Pagamento',
+        pagbank_checkout_id: result.checkoutId,
+        pagbank_checkout_url: result.redirectUrl,
+        pagbank_status: 'CREATED'
+      });
       return res.json({
         ok: true,
         numeroPedido,
         status: 'Aguardando Pagamento',
         metodo: 'pix',
-        qrCodeImage,
-        qrCodeText: qr.text || copiaCola,
-        copiaECola: copiaCola,
-        mensagem: 'Pagamento PIX gerado com sucesso.'
+        redirectUrl: result.redirectUrl,
+        checkoutId: result.checkoutId,
+        mensagem: 'Checkout PIX PagBank criado com sucesso.'
       });
     }
 
@@ -2188,7 +2249,7 @@ app.post('/api/pagamento/pix', async (req, res) => {
     if (!cfg.token) {
       return res.status(503).json({ ok: false, error: 'PIX indisponível: PAGBANK_TOKEN não está configurado.' });
     }
-    const result = await criarCargaPagSeguro({ get: () => 'http://localhost' }, {
+    const result = await criarCheckoutPagBank(req, {
       valor,
       numeroPedido: numeroPedido || `MIO-${Date.now()}`,
       cliente,
@@ -2197,16 +2258,10 @@ app.post('/api/pagamento/pix', async (req, res) => {
     });
 
     if (result.error) return res.status(result.statusCode || 502).json({ ok: false, error: result.error, details: result.details || null });
-
-    const data = result.data || {};
-    const qrCodes = data.qr_codes || data.payment_response?.qr_codes || [];
-    const qr = qrCodes[0] || {};
-    const copiaECola = qr.text || qr.arrangement_information || data.copy_and_paste || '';
     return res.json({
       ok: true,
-      qrCodeText: qr.text || copiaECola,
-      copiaECola,
-      qrCodeImage: qr.image || `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(copiaECola || 'MIO_PIX')}`
+      checkoutId: result.checkoutId,
+      redirectUrl: result.redirectUrl
     });
   } catch (error) {
     res.status(500).json({ error: 'Erro interno ao gerar PIX: ' + error.message });
@@ -2294,44 +2349,72 @@ app.post('/api/pagamento/webhook', async (req, res) => {
 app.post('/api/webhooks/pagseguro', async (req, res) => {
   try {
     const body = req.body || {};
-    const orderId = body.order_id || body.orderId || body.data?.id || body.id || '';
-    if (!orderId) {
-      return res.status(400).json({ ok: false, error: 'order_id obrigatório para validação do webhook.' });
-    }
-
     const cfg = await buscarConfigPagSeguro();
-    if (!cfg.ativo) {
-      return res.status(403).json({ ok: false, error: 'PagSeguro desativado no painel administrativo.' });
+    if (!cfg.token) {
+      return res.status(503).json({ ok: false, error: 'PAGBANK_TOKEN não configurado.' });
     }
 
     const base = getPagSeguroBase(cfg);
-    const orderRes = await fetch(base + '/orders/' + orderId, {
-      method: 'GET',
-      headers: getPagSeguroHeaders(cfg)
-    });
-    const data = await orderRes.json().catch(() => ({}));
-    if (!orderRes.ok) {
-      return res.status(502).json({ ok: false, error: data.message || 'Erro ao consultar PagSeguro.' });
+    const explicitOrderId = body.order_id || body.orderId || body.data?.order_id || '';
+    const checkoutId = body.checkout_id || body.checkoutId || body.data?.checkout_id
+      || (!explicitOrderId ? body.data?.id || body.id : '');
+    const orderId = explicitOrderId || body.data?.id || body.id || '';
+    let data = null;
+
+    if (checkoutId) {
+      const checkoutRes = await fetch(`${base}/checkouts/${encodeURIComponent(checkoutId)}`, {
+        method: 'GET',
+        headers: getPagSeguroHeaders(cfg)
+      });
+      data = await checkoutRes.json().catch(() => ({}));
+      if (!checkoutRes.ok) {
+        data = null;
+      }
     }
 
-    const orderStatus = String(data.status || '').toUpperCase();
+    if (!data && orderId) {
+      const orderRes = await fetch(base + '/orders/' + encodeURIComponent(orderId), {
+        method: 'GET',
+        headers: getPagSeguroHeaders(cfg)
+      });
+      data = await orderRes.json().catch(() => ({}));
+      if (!orderRes.ok) {
+        return res.status(502).json({ ok: false, error: data.message || 'Erro ao consultar pedido PagBank.' });
+      }
+    }
+
+    if (!data) {
+      return res.status(400).json({ ok: false, error: 'Identificador de checkout ou pedido PagBank ausente.' });
+    }
+
+    const checkoutStatus = String(data.status || '').toUpperCase();
     const reference = data.reference_id || data.referenceId || '';
     const chargeStatus = String(data.charges?.[0]?.status || '').toUpperCase();
-    const pago = orderStatus === 'PAID' || chargeStatus === 'PAID' || orderStatus === '3';
+    const paymentStatus = String(data.payments?.[0]?.status || '').toUpperCase();
+    const pago = ['PAID', 'COMPLETED', 'AUTHORIZED'].includes(checkoutStatus)
+      || ['PAID', 'COMPLETED', 'AUTHORIZED'].includes(chargeStatus)
+      || ['PAID', 'COMPLETED', 'AUTHORIZED'].includes(paymentStatus)
+      || checkoutStatus === '3';
 
     if (pago && reference) {
-      await atualizarPedidoPorNumero(reference, { status: 'PAGO', data_bling_sync: new Date().toISOString() });
+      await atualizarPedidoPorNumero(reference, {
+        status: 'PAGO',
+        pagbank_status: checkoutStatus || chargeStatus || paymentStatus || 'PAID'
+      });
       const pedidoPago = await findPedidoByReference(reference);
       if (pedidoPago) {
         const envio = await enviarPedidoParaBling(pedidoPago);
         if (envio.ok && envio.blingId) {
-          await atualizarPedidoPorNumero(reference, { bling_id: envio.blingId });
+          await atualizarPedidoPorNumero(reference, {
+            bling_id: envio.blingId,
+            data_bling_sync: new Date().toISOString()
+          });
         }
       }
       return res.json({ ok: true, pago: true, reference, status: 'PAGO', bling_sync: true });
     }
 
-    return res.json({ ok: true, pago: false, reference, status: orderStatus || chargeStatus || 'PENDING' });
+    return res.json({ ok: true, pago: false, reference, status: checkoutStatus || chargeStatus || paymentStatus || 'PENDING' });
   } catch (error) {
     return res.status(500).json({ ok: false, error: 'Erro no webhook PagSeguro: ' + error.message });
   }
