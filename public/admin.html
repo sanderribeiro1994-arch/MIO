@@ -703,6 +703,19 @@ conteudo: ['Conteúdo do Site', 'Edite banners, carrossel e destaques'],
             });
         });
 
+        setInterval(async () => {
+            const abaPedidos = document.getElementById('tab-pedidos');
+            if (!document.getElementById('painelAdmin')?.classList.contains('hidden') && abaPedidos && !abaPedidos.classList.contains('hidden')) {
+                try {
+                    const atualizados = await API('/api/pedidos');
+                    pedidos = Array.isArray(atualizados) ? atualizados : pedidos;
+                    renderizarPedidos();
+                } catch (err) {
+                    console.warn('[Painel] Atualização automática dos pedidos falhou:', err.message);
+                }
+            }
+        }, 10000);
+
         // =============== BUSCA GLOBAL ===============
         async function carregarTudo() {
             try {

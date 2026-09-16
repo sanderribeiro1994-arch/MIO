@@ -1189,13 +1189,26 @@ async function enriquecerItensComBlingId(itens = []) {
   }));
 }
 
+function normalizarEnderecoBling(endereco = {}) {
+  const origem = parseJsonArray(endereco, {});
+  return {
+    endereco: String(origem.endereco || origem.rua || origem.logradouro || '').trim(),
+    numero: String(origem.numero || '').trim(),
+    complemento: String(origem.complemento || '').trim(),
+    bairro: String(origem.bairro || '').trim(),
+    cep: String(origem.cep || origem.codigoPostal || '').replace(/\D/g, ''),
+    municipio: String(origem.municipio || origem.cidade || '').trim(),
+    uf: String(origem.uf || origem.estado || '').trim().toUpperCase()
+  };
+}
+
 async function enviarPedidoParaBling(pedido) {
   try {
     const accessToken = await getBlingAccessToken();
 
     const clienteJson = parseJsonArray(pedido.cliente, {});
     const itensJson = await enriquecerItensComBlingId(parseJsonArray(pedido.itens, []));
-    const enderecoJson = parseJsonArray(pedido.endereco, {});
+    const enderecoJson = normalizarEnderecoBling(pedido.endereco);
     const descontoValor = Number(pedido.desconto || 0);
     const valorItens = itensJson.reduce((total, item) => (
       total + Number(item.preco || item.valor || 0) * Number(item.quantidade || 1)
@@ -1206,6 +1219,14 @@ async function enviarPedidoParaBling(pedido) {
       ...clienteJson,
       id: clienteJson.id || pedido.cliente_id || pedido.clienteId
     }, pedido);
+    const camposEnderecoObrigatorios = ['endereco', 'numero', 'bairro', 'cep', 'municipio', 'uf'];
+    const camposEnderecoAusentes = camposEnderecoObrigatorios.filter(campo => !enderecoJson[campo]);
+    if (camposEnderecoAusentes.length) {
+      return {
+        ok: false,
+        motivo: `Endereço incompleto para etiqueta do Bling. Campos ausentes: ${camposEnderecoAusentes.join(', ')}.`
+      };
+    }
     const formaPagamentoConfigurada = pedido.metodo === 'cartao'
       ? process.env.BLING_FORMA_PAGAMENTO_CARTAO_ID
       : process.env.BLING_FORMA_PAGAMENTO_ID;

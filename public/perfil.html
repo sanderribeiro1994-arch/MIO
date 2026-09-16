@@ -642,7 +642,7 @@
       aviso.innerText = `Próxima alteração liberada em ${diaAtual} dias.`;
     }
 
-    function trocarAbaPrincipal(aba) {
+    function renderizarAbaPrincipal(aba) {
       document.getElementById('abaDados').classList.add('hidden');
       document.getElementById('abaHistorico').classList.add('hidden');
       document.getElementById('abaAcompanhar').classList.add('hidden');
@@ -997,9 +997,8 @@
     }
 
 // Integra as funções de histórico/acompanhamento ao trocar de aba
-    const _trocarAbaOriginal = trocarAbaPrincipal;
     function trocarAbaPrincipal(aba) {
-      _trocarAbaOriginal(aba);
+      renderizarAbaPrincipal(aba);
       if (aba === 'historico') carregarHistorico();
       if (aba === 'acompanhar') carregarAcompanhamento();
     }
