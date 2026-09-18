@@ -699,6 +699,8 @@ conteudo: ['Conteúdo do Site', 'Edite banners, carrossel e destaques'],
                 if (tab === 'produtos') renderizarProdutos();
                 if (tab === 'pedidos') renderizarPedidos();
                 if (tab === 'clientes') renderizarClientes();
+                if (tab === 'config') renderizarConfig();
+                if (tab === 'pagamentos') renderizarIntegracoes();
                 if (tab === 'envio') carregarExpedicoes();
             });
         });
@@ -1694,18 +1696,26 @@ config.logo = {
 
         async function renderizarIntegracoes() {
             try {
-                const int = await API('/api/integracoes');
+                const int = await API('/api/integracoes').catch(() => ({}));
                 const pg = int.pagamento || {};
                 const me = int.envio || {};
                 const bl = int.bling || int.upseller || {};
                 const blOauth = int.blingOauth || {};
-                document.getElementById('pg-ativo').checked = !!pg.ativo;
-                if (pg.modo) document.getElementById('pg-modo').value = pg.modo;
-                if (pg.email) document.getElementById('pg-email').value = pg.email;
-                if (pg.token) document.getElementById('pg-token').value = pg.token;
-                if (pg.publicKey) document.getElementById('pg-publicKey').value = pg.publicKey;
-                if (pg.appId) document.getElementById('pg-appId').value = pg.appId;
-                if (pg.appKey) document.getElementById('pg-appKey').value = pg.appKey;
+                const pgAtivoInput = document.getElementById('pg-ativo');
+                const pgModoInput = document.getElementById('pg-modo');
+                const pgEmailInput = document.getElementById('pg-email');
+                const pgTokenInput = document.getElementById('pg-token');
+                const pgPublicKeyInput = document.getElementById('pg-publicKey');
+                const pgAppIdInput = document.getElementById('pg-appId');
+                const pgAppKeyInput = document.getElementById('pg-appKey');
+
+                if (pgAtivoInput) pgAtivoInput.checked = !!pg.ativo;
+                if (pg.modo && pgModoInput) pgModoInput.value = pg.modo;
+                if (pg.email && pgEmailInput) pgEmailInput.value = pg.email;
+                if (pg.token && pgTokenInput) pgTokenInput.value = pg.token;
+                if (pg.publicKey && pgPublicKeyInput) pgPublicKeyInput.value = pg.publicKey;
+                if (pg.appId && pgAppIdInput) pgAppIdInput.value = pg.appId;
+                if (pg.appKey && pgAppKeyInput) pgAppKeyInput.value = pg.appKey;
 
                 document.getElementById('me-ativo').checked = !!me.ativo || !!me.configurado;
                 if (me.modo) document.getElementById('me-modo').value = me.modo;

@@ -829,15 +829,6 @@ function getBlingTokenHeaders(cfg = {}) {
   return headers;
 }
 
-function formatarErroBling(valor, fallback = 'Erro desconhecido do Bling.') {
-  if (valor instanceof Error) return valor.message;
-  if (typeof valor === 'string') return valor;
-  if (valor && typeof valor === 'object') {
-    return valor.error_description || valor.description || valor.message || valor.error || JSON.stringify(valor);
-  }
-  return fallback;
-}
-
 async function getBlingOauthConfig() {
   const cfg = await getConfigChave('bling_oauth', {
     clientId: BLING_CLIENT_ID,
@@ -1648,7 +1639,7 @@ app.get('/api/bling/auth', async (req, res) => {
       });
     }
 
-    const redirectUri = BLING_CALLBACK_URL || 'https://usemio.com.br/auth/callback';
+    const redirectUri = (cfg.redirectUri && cfg.redirectUri.trim()) || `${obterBaseUrl(req)}/auth/callback` || BLING_CALLBACK_URL;
 
     const params = new URLSearchParams({
       response_type: 'code',
@@ -1690,7 +1681,7 @@ app.get('/auth/callback', async (req, res) => {
 
     const clientId = cfg.clientId || BLING_CLIENT_ID;
     const clientSecret = cfg.clientSecret || BLING_CLIENT_SECRET;
-    const redirectUri = BLING_CALLBACK_URL || 'https://usemio.com.br/auth/callback';
+    const redirectUri = (cfg.redirectUri && cfg.redirectUri.trim()) || `${obterBaseUrl(req)}/auth/callback` || BLING_CALLBACK_URL;
     const processCallback = (async () => {
       const body = new URLSearchParams({
         grant_type: 'authorization_code',
@@ -1711,13 +1702,10 @@ app.get('/auth/callback', async (req, res) => {
 
       const tokens = await tokenRes.json().catch(() => ({}));
       if (!tokenRes.ok || !tokens.access_token) {
-        throw new Error(formatarErroBling(tokens, `Erro ${tokenRes.status} ao trocar código do Bling por token.`));
+        throw new Error(tokens.error_description || tokens.error || 'Erro ao trocar código do Bling por token.');
       }
 
       await salvarBlingOauthConfig({
-        clientId,
-        clientSecret,
-        redirectUri,
         accessToken: tokens.access_token,
         refreshToken: tokens.refresh_token || cfg.refreshToken || '',
         tokenType: tokens.token_type || 'Bearer',
@@ -1742,7 +1730,7 @@ app.get('/auth/callback', async (req, res) => {
 
     return redirectSuccess();
   } catch (err) {
-    const msg = encodeURIComponent('Erro ao processar callback do Bling: ' + formatarErroBling(err));
+    const msg = encodeURIComponent('Erro ao processar callback do Bling: ' + err.message);
     return res.redirect('/admin.html?bling_error=1&message=' + msg);
   }
 });

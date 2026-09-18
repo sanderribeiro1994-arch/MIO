@@ -687,20 +687,37 @@
     }
 
     function preencherDadosUsuarioLogado() {
-      const usuarioLogado = JSON.parse(localStorage.getItem('mio_usuario_logado'));
-      if (usuarioLogado) {
+      try {
+        const raw = localStorage.getItem('mio_usuario_logado');
+        if (!raw) return;
+        const usuarioLogado = JSON.parse(raw);
+        if (!usuarioLogado) return;
+
+        const endereco = (usuarioLogado.endereco && typeof usuarioLogado.endereco === 'object') ? usuarioLogado.endereco : {};
+        const dadosEndereco = {
+          cep: usuarioLogado.cep || endereco.cep || '',
+          rua: usuarioLogado.rua || endereco.rua || endereco.logradouro || '',
+          numero: usuarioLogado.numero || endereco.numero || '',
+          complemento: usuarioLogado.complemento || endereco.complemento || '',
+          bairro: usuarioLogado.bairro || endereco.bairro || '',
+          cidade: usuarioLogado.cidade || endereco.cidade || endereco.municipio || endereco.localidade || '',
+          uf: usuarioLogado.uf || endereco.uf || endereco.estado || ''
+        };
+
         if (usuarioLogado.nome) document.getElementById('cliNome').value = usuarioLogado.nome;
         if (usuarioLogado.cpf) document.getElementById('cliCpf').value = usuarioLogado.cpf;
         if (usuarioLogado.telefone) document.getElementById('cliTelefone').value = usuarioLogado.telefone;
         if (usuarioLogado.email) document.getElementById('cliEmail').value = usuarioLogado.email;
 
-        if (usuarioLogado.cep) document.getElementById('endCep').value = usuarioLogado.cep;
-        if (usuarioLogado.rua) document.getElementById('endRua').value = usuarioLogado.rua;
-        if (usuarioLogado.numero) document.getElementById('endNumero').value = usuarioLogado.numero;
-        if (usuarioLogado.complemento) document.getElementById('endComplemento').value = usuarioLogado.complemento;
-        if (usuarioLogado.bairro) document.getElementById('endBairro').value = usuarioLogado.bairro;
-        if (usuarioLogado.cidade) document.getElementById('endCidade').value = usuarioLogado.cidade;
-        if (usuarioLogado.uf) document.getElementById('endUf').value = usuarioLogado.uf;
+        if (dadosEndereco.cep) document.getElementById('endCep').value = dadosEndereco.cep;
+        if (dadosEndereco.rua) document.getElementById('endRua').value = dadosEndereco.rua;
+        if (dadosEndereco.numero) document.getElementById('endNumero').value = dadosEndereco.numero;
+        if (dadosEndereco.complemento) document.getElementById('endComplemento').value = dadosEndereco.complemento;
+        if (dadosEndereco.bairro) document.getElementById('endBairro').value = dadosEndereco.bairro;
+        if (dadosEndereco.cidade) document.getElementById('endCidade').value = dadosEndereco.cidade;
+        if (dadosEndereco.uf) document.getElementById('endUf').value = String(dadosEndereco.uf).toUpperCase();
+      } catch (err) {
+        console.warn('[Checkout] Não foi possível preencher os dados do cliente logado:', err);
       }
     }
 
