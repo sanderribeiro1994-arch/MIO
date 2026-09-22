@@ -6,6 +6,35 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Fale Conosco — MIO Streetwear</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .contato-card {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      justify-content: flex-start;
+      min-height: 220px;
+      height: 100%;
+      overflow: visible;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+    }
+
+    .contato-card h2,
+    .contato-card p,
+    .contato-card a {
+      overflow: visible;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+      white-space: normal;
+    }
+
+    .contato-card a {
+      display: inline-block;
+      width: 100%;
+      max-width: 100%;
+      line-height: 1.6;
+    }
+  </style>
 </head>
 <body class="bg-zinc-950 text-white min-h-screen flex flex-col justify-between font-sans">
   
@@ -17,26 +46,26 @@
     <h1 id="faleConoscoTitulo" class="text-3xl font-black tracking-wider mb-2">FALE CONOSCO</h1>
     <p id="faleConoscoTexto" class="text-zinc-400 text-sm mb-10">Entre em contato diretamente com nossa equipe através dos canais oficiais abaixo.</p>
 
-    <div class="grid gap-6 md:grid-cols-3">
+    <div class="grid gap-6 md:grid-cols-3 items-stretch">
       <!-- Atendimento ao Cliente -->
-      <div class="p-6 bg-zinc-900/50 border border-zinc-800 rounded-lg">
+      <div class="contato-card p-6 bg-zinc-900/50 border border-zinc-800 rounded-lg">
         <h2 class="text-xs font-bold text-zinc-400 tracking-wider uppercase mb-2">Atendimento ao Cliente</h2>
-        <p class="text-xs text-zinc-400 mb-4">Dúvidas sobre pedidos, trocas e devoluções.</p>
-        <a id="faleConoscoEmailAtendimento" href="mailto:suporte@miostreetwear.com.br" class="text-sm font-medium text-white hover:underline break-all">suporte@miostreetwear.com.br</a>
+        <p class="text-xs text-zinc-400 mb-4 leading-relaxed">Dúvidas sobre pedidos, trocas e devoluções.</p>
+        <a id="faleConoscoEmailAtendimento" href="mailto:suporte@miostreetwear.com.br" class="text-sm font-medium text-white hover:underline break-all leading-relaxed">suporte@miostreetwear.com.br</a>
       </div>
 
       <!-- Parcerias e Colabs -->
-      <div class="p-6 bg-zinc-900/50 border border-zinc-800 rounded-lg">
+      <div class="contato-card p-6 bg-zinc-900/50 border border-zinc-800 rounded-lg">
         <h2 class="text-xs font-bold text-zinc-400 tracking-wider uppercase mb-2">Parcerias & Colabs</h2>
-        <p class="text-xs text-zinc-400 mb-4">Propostas comerciais, marcas e influenciadores.</p>
-        <a id="faleConoscoEmailParcerias" href="mailto:parcerias@miostreetwear.com.br" class="text-sm font-medium text-white hover:underline break-all">parcerias@miostreetwear.com.br</a>
+        <p class="text-xs text-zinc-400 mb-4 leading-relaxed">Propostas comerciais, marcas e influenciadores.</p>
+        <a id="faleConoscoEmailParcerias" href="mailto:parcerias@miostreetwear.com.br" class="text-sm font-medium text-white hover:underline break-all leading-relaxed">parcerias@miostreetwear.com.br</a>
       </div>
 
       <!-- Trabalhe Conosco -->
-      <div class="p-6 bg-zinc-900/50 border border-zinc-800 rounded-lg">
+      <div class="contato-card p-6 bg-zinc-900/50 border border-zinc-800 rounded-lg">
         <h2 class="text-xs font-bold text-zinc-400 tracking-wider uppercase mb-2">Trabalhe Conosco</h2>
-        <p class="text-xs text-zinc-400 mb-4">Envie seu currículo ou portfólio para a MIO.</p>
-        <a id="faleConoscoEmailCarreiras" href="mailto:carreiras@miostreetwear.com.br" class="text-sm font-medium text-white hover:underline break-all">carreiras@miostreetwear.com.br</a>
+        <p class="text-xs text-zinc-400 mb-4 leading-relaxed">Envie seu currículo ou portfólio para a MIO.</p>
+        <a id="faleConoscoEmailCarreiras" href="mailto:carreiras@miostreetwear.com.br" class="text-sm font-medium text-white hover:underline break-all leading-relaxed">carreiras@miostreetwear.com.br</a>
       </div>
     </div>
   </main>
