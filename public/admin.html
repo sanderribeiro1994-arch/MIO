@@ -1300,8 +1300,10 @@ renderizarConteudo();
         }
 
         function renderizarConteudo() {
+            const carrossel = Array.isArray(config.carrossel) ? config.carrossel : [];
+            const banners = Array.isArray(config.bannersGrelha) ? config.bannersGrelha : [];
+
             // Carrossel
-            const carrossel = config.carrossel || [];
             document.getElementById('formCarrossel').innerHTML = carrossel.map((s, i) => `
                 <div class="bg-zinc-950 border border-zinc-800 rounded-lg p-3 space-y-2">
                     <p class="text-[10px] font-black text-amber-400 uppercase">Slide ${i + 1}</p>
@@ -1316,7 +1318,6 @@ renderizarConteudo();
             `).join('');
 
             // Banners da grade
-            const banners = config.bannersGrelha || [];
             document.getElementById('formBanners').innerHTML = banners.map((b, i) => `
                 <div class="bg-zinc-950 border border-zinc-800 rounded-lg p-3 space-y-2">
                     <p class="text-[10px] font-black text-amber-400 uppercase">Banner ${i + 1}</p>
@@ -1392,23 +1393,26 @@ renderizarConteudo();
 
         async function salvarConteudo() {
             try {
-                const carrossel = (config.carrossel || []).map((s, i) => ({
-                    etiqueta: document.getElementById('cs-etiqueta-' + i).value,
-                    titulo: document.getElementById('cs-titulo-' + i).value,
-                    texto: document.getElementById('cs-texto-' + i).value,
-                    botao: document.getElementById('cs-botao-' + i).value,
-                    link: document.getElementById('cs-link-' + i).value,
-                    imagem: document.getElementById('cs-imagem-' + i).value,
-                    imagemMobile: document.getElementById('cs-imagem-mobile-' + i).value
+                const carrosselAtual = Array.isArray(config.carrossel) ? config.carrossel : [];
+                const bannersGrelhaAtual = Array.isArray(config.bannersGrelha) ? config.bannersGrelha : [];
+
+                const carrossel = carrosselAtual.map((s, i) => ({
+                    etiqueta: document.getElementById('cs-etiqueta-' + i)?.value || s.etiqueta || '',
+                    titulo: document.getElementById('cs-titulo-' + i)?.value || s.titulo || '',
+                    texto: document.getElementById('cs-texto-' + i)?.value || s.texto || '',
+                    botao: document.getElementById('cs-botao-' + i)?.value || s.botao || '',
+                    link: document.getElementById('cs-link-' + i)?.value || s.link || '',
+                    imagem: document.getElementById('cs-imagem-' + i)?.value || s.imagem || '',
+                    imagemMobile: document.getElementById('cs-imagem-mobile-' + i)?.value || s.imagemMobile || ''
                 }));
-                const bannersGrelha = (config.bannersGrelha || []).map((b, i) => ({
-                    etiqueta: document.getElementById('bn-etiqueta-' + i)?.value || '',
-                    mostrarEtiqueta: document.getElementById('bn-mostrar-etiqueta-' + i)?.checked ?? true,
-                    titulo: document.getElementById('bn-titulo-' + i).value,
-                    texto: document.getElementById('bn-texto-' + i).value,
-                    link: document.getElementById('bn-link-' + i).value,
-                    imagem: document.getElementById('bn-imagem-' + i).value,
-                    imagemMobile: document.getElementById('bn-imagem-mobile-' + i).value
+                const bannersGrelha = bannersGrelhaAtual.map((b, i) => ({
+                    etiqueta: document.getElementById('bn-etiqueta-' + i)?.value || b.etiqueta || '',
+                    mostrarEtiqueta: document.getElementById('bn-mostrar-etiqueta-' + i)?.checked ?? (b.mostrarEtiqueta !== false),
+                    titulo: document.getElementById('bn-titulo-' + i)?.value || b.titulo || '',
+                    texto: document.getElementById('bn-texto-' + i)?.value || b.texto || '',
+                    link: document.getElementById('bn-link-' + i)?.value || b.link || '',
+                    imagem: document.getElementById('bn-imagem-' + i)?.value || b.imagem || '',
+                    imagemMobile: document.getElementById('bn-imagem-mobile-' + i)?.value || b.imagemMobile || ''
                 }));
                 config.bannerIntermediario = {
                     titulo: document.getElementById('bi-titulo').value,

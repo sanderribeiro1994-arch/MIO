@@ -3871,12 +3871,27 @@ app.put('/api/config', exigirAdmin, async (req, res) => {
     if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
       return res.status(400).json({ error: 'Configuração inválida.' });
     }
+
+    const configAtual = await getConfigChave('site_config', {});
+    const bannersAtuais = await carregarBanners();
     const { carrossel, bannersGrelha, bannerIntermediario, ...configSemBanners } = req.body;
-    await salvarBanners({ carrossel, bannersGrelha, bannerIntermediario });
-    await setConfigChave('site_config', configSemBanners);
-    const salva = { ...(await getConfigChave('site_config', {})), ...(await carregarBanners()) };
+
+    const carrosselFinal = Array.isArray(carrossel) ? carrossel : (bannersAtuais.carrossel || []);
+    const bannersGrelhaFinal = Array.isArray(bannersGrelha) ? bannersGrelha : (bannersAtuais.bannersGrelha || []);
+    const bannerIntermediarioFinal = bannerIntermediario || bannersAtuais.bannerIntermediario || {};
+
+    await salvarBanners({
+      carrossel: carrosselFinal,
+      bannersGrelha: bannersGrelhaFinal,
+      bannerIntermediario: bannerIntermediarioFinal
+    });
+
+    const novaConfig = { ...configAtual, ...configSemBanners };
+    await setConfigChave('site_config', novaConfig);
+    const salva = { ...novaConfig, ...(await carregarBanners()) };
     res.json({ ok: true, config: salva });
   } catch (err) {
+    console.error('Erro ao salvar configurações:', err);
     res.status(500).json({ error: "Erro ao salvar configurações." });
   }
 });
