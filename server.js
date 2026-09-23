@@ -691,9 +691,15 @@ async function buscarAdmin() {
   return data;
 }
 
+function normalizarMostrarEtiqueta(valor) {
+  if (valor === false || valor === 'false' || valor === 0) return false;
+  return true;
+}
+
 function formatarBanner(banner) {
   const { id, tipo, ordem, ...conteudo } = banner;
-  return { ...conteudo, id, tipo, ordem };
+  const mostrarEtiqueta = normalizarMostrarEtiqueta(conteudo.mostrar_etiqueta ?? conteudo.mostrarEtiqueta ?? true);
+  return { ...conteudo, mostrarEtiqueta, mostrar_etiqueta: mostrarEtiqueta, id, tipo, ordem };
 }
 
 async function carregarBanners() {
@@ -721,16 +727,19 @@ function converterBannersParaLinhas(config = {}) {
 
   carrossel.forEach((banner, ordem) => {
     if (!banner || typeof banner !== 'object') return;
-    linhas.push({ tipo: 'carrossel', ordem, ...banner, imagem: validarUrlImagem(banner.imagem), imagemMobile: validarUrlImagem(banner.imagemMobile) });
+    const mostrar_etiqueta = normalizarMostrarEtiqueta(banner.mostrar_etiqueta ?? banner.mostrarEtiqueta ?? true);
+    linhas.push({ tipo: 'carrossel', ordem, ...banner, mostrar_etiqueta, mostrarEtiqueta: mostrar_etiqueta, imagem: validarUrlImagem(banner.imagem), imagemMobile: validarUrlImagem(banner.imagemMobile) });
   });
 
   bannersGrelha.forEach((banner, ordem) => {
     if (!banner || typeof banner !== 'object') return;
-    linhas.push({ tipo: 'grelha', ordem, ...banner, imagem: validarUrlImagem(banner.imagem), imagemMobile: validarUrlImagem(banner.imagemMobile) });
+    const mostrar_etiqueta = normalizarMostrarEtiqueta(banner.mostrar_etiqueta ?? banner.mostrarEtiqueta ?? true);
+    linhas.push({ tipo: 'grelha', ordem, ...banner, mostrar_etiqueta, mostrarEtiqueta: mostrar_etiqueta, imagem: validarUrlImagem(banner.imagem), imagemMobile: validarUrlImagem(banner.imagemMobile) });
   });
 
   if (bannerIntermediario) {
-    linhas.push({ tipo: 'intermediario', ordem: 0, ...bannerIntermediario, imagem: validarUrlImagem(bannerIntermediario.imagem), imagemMobile: validarUrlImagem(bannerIntermediario.imagemMobile) });
+    const mostrar_etiqueta = normalizarMostrarEtiqueta(bannerIntermediario.mostrar_etiqueta ?? bannerIntermediario.mostrarEtiqueta ?? true);
+    linhas.push({ tipo: 'intermediario', ordem: 0, ...bannerIntermediario, mostrar_etiqueta, mostrarEtiqueta: mostrar_etiqueta, imagem: validarUrlImagem(bannerIntermediario.imagem), imagemMobile: validarUrlImagem(bannerIntermediario.imagemMobile) });
   }
 
   return linhas.map(({ id, ...linha }) => linha);

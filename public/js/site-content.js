@@ -53,7 +53,7 @@
     const el = document.getElementById('banner-grelha-etiqueta-' + index);
     if (!el) return;
     const valor = banner && banner.etiqueta != null ? String(banner.etiqueta).trim() : '';
-    const mostrar = banner && banner.mostrarEtiqueta !== false && valor !== '';
+    const mostrar = banner && (banner.mostrar_etiqueta ?? banner.mostrarEtiqueta ?? true) !== false && valor !== '';
     el.textContent = valor;
     el.classList.toggle('hidden', !mostrar);
   }

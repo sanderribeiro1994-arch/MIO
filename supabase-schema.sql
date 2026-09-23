@@ -67,8 +67,12 @@ create table if not exists public.banners (
   link text default '',
   imagem text default '',
   "imagemMobile" text default '',
+  mostrar_etiqueta boolean not null default true,
   created_at timestamptz not null default now()
 );
+
+alter table public.banners
+  add column if not exists mostrar_etiqueta boolean not null default true;
 
 create table if not exists public.admin_sessoes (
   token_hash text primary key,

@@ -1412,6 +1412,7 @@ renderizarConteudo();
                 const bannersGrelha = (Array.isArray(bannersGrelhaAtual) && bannersGrelhaAtual.length ? bannersGrelhaAtual : [{}, {}, {}]).map((b, i) => ({
                     etiqueta: document.getElementById('bn-etiqueta-' + i)?.value || b.etiqueta || '',
                     mostrarEtiqueta: document.getElementById('bn-mostrar-etiqueta-' + i)?.checked ?? (b.mostrarEtiqueta !== false),
+                    mostrar_etiqueta: document.getElementById('bn-mostrar-etiqueta-' + i)?.checked ?? (b.mostrar_etiqueta ?? b.mostrarEtiqueta !== false),
                     titulo: document.getElementById('bn-titulo-' + i)?.value || b.titulo || '',
                     texto: document.getElementById('bn-texto-' + i)?.value || b.texto || '',
                     link: document.getElementById('bn-link-' + i)?.value || b.link || '',
