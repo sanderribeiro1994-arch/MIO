@@ -220,10 +220,11 @@ function formatarProduto(produto) {
 function validarUrlImagem(valor) {
   if (valor == null || String(valor).trim() === '') return '';
   const url = String(valor).trim();
-  if (!/^https?:\/\//i.test(url)) {
-    throw new Error('As imagens precisam ser URLs http(s) hospedadas remotamente.');
-  }
-  return url;
+
+  if (url.startsWith('/') || url.startsWith('./') || url.startsWith('../')) return url;
+  if (/^https?:\/\//i.test(url) || /^data:image\//i.test(url)) return url;
+
+  return '';
 }
 
 function prepararProduto(produto) {
@@ -712,17 +713,26 @@ async function carregarBanners() {
   return configBanners;
 }
 
-function converterBannersParaLinhas(config) {
+function converterBannersParaLinhas(config = {}) {
+  const carrossel = Array.isArray(config.carrossel) ? config.carrossel : [];
+  const bannersGrelha = Array.isArray(config.bannersGrelha) ? config.bannersGrelha : [];
+  const bannerIntermediario = config.bannerIntermediario && typeof config.bannerIntermediario === 'object' ? config.bannerIntermediario : null;
   const linhas = [];
-  (config.carrossel || []).forEach((banner, ordem) => {
+
+  carrossel.forEach((banner, ordem) => {
+    if (!banner || typeof banner !== 'object') return;
     linhas.push({ tipo: 'carrossel', ordem, ...banner, imagem: validarUrlImagem(banner.imagem), imagemMobile: validarUrlImagem(banner.imagemMobile) });
   });
-  (config.bannersGrelha || []).forEach((banner, ordem) => {
+
+  bannersGrelha.forEach((banner, ordem) => {
+    if (!banner || typeof banner !== 'object') return;
     linhas.push({ tipo: 'grelha', ordem, ...banner, imagem: validarUrlImagem(banner.imagem), imagemMobile: validarUrlImagem(banner.imagemMobile) });
   });
-  if (config.bannerIntermediario) {
-    linhas.push({ tipo: 'intermediario', ordem: 0, ...config.bannerIntermediario, imagem: validarUrlImagem(config.bannerIntermediario.imagem), imagemMobile: validarUrlImagem(config.bannerIntermediario.imagemMobile) });
+
+  if (bannerIntermediario) {
+    linhas.push({ tipo: 'intermediario', ordem: 0, ...bannerIntermediario, imagem: validarUrlImagem(bannerIntermediario.imagem), imagemMobile: validarUrlImagem(bannerIntermediario.imagemMobile) });
   }
+
   return linhas.map(({ id, ...linha }) => linha);
 }
 

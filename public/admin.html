@@ -1539,10 +1539,15 @@ campoTexto('lg-texto', 'Texto do Logo', logo.texto),
                     instagram: document.getElementById('rs-instagram').value,
                     tiktok: document.getElementById('rs-tiktok').value
                 };
-config.logo = {
+                config.logo = {
                     texto: document.getElementById('lg-texto').value,
                     url: document.getElementById('lg-url').value
                 };
+
+                config.carrossel = Array.isArray(config.carrossel) ? config.carrossel : [];
+                config.bannersGrelha = Array.isArray(config.bannersGrelha) ? config.bannersGrelha : [];
+                config.bannerIntermediario = config.bannerIntermediario && typeof config.bannerIntermediario === 'object' ? config.bannerIntermediario : {};
+
                 await API('/api/config', { method: 'PUT', body: JSON.stringify(config) });
                 config = await API('/api/config');
                 renderizarConfig();
