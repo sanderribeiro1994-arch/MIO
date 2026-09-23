@@ -1300,8 +1300,12 @@ renderizarConteudo();
         }
 
         function renderizarConteudo() {
-            const carrossel = Array.isArray(config.carrossel) ? config.carrossel : [];
-            const banners = Array.isArray(config.bannersGrelha) ? config.bannersGrelha : [];
+            const carrossel = Array.isArray(config.carrossel) && config.carrossel.length
+                ? config.carrossel
+                : [{}, {}, {}];
+            const banners = Array.isArray(config.bannersGrelha) && config.bannersGrelha.length
+                ? config.bannersGrelha
+                : [{}, {}, {}];
 
             // Carrossel
             document.getElementById('formCarrossel').innerHTML = carrossel.map((s, i) => `
@@ -1396,7 +1400,7 @@ renderizarConteudo();
                 const carrosselAtual = Array.isArray(config.carrossel) ? config.carrossel : [];
                 const bannersGrelhaAtual = Array.isArray(config.bannersGrelha) ? config.bannersGrelha : [];
 
-                const carrossel = carrosselAtual.map((s, i) => ({
+                const carrossel = (Array.isArray(carrosselAtual) && carrosselAtual.length ? carrosselAtual : [{}, {}, {}]).map((s, i) => ({
                     etiqueta: document.getElementById('cs-etiqueta-' + i)?.value || s.etiqueta || '',
                     titulo: document.getElementById('cs-titulo-' + i)?.value || s.titulo || '',
                     texto: document.getElementById('cs-texto-' + i)?.value || s.texto || '',
@@ -1405,7 +1409,7 @@ renderizarConteudo();
                     imagem: document.getElementById('cs-imagem-' + i)?.value || s.imagem || '',
                     imagemMobile: document.getElementById('cs-imagem-mobile-' + i)?.value || s.imagemMobile || ''
                 }));
-                const bannersGrelha = bannersGrelhaAtual.map((b, i) => ({
+                const bannersGrelha = (Array.isArray(bannersGrelhaAtual) && bannersGrelhaAtual.length ? bannersGrelhaAtual : [{}, {}, {}]).map((b, i) => ({
                     etiqueta: document.getElementById('bn-etiqueta-' + i)?.value || b.etiqueta || '',
                     mostrarEtiqueta: document.getElementById('bn-mostrar-etiqueta-' + i)?.checked ?? (b.mostrarEtiqueta !== false),
                     titulo: document.getElementById('bn-titulo-' + i)?.value || b.titulo || '',
