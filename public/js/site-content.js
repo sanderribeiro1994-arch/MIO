@@ -49,6 +49,15 @@
     }
   }
 
+  function atualizarEtiquetaBanner(index, banner) {
+    const el = document.getElementById('banner-grelha-etiqueta-' + index);
+    if (!el) return;
+    const valor = banner && banner.etiqueta != null ? String(banner.etiqueta).trim() : '';
+    const mostrar = banner && banner.mostrarEtiqueta !== false && valor !== '';
+    el.textContent = valor;
+    el.classList.toggle('hidden', !mostrar);
+  }
+
   function atualizarHref(id, valor) {
     const el = document.getElementById(id);
     if (!el) return;
@@ -86,7 +95,7 @@
         // Atualizar banners da grelha
         bannersGrelha.forEach((banner, i) => {
           atualizarImagemResponsiva('banner-grelha-img-' + i, banner.imagem, banner.imagemMobile);
-          atualizarTexto('banner-grelha-etiqueta-' + i, banner.etiqueta);
+          atualizarEtiquetaBanner(i, banner);
           atualizarTexto('banner-grelha-titulo-' + i, banner.titulo);
           atualizarTexto('banner-grelha-texto-' + i, banner.texto);
           atualizarTexto('banner-grelha-botao-' + i, banner.botao);

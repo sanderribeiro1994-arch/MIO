@@ -1292,6 +1292,13 @@ renderizarConteudo();
                 <p class="text-[10px] text-zinc-600 mt-1">Envie arquivo ou cole URL para preencher o campo.</p></div>`;
         }
 
+        function campoCheckbox(id, label, checked) {
+            return `<label class="flex items-center gap-2 text-[10px] font-mono uppercase text-zinc-300">
+                <input type="checkbox" id="${id}" ${checked ? 'checked' : ''} class="accent-amber-500 rounded">
+                <span>${label}</span>
+            </label>`;
+        }
+
         function renderizarConteudo() {
             // Carrossel
             const carrossel = config.carrossel || [];
@@ -1313,6 +1320,8 @@ renderizarConteudo();
             document.getElementById('formBanners').innerHTML = banners.map((b, i) => `
                 <div class="bg-zinc-950 border border-zinc-800 rounded-lg p-3 space-y-2">
                     <p class="text-[10px] font-black text-amber-400 uppercase">Banner ${i + 1}</p>
+                    ${campoTexto('bn-etiqueta-' + i, 'Etiqueta', b.etiqueta, 'Ex.: Presente de Boas-Vindas')}
+                    ${campoCheckbox('bn-mostrar-etiqueta-' + i, 'Mostrar etiqueta', b.mostrarEtiqueta !== false)}
                     ${campoTexto('bn-titulo-' + i, 'Título', b.titulo)}
                     ${campoTexto('bn-texto-' + i, 'Texto', b.texto)}
                     ${campoTexto('bn-link-' + i, 'Link', b.link)}
@@ -1393,6 +1402,8 @@ renderizarConteudo();
                     imagemMobile: document.getElementById('cs-imagem-mobile-' + i).value
                 }));
                 const bannersGrelha = (config.bannersGrelha || []).map((b, i) => ({
+                    etiqueta: document.getElementById('bn-etiqueta-' + i)?.value || '',
+                    mostrarEtiqueta: document.getElementById('bn-mostrar-etiqueta-' + i)?.checked ?? true,
                     titulo: document.getElementById('bn-titulo-' + i).value,
                     texto: document.getElementById('bn-texto-' + i).value,
                     link: document.getElementById('bn-link-' + i).value,
